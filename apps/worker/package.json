@@ -9,12 +9,16 @@
     "start": "node dist/index.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"no unit tests in apps/worker yet\" && exit 0"
+    "test": "echo \"no unit tests in apps/worker yet\" && exit 0",
+    "poke-simulator": "tsx --env-file=.env scripts/poke-simulator.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68",
+    "@faker-js/faker": "^9",
     "@hono/node-server": "^1",
     "@pulse/db": "workspace:*",
     "@pulse/shared": "workspace:*",
+    "bullmq": "^5",
     "hono": "^4",
     "ioredis": "^5",
     "pino": "^9"

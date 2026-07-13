@@ -5,6 +5,10 @@ import { APP_NAME } from "@pulse/shared";
 import { prisma } from "@pulse/db";
 
 import { log } from "./log.js";
+import { ehrApp } from "./simulator/ehr.js";
+import { clearinghouseApp } from "./simulator/clearinghouse.js";
+import { eligibilityApp } from "./simulator/eligibility.js";
+import { labsApp } from "./simulator/labs.js";
 
 const SIMULATOR_PORT = Number(process.env.SIMULATOR_PORT ?? 4001);
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -21,6 +25,10 @@ async function main() {
 
   const app = new Hono();
   app.get("/healthz", (c) => c.json({ ok: true }));
+  app.route("/", ehrApp);
+  app.route("/", clearinghouseApp);
+  app.route("/", eligibilityApp);
+  app.route("/", labsApp);
 
   const server = serve({ fetch: app.fetch, port: SIMULATOR_PORT }, (info) => {
     log.info({ port: info.port }, "simulator http server listening");

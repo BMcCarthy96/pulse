@@ -3,11 +3,10 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@pulse/db";
 import type { RoleName } from "@pulse/shared";
+import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
-  trustHost: true,
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -35,20 +34,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt: ({ token, user }) => {
-      if (user) {
-        token.userId = user.id as string;
-        token.orgId = (user as { orgId: string }).orgId;
-        token.role = (user as { role: RoleName }).role;
-      }
-      return token;
-    },
-    session: ({ session, token }) => {
-      session.user.id = token.userId as string;
-      session.user.orgId = token.orgId as string;
-      session.user.role = token.role as RoleName;
-      return session;
-    },
-  },
 });

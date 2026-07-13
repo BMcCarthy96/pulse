@@ -1,5 +1,9 @@
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { authConfig } from "./auth.config";
+
+// Edge-safe: only reads/verifies the JWT session cookie, no Credentials provider.
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_API_PREFIXES = ["/api/webhooks", "/api/auth", "/api/v1/health"];
 

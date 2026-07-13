@@ -1,11 +1,12 @@
 export const APP_NAME = "Pulse";
 
-export * from "./connectors";
-export * from "./queue-config";
-export * from "./health-rules";
-export * from "./chaos";
-export * from "./roles";
-export * from "./api-errors";
-export * from "./schemas";
-export * from "./prompts";
-export * from "./personas";
+export * from "./connectors.js";
+export * from "./queue-config.js";
+export * from "./health-rules.js";
+export * from "./chaos.js";
+export * from "./roles.js";
+export * from "./api-errors.js";
+export * from "./schemas.js";
+export * from "./prompts.js";
+export * from "./personas.js";
+export * from "./payloads.js";
