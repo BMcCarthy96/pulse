@@ -1,0 +1,31 @@
+{
+  "name": "integration-health",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -n web,worker -c blue,green \"pnpm --filter @pulse/web dev\" \"pnpm --filter @pulse/worker dev\"",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @pulse/web test:e2e",
+    "db:push": "pnpm --filter @pulse/db db:push",
+    "db:migrate": "pnpm --filter @pulse/db db:migrate",
+    "db:seed": "pnpm --filter @pulse/db db:seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/parser": "^8.64.0",
+    "concurrently": "^10.0.3",
+    "eslint": "^10.7.0",
+    "prettier": "^3.9.5",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.64.0"
+  }
+}
