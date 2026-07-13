@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { faker } from "@faker-js/faker";
 import bcrypt from "bcryptjs";
-import { CONNECTOR_DEFS } from "@pulse/shared";
+import { CONNECTOR_DEFS, DEMO_PERSONAS } from "@pulse/shared";
 import {
   PrismaClient,
   Role,
@@ -78,18 +78,13 @@ async function main() {
   const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "pulse-demo-2026";
   const passwordHash = await bcrypt.hash(demoPassword, 10);
 
-  const personas: { name: string; email: string; role: Role }[] = [
-    { name: "Dana Alvarez", email: "dana@lakeviewhealth.example", role: Role.ADMIN },
-    { name: "Marcus Webb", email: "marcus@lakeviewhealth.example", role: Role.OPS },
-    { name: "Priya Nair", email: "priya@lakeviewhealth.example", role: Role.VIEWER },
-  ];
-
   const users = [];
-  for (const p of personas) {
+  for (const p of DEMO_PERSONAS) {
+    const role = Role[p.role];
     const user = await prisma.user.upsert({
       where: { email: p.email },
-      update: { name: p.name, role: p.role, passwordHash },
-      create: { orgId: org.id, email: p.email, name: p.name, role: p.role, passwordHash },
+      update: { name: p.name, role, passwordHash },
+      create: { orgId: org.id, email: p.email, name: p.name, role, passwordHash },
     });
     users.push(user);
   }

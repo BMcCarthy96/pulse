@@ -7,7 +7,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 |---|---|---|---|
 | 00 scaffold | done | 2026-07-13 | `pnpm dev` boots web (:3000) + worker (:4001/healthz); lint/typecheck/build clean; CI workflow added |
 | 01 database | done | 2026-07-13 | Schema pushed + migration committed (`prisma migrate resolve --applied`); `pnpm db:seed` run twice, idempotent, counts printed |
-| 02 auth | not started | | |
+| 02 auth | done | 2026-07-13 | Verified live in browser: 3 demo logins, wrong-password error, role-gated Settings link, sign-out, `/` redirect when signed out, `curl :3010/api/v1/health`, temp admin-gated route returned FORBIDDEN envelope to a VIEWER session (route removed after) |
 | 03 simulator | not started | | |
 | 04 worker queues | not started | | |
 | 05 webhooks | not started | | |
@@ -33,3 +33,8 @@ criteria with a one-line verification note. Deviations from reference docs get l
   the two bad-afternoon clusters independently roll a chance of exhausting retries, on top of
   the 20-30 explicitly-seeded DEAD jobs. Still well within "failed-job queue is non-empty on
   first login"; not adjusted further.
+- **Phase 2**: Web dev server is pinned to `:3010` (`next dev -p 3010`) instead of the doc's
+  `:3000`. This machine has an unrelated personal-site dev server permanently squatting on
+  `:3000`; rather than fight over the port on every session, Pulse's web app owns a fixed port
+  of its own. `AUTH_URL`/`WEBHOOK_TARGET_URL` and `.env.example` updated to match. Production
+  (Vercel) is unaffected — Vercel assigns its own port/URL.

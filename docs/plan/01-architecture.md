@@ -120,7 +120,7 @@ Single `.env.example` at root; each app documents which it reads.
 | `DATABASE_URL` | web, worker, db | `postgresql://pulse:pulse@localhost:5432/pulse` locally |
 | `REDIS_URL` | web, worker | `redis://localhost:6379` locally |
 | `AUTH_SECRET` | web | `openssl rand -base64 32` |
-| `AUTH_URL` | web | `http://localhost:3000` locally; Vercel URL in prod |
+| `AUTH_URL` | web | `http://localhost:3010` locally (web dev server is pinned to :3010 to avoid clashing with other local dev servers); Vercel URL in prod |
 | `ANTHROPIC_API_KEY` | worker | user supplies |
 | `ANTHROPIC_MODEL` | worker | default `claude-opus-4-8` ($5/$25 per MTok). Summaries are short (~1–2K in, ~500 out), so cost is cents; set `claude-haiku-4-5` ($1/$5) if minimizing spend. |
 | `SIMULATOR_PORT` | worker | default `4001` |
