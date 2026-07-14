@@ -1,85 +1,45 @@
-import { Queue, Worker, type Job as BullJob, type JobsOptions } from "bullmq";
+import { Queue, Worker, type Job as BullJob } from "bullmq";
 import { prisma, type Prisma } from "@pulse/db";
-import { QUEUE_NAMES, DEFAULT_JOB_OPTS } from "@pulse/shared";
+import {
+  QUEUE_NAMES,
+  getRedisConnectionOptions,
+  createTrackedJob as sharedCreateTrackedJob,
+  retryTrackedJob as sharedRetryTrackedJob,
+  type TrackedJobParams,
+} from "@pulse/shared";
 import { log } from "./log.js";
 import { RetryAfterError } from "./processors/eligibility.js";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
-const redisUrl = new URL(REDIS_URL);
-
-// Plain connection options (not a shared ioredis instance) — each Queue/Worker creates its
-// own client internally, matching BullMQ's bundled ioredis version and avoiding cross-version
-// type friction with a directly-constructed ioredis.Redis instance.
-export const connectionOptions = {
-  host: redisUrl.hostname,
-  port: Number(redisUrl.port || 6379),
-  password: redisUrl.password || undefined,
-  maxRetriesPerRequest: null as null,
-};
+export const connectionOptions = getRedisConnectionOptions(REDIS_URL);
 
 export const syncQueue = new Queue(QUEUE_NAMES.sync, { connection: connectionOptions });
 export const webhookProcessingQueue = new Queue(QUEUE_NAMES.webhookProcessing, { connection: connectionOptions });
 export const claimsSubmitQueue = new Queue(QUEUE_NAMES.claimsSubmit, { connection: connectionOptions });
 export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, { connection: connectionOptions });
 
-interface TrackedJobParams {
-  queue: Queue;
-  queueName: string;
-  type: string;
-  connectorId: string;
-  orgId: string;
-  payload: Record<string, unknown>;
-  syncRunId?: string;
-  opts?: JobsOptions;
+const queueByName: Record<string, Queue> = {
+  [QUEUE_NAMES.sync]: syncQueue,
+  [QUEUE_NAMES.webhookProcessing]: webhookProcessingQueue,
+  [QUEUE_NAMES.claimsSubmit]: claimsSubmitQueue,
+  [QUEUE_NAMES.eligibility]: eligibilityQueue,
+};
+
+export function createTrackedJob(params: TrackedJobParams) {
+  return sharedCreateTrackedJob(prisma, params);
 }
 
-/**
- * Creates the DB Job row first (durable, queryable history), then enqueues the BullMQ job
- * with `{dbJobId}` merged into its data so lifecycle events can find the mirrored row.
- */
-export async function createTrackedJob(params: TrackedJobParams) {
-  const dbJob = await prisma.job.create({
-    data: {
-      orgId: params.orgId,
-      connectorId: params.connectorId,
-      syncRunId: params.syncRunId,
-      queue: params.queueName,
-      type: params.type,
-      status: "QUEUED",
-      maxAttempts: (params.opts ?? DEFAULT_JOB_OPTS).attempts ?? 5,
-      payload: params.payload as Prisma.InputJsonValue,
-    },
-  });
-
-  const bullJob = await params.queue.add(
-    params.type,
-    { ...params.payload, dbJobId: dbJob.id },
-    params.opts ?? DEFAULT_JOB_OPTS,
-  );
-
-  await prisma.job.update({ where: { id: dbJob.id }, data: { bullJobId: String(bullJob.id) } });
-  return { dbJobId: dbJob.id, bullJobId: bullJob.id };
+export function retryTrackedJob(dbJobId: string) {
+  return sharedRetryTrackedJob(prisma, queueByName, dbJobId);
 }
 
-/** Manual retry: reset the DB Job row to QUEUED (keeping errorHistory) and enqueue a fresh BullMQ job with the same payload. */
-export async function retryTrackedJob(dbJobId: string) {
-  const dbJob = await prisma.job.findUniqueOrThrow({ where: { id: dbJobId } });
-  const queueByName: Record<string, Queue> = {
-    [QUEUE_NAMES.sync]: syncQueue,
-    [QUEUE_NAMES.webhookProcessing]: webhookProcessingQueue,
-    [QUEUE_NAMES.claimsSubmit]: claimsSubmitQueue,
-    [QUEUE_NAMES.eligibility]: eligibilityQueue,
-  };
-  const queue = queueByName[dbJob.queue];
-  if (!queue) throw new Error(`unknown queue for retry: ${dbJob.queue}`);
-
-  const bullJob = await queue.add(dbJob.type, { ...(dbJob.payload as object), dbJobId: dbJob.id }, DEFAULT_JOB_OPTS);
-
-  await prisma.job.update({
-    where: { id: dbJobId },
-    data: { status: "QUEUED", bullJobId: String(bullJob.id), lastError: null },
-  });
-  return { dbJobId, bullJobId: bullJob.id };
+async function markWebhookEventFailed(dbJob: { queue: string; payload: Prisma.JsonValue }, error: string) {
+  if (dbJob.queue !== QUEUE_NAMES.webhookProcessing) return;
+  const eventId = (dbJob.payload as { eventId?: string } | null)?.eventId;
+  if (!eventId) return;
+  await prisma.integrationEvent
+    .update({ where: { id: eventId }, data: { status: "FAILED", error, processedAt: new Date() } })
+    .catch(() => {});
 }
 
 async function markSyncRunOutcome(syncRunId: string, opts: { failed: boolean; error: string }) {
@@ -153,6 +113,9 @@ async function handleFailed(job: BullJob | undefined, err: Error) {
 
   if (isDead && dbJob.syncRunId) {
     await markSyncRunOutcome(dbJob.syncRunId, { failed: true, error: err.message });
+  }
+  if (isDead) {
+    await markWebhookEventFailed(dbJob, err.message);
   }
 }
 

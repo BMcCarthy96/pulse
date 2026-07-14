@@ -20,6 +20,7 @@ import {
 import { processSyncJob } from "./processors/sync.js";
 import { processClaimJob } from "./processors/claim.js";
 import { processEligibilityJob } from "./processors/eligibility.js";
+import { processWebhookJob } from "./processors/webhook.js";
 
 const SIMULATOR_PORT = Number(process.env.SIMULATOR_PORT ?? 4001);
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -76,7 +77,8 @@ async function main() {
     concurrency: 3,
     backoffStrategy: eligibilityBackoffStrategy,
   });
-  log.info("queue workers started: sync, claims-submit, eligibility");
+  const webhookWorker = createTrackedWorker(QUEUE_NAMES.webhookProcessing, processWebhookJob, { concurrency: 5 });
+  log.info("queue workers started: sync, claims-submit, eligibility, webhook-processing");
 
   await registerRepeatables();
   log.info(`${APP_NAME} worker ready`);
@@ -84,7 +86,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     log.info({ signal }, "shutting down worker");
     server.close();
-    await Promise.all([syncWorker.close(), claimsWorker.close(), eligibilityWorker.close()]);
+    await Promise.all([syncWorker.close(), claimsWorker.close(), eligibilityWorker.close(), webhookWorker.close()]);
     await Promise.all([
       syncQueue.close(),
       webhookProcessingQueue.close(),

@@ -10,7 +10,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 02 auth | done | 2026-07-13 | Verified live in browser: 3 demo logins, wrong-password error, role-gated Settings link, sign-out, `/` redirect when signed out, `curl :3010/api/v1/health`, temp admin-gated route returned FORBIDDEN envelope to a VIEWER session (route removed after) |
 | 03 simulator | done | 2026-07-13 | `poke-simulator` run against HEALTHY connectors (EHR paginates 4 pages, claim accepted, eligibility responds, 3 lab webhooks delivered — 404 expected pre-phase-5); chaos verified live: OUTAGE→503, RATE_LIMIT→429+Retry-After 15, TIMEOUT→client abort at 10s, BAD_PAYLOAD→malformed webhook body logged; HEALTHY latency spot-checked at 51-224ms |
 | 04 worker queues | done | 2026-07-13 | Verified live (syncIntervalSec temporarily 30s): SyncRun SUCCEEDED w/ recordsFetched=120, Job QUEUED→ACTIVE→SUCCEEDED; OUTAGE→exponential backoff 2/4/8/16s across 5 attempts→DEAD, run FAILED, 5 ERROR LogEntries w/ connectorId+jobId; manual retry of DEAD job succeeded w/ errorHistory preserved; eligibility RATE_LIMIT→~15s retry delay (not exponential), DEAD at 3/3; 5 claim.submit all SUCCEEDED w/ claimIds; no unhandled rejections; no stuck ACTIVE jobs after process kill |
-| 05 webhooks | not started | | |
+| 05 webhooks | done | 2026-07-14 | Verified live: 10 labs/emit events reached PROCESSED; tampered signature → 401 + INVALID row w/ headers captured; replayed delivery id → 200, original untouched (dedupe confirmed by row count); BAD_PAYLOAD → INVALID w/ full zod error in `error`; rejected claim.ack → WARN log + Job payload ackStatus updated; claims OUTAGE did not block lab-results ingestion (isolation confirmed) |
 | 06 dashboard UI | not started | | |
 | 07 health + incidents | not started | | |
 | 08 AI + audit | not started | | |
@@ -52,3 +52,10 @@ criteria with a one-line verification note. Deviations from reference docs get l
   `resolve.extensionAlias` (`.js` → `.ts`/`.tsx`/`.js`) so Next's bundler resolves the same
   `.js`-suffixed specifiers to the `.ts` source. Both `pnpm build` (web + worker) and `pnpm dev`
   verified clean after this fix.
+- **Phase 5**: Removed `pino-pretty` from `apps/web` (added in phase 2). Its worker-thread
+  transport intermittently threw `Error: the worker has exited` from unrelated route handlers
+  under Next.js dev-mode Fast Refresh (Next's own compilation workers appear to race with
+  pino-pretty's transport thread on file-change reloads) — cosmetic in that requests still
+  succeeded, but alarming and worth avoiding. `apps/web/lib/log.ts` now emits plain JSON via
+  pino with no transport; `apps/worker`'s pino-pretty is unaffected (long-running process, no
+  Fast Refresh) and unchanged.
