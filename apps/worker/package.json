@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "echo \"no unit tests in apps/worker yet\" && exit 0",
-    "poke-simulator": "tsx --env-file=.env scripts/poke-simulator.ts"
+    "poke-simulator": "tsx --env-file=.env scripts/poke-simulator.ts",
+    "enqueue-test-jobs": "tsx --env-file=.env scripts/enqueue-test-jobs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68",

@@ -16,9 +16,11 @@ export const DEFAULT_JOB_OPTS = {
   removeOnFail: false,
 };
 
+// backoff type "custom" so the worker's backoffStrategy can honor a 429 Retry-After header
+// instead of falling back to exponential delay.
 export const ELIGIBILITY_JOB_OPTS = {
   attempts: 3,
-  backoff: { type: "exponential" as const, delay: 2_000 },
+  backoff: { type: "custom" as const },
   removeOnComplete: { count: 1000 },
   removeOnFail: false,
 };

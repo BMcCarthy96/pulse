@@ -9,7 +9,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 01 database | done | 2026-07-13 | Schema pushed + migration committed (`prisma migrate resolve --applied`); `pnpm db:seed` run twice, idempotent, counts printed |
 | 02 auth | done | 2026-07-13 | Verified live in browser: 3 demo logins, wrong-password error, role-gated Settings link, sign-out, `/` redirect when signed out, `curl :3010/api/v1/health`, temp admin-gated route returned FORBIDDEN envelope to a VIEWER session (route removed after) |
 | 03 simulator | done | 2026-07-13 | `poke-simulator` run against HEALTHY connectors (EHR paginates 4 pages, claim accepted, eligibility responds, 3 lab webhooks delivered — 404 expected pre-phase-5); chaos verified live: OUTAGE→503, RATE_LIMIT→429+Retry-After 15, TIMEOUT→client abort at 10s, BAD_PAYLOAD→malformed webhook body logged; HEALTHY latency spot-checked at 51-224ms |
-| 04 worker queues | not started | | |
+| 04 worker queues | done | 2026-07-13 | Verified live (syncIntervalSec temporarily 30s): SyncRun SUCCEEDED w/ recordsFetched=120, Job QUEUED→ACTIVE→SUCCEEDED; OUTAGE→exponential backoff 2/4/8/16s across 5 attempts→DEAD, run FAILED, 5 ERROR LogEntries w/ connectorId+jobId; manual retry of DEAD job succeeded w/ errorHistory preserved; eligibility RATE_LIMIT→~15s retry delay (not exponential), DEAD at 3/3; 5 claim.submit all SUCCEEDED w/ claimIds; no unhandled rejections; no stuck ACTIVE jobs after process kill |
 | 05 webhooks | not started | | |
 | 06 dashboard UI | not started | | |
 | 07 health + incidents | not started | | |
