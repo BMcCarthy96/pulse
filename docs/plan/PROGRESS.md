@@ -12,7 +12,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 04 worker queues | done | 2026-07-13 | Verified live (syncIntervalSec temporarily 30s): SyncRun SUCCEEDED w/ recordsFetched=120, Job QUEUED→ACTIVE→SUCCEEDED; OUTAGE→exponential backoff 2/4/8/16s across 5 attempts→DEAD, run FAILED, 5 ERROR LogEntries w/ connectorId+jobId; manual retry of DEAD job succeeded w/ errorHistory preserved; eligibility RATE_LIMIT→~15s retry delay (not exponential), DEAD at 3/3; 5 claim.submit all SUCCEEDED w/ claimIds; no unhandled rejections; no stuck ACTIVE jobs after process kill |
 | 05 webhooks | done | 2026-07-14 | Verified live: 10 labs/emit events reached PROCESSED; tampered signature → 401 + INVALID row w/ headers captured; replayed delivery id → 200, original untouched (dedupe confirmed by row count); BAD_PAYLOAD → INVALID w/ full zod error in `error`; rejected claim.ack → WARN log + Job payload ackStatus updated; claims OUTAGE did not block lab-results ingestion (isolation confirmed) |
 | 06 dashboard UI | done | 2026-07-27 | Verified live across all three roles. Overview: 4 tiles w/ 15m error rate + last activity, KPIs (63 dead / 0 open incidents / 10 events 1h / 91 jobs 1h), 24h per-connector error-rate chart, 2 seeded RESOLVED CRITICAL incidents. EHR "Run sync now" → SUCCEEDED run (120 fetched) in Sync History within one poll. As ADMIN: chaos → OUTAGE via confirm dialog quoting `connector.chaos_change {from,to}`, matching AuditEntry; as VIEWER: chaos panel + all action buttons absent, direct `POST /chaos` → `{"error":{"code":"FORBIDDEN","message":"ADMIN role required"}}` 403. OUTAGE sync → attempts ticked 1/5…5/5 → DEAD, sidebar bubble incremented. Single retry ("Job re-queued") + "Retry all matching" w/ confirm, both audited (`job.retry`, `job.retry_bulk meta.count`). "Simulate incoming results" → 5 PROCESSED events, detail sheet shows payload + `x-pulse-signature`. Eligibility modal → job SUCCEEDED. `/logs`: level filter (ERROR → 30/30 ERROR rows), connector filter (Northside only), free-text (`sync.page`), row → sheet w/ context JSON. Empty states hit on /jobs (status QUEUED), /events (VerifyMed+INVALID), /logs (no-match `q`); DataTable skeletons on first load. `pnpm lint`/`typecheck`/`build` clean (26 routes); fresh-tab console clean on /jobs, /logs, /connectors/[key] |
-| 07 health + incidents | not started | | |
+| 07 health + incidents | done | 2026-07-27 | Walked with `HEALTH_TICK_SEC=15`, `INCIDENT_STABILITY_MIN=1`. All healthy: 4 connectors × 6 snapshots per 2 min, all HEALTHY, no status drift. EHR OUTAGE + manual sync → DOWN → **one** CRITICAL incident (`Mercy General EHR (FHIR R4) is DOWN`, `aiSummaryStatus: queued`), still a single row after ~30 further ticks; timeline had `opened` + `health_transition`. Incident visible in sidebar bubble (1→2), `/incidents` list, overview tile link, and connector-detail banner; detail page rendered the AI card's "queued" state, timeline, and context panel (failed jobs 1, error logs 4, both pre-filtered links). Acknowledge as Marcus (OPS) → ACKNOWLEDGED + `status_change` + note entries + AuditEntry `incident.acknowledge {from: OPEN}`. As Priya (VIEWER): only "Sign out" rendered, no note box, and acknowledge/resolve/notes each returned `{"error":{"code":"FORBIDDEN","message":"OPS role required"}}` 403. Chaos → HEALTHY + bulk retry (45 jobs) → MONITORING, flapped back to **ACKNOWLEDGED** (not OPEN — `preMonitoringStatus` reads `acknowledgedAt`), re-entered MONITORING, then RESOLVED at 14:51:30 with `resolvedAt` set and the complete 9-entry timeline. Sustained DEGRADED (`failureRate 0.4`) on ClearPath → WARNING incident after the sustained window. `computeStatus`/`buildWindow` spot-checks: 16/16 pass via `apps/worker/src/scripts/check-health-rules.ts`, including the three doc 03 §4 cases (5 consecutive → DOWN, errorRate 0.12 → DEGRADED, empty window carries previous). lint/typecheck/build clean |
 | 08 AI + audit | not started | | |
 | 09 testing + CI | not started | | |
 | 10 deployment | not started | | |
@@ -52,6 +52,35 @@ criteria with a one-line verification note. Deviations from reference docs get l
   `resolve.extensionAlias` (`.js` → `.ts`/`.tsx`/`.js`) so Next's bundler resolves the same
   `.js`-suffixed specifiers to the `.ts` source. Both `pnpm build` (web + worker) and `pnpm dev`
   verified clean after this fix.
+- **Phase 7**: The pure core lives in `apps/worker/src/health/rules.ts` as the phase file
+  specifies, but the tunable constants stayed in the existing `packages/shared/src/health-rules.ts`
+  rather than a new `health-config.ts` — same package, same export surface, one file instead of
+  two that would have to be kept in step. `getHealthConfig()` there resolves the env overrides.
+- **Phase 7**: **A job row is not a call.** `loadCalls` originally counted each `Job` once, so a
+  sync page that burned five retries against a dead upstream registered as *one* failure. A total
+  outage then produced one failing call per sync run (every 300s), the
+  `consecutiveFailures >= 5` rule needed ~25 minutes to trip, and the 15-minute window — which
+  holds ~225 seeded successes — diluted the error rate to 0.9%. doc 03 §4 and the phase file both
+  say "treat DEAD/FAILED **attempts** as calls", so `jobToCalls` now expands a job into one call
+  per attempt using `errorHistory` (which already carries a timestamp and duration per failed
+  attempt), plus a final successful call for jobs that recovered. Failed calls in the EHR window
+  went from 2 to 15 and detection landed where the acceptance criterion expects it. This is the
+  specified rule implemented correctly, not a loosened threshold.
+- **Phase 7**: Added `HEALTH_WINDOW_MIN` alongside `HEALTH_TICK_SEC`/`INCIDENT_STABILITY_MIN`.
+  doc 05's e2e flow already anticipated this ("test can force-resolve via API or shortened window
+  config"): recovery is only visible once failures roll out of the rolling window, so with the
+  production 15-minute window the resolve leg of the demo takes 15 real minutes no matter how
+  fast the tick is. The auto-resolve leg above was observed with the window shrunk to 2 minutes;
+  every rule and threshold was unchanged. Production default stays 15.
+- **Phase 7**: Repeatable jobs are now fully cleared and rebuilt on every worker boot. Matching
+  the previous entry by `id` did not reliably remove it, so changing `HEALTH_TICK_SEC` left the
+  old scheduler running next to the new one — a 60s and a 15s health tick both firing, writing
+  two snapshots on the minute (caught in the data: two rows 21 ms apart).
+- **Phase 7**: Worker shutdown now awaits the simulator's HTTP server close *first*. It used to
+  call `server.close()` without awaiting and then drain the queues, so a `tsx watch` reload raced
+  its own replacement for `:4001` and died on `EADDRINUSE`. Reloads are cleaner, though an
+  orphaned process can still win the race occasionally — if the worker dies on EADDRINUSE, kill
+  the process holding 4001 and restart `pnpm dev`.
 - **Phase 6**: Added an opt-in `?withTotal=1` → `{ total }` to the doc-04 pagination envelope
   (doc 04 §Conventions updated in the same commit). Needed because `/jobs`' header button
   "Retry all matching (N)" was counting only the loaded page — it read 25 while

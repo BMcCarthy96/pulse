@@ -3,6 +3,7 @@ export const APP_NAME = "Pulse";
 export * from "./connectors.js";
 export * from "./queue-config.js";
 export * from "./health-rules.js";
+export * from "./incidents.js";
 export * from "./chaos.js";
 export * from "./roles.js";
 export * from "./api-errors.js";

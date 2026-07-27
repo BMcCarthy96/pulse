@@ -2,6 +2,7 @@ import { Queue, Worker, type Job as BullJob } from "bullmq";
 import { prisma, type Prisma } from "@pulse/db";
 import {
   QUEUE_NAMES,
+  INCIDENT_SUMMARY_JOB_OPTS,
   getRedisConnectionOptions,
   createTrackedJob as sharedCreateTrackedJob,
   retryTrackedJob as sharedRetryTrackedJob,
@@ -17,6 +18,20 @@ export const syncQueue = new Queue(QUEUE_NAMES.sync, { connection: connectionOpt
 export const webhookProcessingQueue = new Queue(QUEUE_NAMES.webhookProcessing, { connection: connectionOptions });
 export const claimsSubmitQueue = new Queue(QUEUE_NAMES.claimsSubmit, { connection: connectionOptions });
 export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, { connection: connectionOptions });
+export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, { connection: connectionOptions });
+export const healthTickQueue = new Queue(QUEUE_NAMES.healthTick, { connection: connectionOptions });
+
+/**
+ * Not a tracked job: incident summaries are internal work, not a connector call, so they stay
+ * out of the failed-job queue the ops team triages.
+ */
+export function enqueueIncidentSummary(incidentId: string, opts: { reason?: "opened" | "resolution" } = {}) {
+  return incidentSummaryQueue.add(
+    "incident.summary",
+    { incidentId, reason: opts.reason ?? "opened" },
+    INCIDENT_SUMMARY_JOB_OPTS,
+  );
+}
 
 const queueByName: Record<string, Queue> = {
   [QUEUE_NAMES.sync]: syncQueue,

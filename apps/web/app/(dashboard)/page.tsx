@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { usePolling } from "@/lib/hooks";
 import type { OverviewResponse, ConnectorRow } from "@/lib/types";
@@ -21,6 +22,7 @@ const CONNECTOR_COLORS: Record<string, string> = {
 };
 
 export default function OverviewPage() {
+  const router = useRouter();
   const { data: overview, isLoading: overviewLoading } = usePolling<OverviewResponse>("/api/v1/overview");
   const { data: connectorsResp } = usePolling<{ data: ConnectorRow[] }>("/api/v1/connectors");
 
@@ -58,7 +60,25 @@ export default function OverviewPage() {
                       </span>
                     </div>
                     {c.openIncidentId && (
-                      <p className="text-xs font-medium text-red-600">Open incident</p>
+                      // Nested <a> is invalid, so stop the tile's navigation and route here.
+                      <span
+                        role="link"
+                        tabIndex={0}
+                        className="block cursor-pointer text-xs font-medium text-red-600 hover:underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          router.push(`/incidents/${c.openIncidentId}`);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          router.push(`/incidents/${c.openIncidentId}`);
+                        }}
+                      >
+                        Open incident →
+                      </span>
                     )}
                   </CardContent>
                 </Card>

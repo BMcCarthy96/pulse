@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePolling } from "@/lib/hooks";
 import { apiPatch, apiPost } from "@/lib/api-client";
@@ -83,6 +84,19 @@ export default function ConnectorDetailPage({ params }: { params: Promise<{ key:
           </div>
         }
       />
+
+      {data.openIncident && (
+        <Link
+          href={`/incidents/${data.openIncident.id}`}
+          className="mb-6 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm hover:bg-red-100"
+        >
+          <span>
+            <span className="font-medium text-red-800">{data.openIncident.severity} incident</span>
+            <span className="text-red-700"> · {data.openIncident.status}</span>
+          </span>
+          <span className="text-red-800">View incident →</span>
+        </Link>
+      )}
 
       <RoleGate minRole="ADMIN">
         <div className="mb-6">

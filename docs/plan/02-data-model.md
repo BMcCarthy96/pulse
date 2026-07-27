@@ -281,8 +281,8 @@ model AuditEntry {
   userId     String
   user       User     @relation(fields: [userId], references: [id])
   action     String   // "job.retry" | "job.retry_bulk" | "connector.chaos_change" | "connector.pause" |
-                      // "incident.acknowledge" | "incident.resolve" | "incident.summary_regenerate" |
-                      // "incident.summary_edit" | "sync.trigger_manual"
+                      // "incident.acknowledge" | "incident.resolve" | "incident.note" |
+                      // "incident.summary_regenerate" | "incident.summary_edit" | "sync.trigger_manual"
   targetType String   // "job" | "connector" | "incident" | "sync_run"
   targetId   String
   metadata   Json     @default("{}")   // e.g. { from: "HEALTHY", to: "OUTAGE" }

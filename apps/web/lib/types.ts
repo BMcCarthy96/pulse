@@ -109,6 +109,49 @@ export interface LogRow {
   connector: { key: string; displayName: string } | null;
 }
 
+export interface IncidentTimelineRow {
+  id: string;
+  kind: string;
+  message: string;
+  actor: string;
+  createdAt: string;
+}
+
+export interface AiSummary {
+  summary: string;
+  probableCause: string;
+  impact: string;
+  suggestedSteps: string[];
+  confidence?: string;
+  model?: string;
+  promptVersion?: string;
+  generatedAt?: string;
+  editedBy?: string;
+  editedAt?: string;
+}
+
+export interface IncidentRow {
+  id: string;
+  status: string;
+  severity: string;
+  title: string;
+  openedAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  detectionSource: string;
+  aiSummary: AiSummary | null;
+  aiSummaryStatus: string;
+  connector: { key: string; displayName: string; status: string };
+}
+
+export interface IncidentDetailResponse {
+  incident: IncidentRow & {
+    connector: { key: string; displayName: string; kind: string; status: string; chaosMode: string };
+    timeline: IncidentTimelineRow[];
+  };
+  context: { failedJobs: number; errorLogs: number; windowEnd: string };
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   nextCursor: string | null;
