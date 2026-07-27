@@ -64,12 +64,16 @@ async function openIncident(args: {
         `${args.severity} incident opened: ${args.connectorName} went ${args.status}`,
       );
       // The transition that caused it, recorded in its own right — the tick that opens an
-      // incident would otherwise be the one tick whose health change left no entry.
+      // incident would otherwise be the one tick whose health change left no entry. A
+      // sustained-DEGRADED incident opens on a tick where nothing *changed*, so describe the
+      // duration instead of writing a meaningless "DEGRADED → DEGRADED".
       await addTimelineEntry(
         tx,
         created.id,
         "health_transition",
-        `health ${args.previousStatus} → ${args.status}`,
+        args.previousStatus === args.status
+          ? `health has been ${args.status} for the full sustained window`
+          : `health ${args.previousStatus} → ${args.status}`,
       );
       return created;
     },

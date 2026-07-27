@@ -14,7 +14,7 @@
     "enqueue-test-jobs": "tsx --env-file=.env scripts/enqueue-test-jobs.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@faker-js/faker": "^9",
     "@hono/node-server": "^1",
     "@pulse/db": "workspace:*",

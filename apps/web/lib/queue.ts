@@ -9,6 +9,7 @@ export const syncQueue = new Queue(QUEUE_NAMES.sync, { connection: connectionOpt
 export const webhookProcessingQueue = new Queue(QUEUE_NAMES.webhookProcessing, { connection: connectionOptions });
 export const claimsSubmitQueue = new Queue(QUEUE_NAMES.claimsSubmit, { connection: connectionOptions });
 export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, { connection: connectionOptions });
+export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, { connection: connectionOptions });
 
 export const queueByName: Record<string, Queue> = {
   [QUEUE_NAMES.sync]: syncQueue,

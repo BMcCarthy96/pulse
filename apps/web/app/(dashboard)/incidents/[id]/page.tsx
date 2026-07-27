@@ -118,7 +118,12 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <AiSummaryCard status={incident.aiSummaryStatus} summary={incident.aiSummary} />
+          <AiSummaryCard
+            incidentId={id}
+            status={incident.aiSummaryStatus}
+            summary={incident.aiSummary}
+            onChanged={() => void mutate()}
+          />
 
           <section className="rounded-lg border p-4">
             <h2 className="mb-3 text-sm font-semibold">Timeline</h2>

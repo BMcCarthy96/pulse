@@ -128,6 +128,10 @@ export interface AiSummary {
   generatedAt?: string;
   editedBy?: string;
   editedAt?: string;
+  /** Present once edited: the machine-generated version, kept per doc 03 §6.6. */
+  original?: Omit<AiSummary, "original">;
+  /** Only set on the `failed` status. */
+  error?: string;
 }
 
 export interface IncidentRow {
@@ -150,6 +154,24 @@ export interface IncidentDetailResponse {
     timeline: IncidentTimelineRow[];
   };
   context: { failedJobs: number; errorLogs: number; windowEnd: string };
+}
+
+export interface UserRow {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface AuditRow {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: unknown;
+  createdAt: string;
+  user: { name: string | null; email: string; role: string } | null;
 }
 
 export interface PaginatedResponse<T> {

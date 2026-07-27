@@ -13,7 +13,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 05 webhooks | done | 2026-07-14 | Verified live: 10 labs/emit events reached PROCESSED; tampered signature → 401 + INVALID row w/ headers captured; replayed delivery id → 200, original untouched (dedupe confirmed by row count); BAD_PAYLOAD → INVALID w/ full zod error in `error`; rejected claim.ack → WARN log + Job payload ackStatus updated; claims OUTAGE did not block lab-results ingestion (isolation confirmed) |
 | 06 dashboard UI | done | 2026-07-27 | Verified live across all three roles. Overview: 4 tiles w/ 15m error rate + last activity, KPIs (63 dead / 0 open incidents / 10 events 1h / 91 jobs 1h), 24h per-connector error-rate chart, 2 seeded RESOLVED CRITICAL incidents. EHR "Run sync now" → SUCCEEDED run (120 fetched) in Sync History within one poll. As ADMIN: chaos → OUTAGE via confirm dialog quoting `connector.chaos_change {from,to}`, matching AuditEntry; as VIEWER: chaos panel + all action buttons absent, direct `POST /chaos` → `{"error":{"code":"FORBIDDEN","message":"ADMIN role required"}}` 403. OUTAGE sync → attempts ticked 1/5…5/5 → DEAD, sidebar bubble incremented. Single retry ("Job re-queued") + "Retry all matching" w/ confirm, both audited (`job.retry`, `job.retry_bulk meta.count`). "Simulate incoming results" → 5 PROCESSED events, detail sheet shows payload + `x-pulse-signature`. Eligibility modal → job SUCCEEDED. `/logs`: level filter (ERROR → 30/30 ERROR rows), connector filter (Northside only), free-text (`sync.page`), row → sheet w/ context JSON. Empty states hit on /jobs (status QUEUED), /events (VerifyMed+INVALID), /logs (no-match `q`); DataTable skeletons on first load. `pnpm lint`/`typecheck`/`build` clean (26 routes); fresh-tab console clean on /jobs, /logs, /connectors/[key] |
 | 07 health + incidents | done | 2026-07-27 | Walked with `HEALTH_TICK_SEC=15`, `INCIDENT_STABILITY_MIN=1`. All healthy: 4 connectors × 6 snapshots per 2 min, all HEALTHY, no status drift. EHR OUTAGE + manual sync → DOWN → **one** CRITICAL incident (`Mercy General EHR (FHIR R4) is DOWN`, `aiSummaryStatus: queued`), still a single row after ~30 further ticks; timeline had `opened` + `health_transition`. Incident visible in sidebar bubble (1→2), `/incidents` list, overview tile link, and connector-detail banner; detail page rendered the AI card's "queued" state, timeline, and context panel (failed jobs 1, error logs 4, both pre-filtered links). Acknowledge as Marcus (OPS) → ACKNOWLEDGED + `status_change` + note entries + AuditEntry `incident.acknowledge {from: OPEN}`. As Priya (VIEWER): only "Sign out" rendered, no note box, and acknowledge/resolve/notes each returned `{"error":{"code":"FORBIDDEN","message":"OPS role required"}}` 403. Chaos → HEALTHY + bulk retry (45 jobs) → MONITORING, flapped back to **ACKNOWLEDGED** (not OPEN — `preMonitoringStatus` reads `acknowledgedAt`), re-entered MONITORING, then RESOLVED at 14:51:30 with `resolvedAt` set and the complete 9-entry timeline. Sustained DEGRADED (`failureRate 0.4`) on ClearPath → WARNING incident after the sustained window. `computeStatus`/`buildWindow` spot-checks: 16/16 pass via `apps/worker/src/scripts/check-health-rules.ts`, including the three doc 03 §4 cases (5 consecutive → DOWN, errorRate 0.12 → DEGRADED, empty window carries previous). lint/typecheck/build clean |
-| 08 AI + audit | not started | | |
+| 08 AI + audit | **blocked** — 5 of 6 criteria verified; needs a real `ANTHROPIC_API_KEY` | | Verified without a key: redaction spot-checks 24/24 (`scripts/check-redaction.ts` — identifiers, DOB vs. operational timestamps, names, known-names list, nested JSON, idempotency); outgoing context contains **zero** `PAT-`/`CLM-`/`APT-` tokens and zero seeded names (`scripts/dump-incident-context.ts`, exits non-zero if either leaks); no-key path → `queued → generating → failed` with `{"error":"AI not configured"}`, WARN log, job completes without burning its retry, and the card renders the message plus the `ANTHROPIC_KEY` hint; regenerate → 202 + `incident.summary_regenerate` audit; edit → status `edited`, `editedBy: Dana Alvarez`, machine original preserved under `aiSummary.original`, `incident.summary_edit {firstEdit:true}` audit; `/settings` audit log shows the full session history with correct actors, action filter, and a metadata sheet, users table read-only with role badges; as OPS both `/api/v1/audit` and `/api/v1/users` → 403 `ADMIN role required` and Settings is absent from the nav. lint/typecheck/build clean (30 routes). **Not verified:** the live generation criterion (card → `ready`, footer showing model + prompt v1 + timestamp) — `ANTHROPIC_API_KEY` is empty locally and supplying one is the user's call |
 | 09 testing + CI | not started | | |
 | 10 deployment | not started | | |
 | 11 docs + polish | not started | | |
@@ -52,6 +52,26 @@ criteria with a one-line verification note. Deviations from reference docs get l
   `resolve.extensionAlias` (`.js` → `.ts`/`.tsx`/`.js`) so Next's bundler resolves the same
   `.js`-suffixed specifiers to the `.ts` source. Both `pnpm build` (web + worker) and `pnpm dev`
   verified clean after this fix.
+- **Phase 8**: Upgraded `@anthropic-ai/sdk` from the phase-0 `^0.68` pin to `^0.115`. doc 03 §6
+  specifies `client.messages.parse()` with `zodOutputFormat()` and `output_config.format`; 0.68
+  has none of them (only `betaZodTool`), so the documented call was unimplementable as written.
+  doc 01's stack table already says `@anthropic-ai/sdk | latest`, so this restores the intended
+  version rather than changing the plan.
+- **Phase 8**: `zodOutputFormat()` accepts only `zod/v4` schemas while the repo is on zod 3's
+  classic API. zod 3.25 ships both under one install, so `packages/shared/src/prompts.ts` now
+  exports `IncidentSummaryAiSchema` built with `zod/v4` alongside the existing v3
+  `IncidentSummarySchema` — one contract, two views, no second dependency. The `.describe()`
+  calls live on the v4 schema because they are prompt surface: they reach the model as JSON
+  Schema field descriptions.
+- **Phase 8**: The SDK install re-resolved the lockfile and dropped `eslint-plugin-import`,
+  which `eslint-config-next` requires — `apps/web` lint failed until it was added explicitly.
+  Worth noting for phase 9: `apps/web` pins `eslint-config-next@16.2.10` against `next@15.5.20`.
+  That mismatch predates this phase and currently works, but CI should align them.
+- **Phase 8**: Context builder collapses consecutive identical log/job lines into one with a
+  `(×N)` count. A retry storm writes the same message dozens of times in the same second; sent
+  verbatim it spent the 8K budget on repetition and pushed the incident timeline out of the
+  context entirely. The EHR incident's context went from 6327 to 2770 chars with no information
+  lost.
 - **Phase 7**: The pure core lives in `apps/worker/src/health/rules.ts` as the phase file
   specifies, but the tunable constants stayed in the existing `packages/shared/src/health-rules.ts`
   rather than a new `health-config.ts` — same package, same export surface, one file instead of

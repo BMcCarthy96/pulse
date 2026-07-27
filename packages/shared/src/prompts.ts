@@ -1,4 +1,5 @@
 import { z } from "zod";
+import * as z4 from "zod/v4";
 
 export const IncidentSummarySchema = z.object({
   summary: z.string(),
@@ -9,6 +10,26 @@ export const IncidentSummarySchema = z.object({
 });
 
 export type IncidentSummary = z.infer<typeof IncidentSummarySchema>;
+
+/**
+ * Same shape, declared with `zod/v4` because `zodOutputFormat()` from the Anthropic SDK only
+ * accepts v4 schemas. The repo is otherwise on zod 3's classic API, and zod 3.25 ships both
+ * under one install — so this is a second view of one contract, not a second contract. The
+ * `.describe()` calls are here rather than on the v3 schema because they are prompt surface:
+ * they travel to the model as the JSON-schema field descriptions.
+ */
+export const IncidentSummaryAiSchema = z4.object({
+  summary: z4.string().describe("2-3 sentences in plain operations language: what is happening and since when."),
+  probableCause: z4.string().describe("The most likely cause supported by the evidence given. Say so if ambiguous."),
+  impact: z4.string().describe("Which downstream clinical or billing workflow is affected, and how badly."),
+  suggestedSteps: z4
+    .array(z4.string())
+    .max(5)
+    .describe("Up to 5 concrete next actions for the on-call engineer, most useful first."),
+  confidence: z4
+    .enum(["low", "medium", "high"])
+    .describe("How well the evidence supports the probable cause."),
+});
 
 export const INCIDENT_SUMMARY_PROMPT_VERSION = "v1";
 
