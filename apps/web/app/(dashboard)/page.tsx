@@ -1,15 +1,156 @@
-import { auth } from "@/auth";
+"use client";
 
-export default async function OverviewPage() {
-  const session = await auth();
-  const user = session?.user;
+import Link from "next/link";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import { usePolling } from "@/lib/hooks";
+import type { OverviewResponse, ConnectorRow } from "@/lib/types";
+import { PageHeader } from "@/components/page-header";
+import { KpiCard } from "@/components/kpi-card";
+import { StatusBadge } from "@/components/status-badge";
+import { SeverityBadge } from "@/components/severity-badge";
+import { Timestamp } from "@/components/timestamp";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
+
+const CONNECTOR_COLORS: Record<string, string> = {
+  "ehr-fhir": "#2563eb",
+  "lab-results": "#16a34a",
+  claims: "#d97706",
+  eligibility: "#9333ea",
+};
+
+export default function OverviewPage() {
+  const { data: overview, isLoading: overviewLoading } = usePolling<OverviewResponse>("/api/v1/overview");
+  const { data: connectorsResp } = usePolling<{ data: ConnectorRow[] }>("/api/v1/connectors");
+
+  const connectors = connectorsResp?.data ?? [];
+  const chartData = buildChartData(connectors);
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">Overview</h1>
-      <p className="text-muted-foreground mt-2 text-sm">
-        Signed in as {user?.name} ({user?.role})
-      </p>
+      <PageHeader title="Overview" description="Integration health across all connectors." />
+
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCard label="Dead jobs" value={overview?.totals.deadJobs ?? "—"} tone={overview && overview.totals.deadJobs > 0 ? "danger" : "default"} />
+        <KpiCard label="Open incidents" value={overview?.totals.openIncidents ?? "—"} tone={overview && overview.totals.openIncidents > 0 ? "danger" : "default"} />
+        <KpiCard label="Events (1h)" value={overview?.totals.eventsLastHour ?? "—"} />
+        <KpiCard label="Jobs (1h)" value={overview?.totals.jobsLastHour ?? "—"} />
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {overviewLoading && !overview
+          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)
+          : overview?.connectors.map((c) => (
+              <Link key={c.key} href={`/connectors/${c.key}`}>
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-medium">{c.displayName}</CardTitle>
+                      <StatusBadge status={c.paused ? "PAUSED" : c.status} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-muted-foreground flex items-center justify-between text-xs">
+                      <span>error rate (15m): {(c.errorRate * 100).toFixed(1)}%</span>
+                      <span>
+                        last activity: <Timestamp date={c.lastActivity} />
+                      </span>
+                    </div>
+                    {c.openIncidentId && (
+                      <p className="text-xs font-medium text-red-600">Open incident</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Error rate per connector (24h)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {chartData.length === 0 ? (
+            <EmptyState title="No snapshot data yet" hint="Health snapshots accumulate every 60 seconds." />
+          ) : (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={40} />
+                  <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+                  <Tooltip formatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {connectors.map((c) => (
+                    <Line
+                      key={c.key}
+                      type="monotone"
+                      dataKey={c.key}
+                      name={c.displayName}
+                      stroke={CONNECTOR_COLORS[c.key] ?? "#64748b"}
+                      dot={false}
+                      strokeWidth={1.5}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Recent incidents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {overview && overview.recentIncidents.length === 0 ? (
+            <EmptyState title="No incidents" hint="Incidents auto-open when a connector degrades or goes down." />
+          ) : (
+            <div className="divide-y">
+              {overview?.recentIncidents.map((i) => (
+                <Link
+                  key={i.id}
+                  href={`/incidents/${i.id}`}
+                  className="flex items-center justify-between py-2 text-sm hover:bg-muted/40"
+                >
+                  <div className="flex items-center gap-3">
+                    <SeverityBadge severity={i.severity} />
+                    <span className="font-medium">{i.title}</span>
+                    <span className="text-muted-foreground">{i.connectorDisplayName}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status={i.status} />
+                    <Timestamp date={i.openedAt} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+function buildChartData(connectors: ConnectorRow[]) {
+  if (connectors.length === 0) return [];
+  const maxLen = Math.max(...connectors.map((c) => c.sparkline.length));
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < maxLen; i++) {
+    const row: Record<string, unknown> = {};
+    let label = "";
+    for (const c of connectors) {
+      const point = c.sparkline[i];
+      if (point) {
+        row[c.key] = point.errorRate;
+        label = new Date(point.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+    }
+    row.label = label;
+    rows.push(row);
+  }
+  return rows;
 }

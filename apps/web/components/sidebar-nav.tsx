@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { RoleGate } from "@/components/role-gate";
+import { usePolling } from "@/lib/hooks";
+import type { OverviewResponse } from "@/lib/types";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview" },
@@ -14,8 +16,11 @@ const NAV_ITEMS = [
   { href: "/logs", label: "Logs" },
 ] as const;
 
-export function SidebarNav({ deadJobs = 0, openIncidents = 0 }: { deadJobs?: number; openIncidents?: number }) {
+export function SidebarNav() {
   const pathname = usePathname();
+  const { data } = usePolling<OverviewResponse>("/api/v1/overview");
+  const deadJobs = data?.totals.deadJobs ?? 0;
+  const openIncidents = data?.totals.openIncidents ?? 0;
 
   return (
     <nav className="flex flex-col gap-0.5 p-2">

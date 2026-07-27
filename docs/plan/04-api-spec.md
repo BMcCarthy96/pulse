@@ -16,6 +16,9 @@ All app APIs live under `apps/web/app/api/v1/` (Next.js route handlers) except a
   ```
   Codes: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION`, `CONFLICT`, `INTERNAL`.
 - **Pagination**: `?cursor=<id>&limit=<n≤100>` → `{ data: [...], nextCursor: string | null }`.
+  Add `?withTotal=1` for `{ ..., total: number }` — a COUNT of all matching rows, opt-in because
+  the extra query is only earned where the UI states a total (today: `/jobs`, whose
+  "Retry all matching (N)" must agree with what `retry-bulk` will actually re-queue).
 - **Mutations** write an `AuditEntry` (action names in 02-data-model.md) — no exceptions.
 - Every route handler logs a structured line (pino) with route, userId, duration, outcome.
 

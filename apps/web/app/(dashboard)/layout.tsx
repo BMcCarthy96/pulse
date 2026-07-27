@@ -1,5 +1,6 @@
 import { auth, signOut } from "@/auth";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { GlobalHealthDot } from "@/components/global-health-dot";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { APP_NAME } from "@pulse/shared";
@@ -20,10 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b bg-card px-4">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" title="All connectors healthy" />
-            <span className="text-muted-foreground text-sm">All systems healthy</span>
-          </div>
+          <GlobalHealthDot />
           <div className="flex items-center gap-3">
             {user && (
               <>
