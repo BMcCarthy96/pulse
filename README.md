@@ -329,7 +329,7 @@ no failures in it would demonstrate nothing.
 
 | Layer | Runs against | Covers | Count |
 |---|---|---|---|
-| **Unit** (`pnpm test:unit`) | nothing — pure Node | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly, prompt snapshot | 161 |
+| **Unit** (`pnpm test:unit`) | nothing — pure Node | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly, prompt snapshot, OpenAPI drift | 171 |
 | **Integration** (`pnpm test:integration`) | real Postgres + Redis | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions | 51 |
 | **E2E** (`pnpm test:e2e`) | built app + real worker | The full demo flow, plus auth and role gates | 7 |
 
