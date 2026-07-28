@@ -5,29 +5,178 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  # Same defaults the local configs use, so a CI failure is reproducible with `pnpm test`.
+  POSTGRES_USER: pulse
+  POSTGRES_PASSWORD: pulse
+
 jobs:
-  build:
+  lint-typecheck:
+    name: Lint & typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
+        with: { version: 9 }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/db generate
+      - run: pnpm lint
+      - run: pnpm typecheck
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+  unit:
+    name: Unit tests & coverage
+    runs-on: ubuntu-latest
+    needs: lint-typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/db generate
 
-      - name: Lint
-        run: pnpm lint
+      # No services: the unit suite must stay runnable with nothing but Node.
+      - name: Unit tests with coverage
+        run: pnpm test:coverage
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
 
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: lint-typecheck
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulse"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/db generate
+
+      # The suite's own global-setup creates and migrates pulse_test.
+      - name: Integration tests
+        run: pnpm test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse_test
+          TEST_REDIS_URL: redis://localhost:6379/1
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [unit, integration]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/db generate
+      - run: pnpm build
+        env:
+          # next build needs these present; values are irrelevant to a build.
+          DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse
+          AUTH_SECRET: build-time-placeholder
+
+  e2e:
+    name: E2E (demo flow)
+    runs-on: ubuntu-latest
+    needs: build
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulse"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/db generate
+
+      - name: Install Playwright browser
+        run: pnpm --filter @pulse/web exec playwright install --with-deps chromium
+
+      # `next start` needs a build; the e2e config's globalSetup creates, migrates and seeds
+      # pulse_e2e before the servers come up.
       - name: Build
         run: pnpm build
+        env:
+          DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse_e2e
+          AUTH_SECRET: e2e-secret-not-used-anywhere-else
+
+      - name: E2E
+        run: pnpm test:e2e
+        env:
+          E2E_DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse_e2e
+          E2E_REDIS_URL: redis://localhost:6379/2
+          # Deliberately empty: the demo flow asserts graceful degradation, and CI never spends
+          # money on model calls.
+          ANTHROPIC_API_KEY: ""
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
