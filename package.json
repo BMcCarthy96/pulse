@@ -1,5 +1,5 @@
 {
-  "name": "integration-health",
+  "name": "pulse",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -11,7 +11,11 @@
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "pnpm -r test",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage && node scripts/check-coverage-claims.mjs",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "pnpm --filter @pulse/web test:e2e",
     "db:push": "pnpm --filter @pulse/db db:push",
     "db:migrate": "pnpm --filter @pulse/db db:migrate",
@@ -19,13 +23,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@pulse/db": "workspace:*",
+    "@pulse/shared": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.3",
     "eslint": "^10.7.0",
     "prettier": "^3.9.5",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.64.0"
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^4.1.10"
   }
 }

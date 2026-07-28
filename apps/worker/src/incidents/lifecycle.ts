@@ -54,7 +54,11 @@ async function openIncident(args: {
           status: "OPEN",
           title: `${args.connectorName} is ${args.status}`,
           detectionSource: "health-engine",
-          aiSummaryStatus: "none",
+          // "queued", not "none": a summary job is enqueued unconditionally a few lines below,
+          // so the incident *is* waiting on one. Leaving it "none" made the card claim no
+          // summary had been requested for as long as the worker was busy or down — the one
+          // situation where an operator most wants to know something is pending.
+          aiSummaryStatus: "queued",
         },
       });
       await addTimelineEntry(

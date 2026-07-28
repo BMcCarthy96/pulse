@@ -7,6 +7,7 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
+    "start:e2e": "tsx src/index.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "echo \"no unit tests in apps/worker yet\" && exit 0",

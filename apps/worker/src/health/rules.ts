@@ -14,10 +14,19 @@ export interface HealthCall {
   durationMs: number | null;
 }
 
-type StatusRules = Pick<
-  typeof HEALTH_RULES,
-  "downConsecutiveFailures" | "downErrorRate" | "downMinCalls" | "degradedErrorRate" | "degradedP95Ms"
->;
+/**
+ * Explicitly `number`, not `Pick<typeof HEALTH_RULES, ...>`. `HEALTH_RULES` is declared `as
+ * const`, so picking from it yields literal types (`5`, `0.5`, `4`…) and the `rules` parameter
+ * below would only accept the exact default values — an injection seam that cannot inject
+ * anything. Widening restores the point of the parameter.
+ */
+export interface StatusRules {
+  downConsecutiveFailures: number;
+  downErrorRate: number;
+  downMinCalls: number;
+  degradedErrorRate: number;
+  degradedP95Ms: number;
+}
 
 /**
  * doc 03 §4, implemented exactly:

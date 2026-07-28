@@ -1,6 +1,6 @@
 import type { Job } from "bullmq";
 import { prisma, type Prisma } from "@pulse/db";
-import { SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
+import { parseRetryAfterMs, SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
 import { log } from "../log.js";
 
 const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? "http://localhost:4001";
@@ -35,8 +35,7 @@ export async function processEligibilityJob(job: Job<EligibilityPayload>) {
     });
 
     if (res.status === 429) {
-      const retryAfterSec = Number(res.headers.get("retry-after") ?? "15");
-      throw new RetryAfterError("rate limited", retryAfterSec * 1000);
+      throw new RetryAfterError("rate limited", parseRetryAfterMs(res.headers.get("retry-after")));
     }
     if (!res.ok) throw new Error(`simulator returned ${res.status}`);
 

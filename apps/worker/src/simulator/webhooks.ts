@@ -1,14 +1,16 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import {
+  signWebhookBody,
+  WEBHOOK_DELIVERY_HEADER,
+  WEBHOOK_EVENT_HEADER,
+  WEBHOOK_SIGNATURE_HEADER,
+} from "@pulse/shared/webhook-signature";
 import { log } from "../log.js";
 import { getChaosState } from "./chaos.js";
 
 const WEBHOOK_TARGET_URL = process.env.WEBHOOK_TARGET_URL ?? "http://localhost:3010";
 const WEBHOOK_SIGNING_SECRET = process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
 const EMIT_TIMEOUT_MS = 5000;
-
-function sign(rawBody: string): string {
-  return createHmac("sha256", WEBHOOK_SIGNING_SECRET).update(rawBody).digest("hex");
-}
 
 async function post(connectorKey: string, eventType: string, body: string, deliveryId: string) {
   const controller = new AbortController();
@@ -18,9 +20,9 @@ async function post(connectorKey: string, eventType: string, body: string, deliv
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-pulse-signature": sign(body),
-        "x-pulse-delivery": deliveryId,
-        "x-pulse-event": eventType,
+        [WEBHOOK_SIGNATURE_HEADER]: signWebhookBody(body, WEBHOOK_SIGNING_SECRET),
+        [WEBHOOK_DELIVERY_HEADER]: deliveryId,
+        [WEBHOOK_EVENT_HEADER]: eventType,
       },
       body,
       signal: controller.signal,

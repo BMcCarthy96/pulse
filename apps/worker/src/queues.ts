@@ -3,6 +3,7 @@ import { prisma, type Prisma } from "@pulse/db";
 import {
   QUEUE_NAMES,
   INCIDENT_SUMMARY_JOB_OPTS,
+  exponentialBackoffMs,
   getRedisConnectionOptions,
   createTrackedJob as sharedCreateTrackedJob,
   retryTrackedJob as sharedRetryTrackedJob,
@@ -155,7 +156,11 @@ export function createTrackedWorker(
   return worker;
 }
 
+/**
+ * A 429 tells us exactly how long to wait; exponential backoff would be guessing over the top of
+ * an authoritative answer. Everything else falls back to the standard schedule.
+ */
 export const eligibilityBackoffStrategy = (attemptsMade: number, _type?: string, err?: Error): number => {
   if (err instanceof RetryAfterError) return err.retryAfterMs;
-  return Math.min(2000 * 2 ** (attemptsMade - 1), 32000);
+  return exponentialBackoffMs(attemptsMade);
 };

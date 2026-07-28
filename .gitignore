@@ -16,3 +16,7 @@ playwright-report/
 test-results/
 .pnpm-store/
 .claude/
+
+# Local dev/test process logs
+dev.log
+e2e.log

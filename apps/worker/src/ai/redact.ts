@@ -62,7 +62,10 @@ const RULES: RedactionRule[] = [
   },
   {
     name: "phone",
-    pattern: /\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g,
+    // `\b` cannot open this pattern: the first character may be `+` or `(`, and there is no
+    // word boundary between a space and a punctuation mark, so `\b` pushed the match start
+    // past the punctuation and left `+` / `(` dangling outside the replacement token.
+    pattern: /(?<!\w)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g,
     replacement: "[REDACTED:phone]",
   },
   // ── Dates that look like a date of birth ───────────────────────────────────
@@ -114,7 +117,10 @@ function knownNameRules(names: string[]): RedactionRule[] {
     .filter((n) => n.trim().length > 0)
     .map((name) => ({
       name: `known-name:${name}`,
-      pattern: new RegExp(`\\b${escapeRegExp(name)}\\b`, "gi"),
+      // Lookarounds rather than `\b` for the same reason as the phone rule: a seeded name can
+      // end in punctuation ("Dana A.", "Kessler (Ops)"), and `\b` requires a word character on
+      // the inside of the boundary — so those names silently failed to match at all.
+      pattern: new RegExp(`(?<!\\w)${escapeRegExp(name.trim())}(?!\\w)`, "gi"),
       replacement: "[REDACTED:name]",
     }));
 }

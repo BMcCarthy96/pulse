@@ -10,11 +10,17 @@ export const HEALTH_RULES = {
   tickIntervalSec: 60,
 } as const;
 
-function envInt(name: string, fallback: number): number {
+function envInt(name: string, fallback: number, opts: { allowZero?: boolean } = {}): number {
   const raw = process.env[name];
-  if (!raw) return fallback;
+  if (raw === undefined || raw.trim() === "") return fallback;
   const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  if (!Number.isFinite(n)) return fallback;
+  // Zero is a meaningful value for the stability windows — it means "resolve on the next healthy
+  // tick", which is exactly what the e2e suite and `.env.example` ask for. Treating it as falsy
+  // silently substituted the 10-minute production default and made the documented test
+  // configuration impossible to actually run.
+  const floor = opts.allowZero ? 0 : 1;
+  return n >= floor ? n : fallback;
 }
 
 /**
@@ -23,7 +29,9 @@ function envInt(name: string, fallback: number): number {
  * 10-minute stability window into seconds without touching the rules themselves.
  */
 export function getHealthConfig() {
-  const stabilityMinutes = envInt("INCIDENT_STABILITY_MIN", HEALTH_RULES.monitoringStabilityMinutes);
+  const stabilityMinutes = envInt("INCIDENT_STABILITY_MIN", HEALTH_RULES.monitoringStabilityMinutes, {
+    allowZero: true,
+  });
   return {
     ...HEALTH_RULES,
     tickIntervalSec: envInt("HEALTH_TICK_SEC", HEALTH_RULES.tickIntervalSec),
