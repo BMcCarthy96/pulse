@@ -45,6 +45,20 @@ export function SidebarNav() {
           </Link>
         );
       })}
+      {/* Reference material rather than an operational view, so it sits below the divider and
+          outside the badge logic. */}
+      <div className="my-1 border-t" />
+      <Link
+        href="/docs/api"
+        className={cn(
+          "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          pathname.startsWith("/docs")
+            ? "bg-secondary text-secondary-foreground"
+            : "text-muted-foreground hover:bg-secondary/60",
+        )}
+      >
+        API reference
+      </Link>
       <RoleGate minRole="ADMIN">
         <Link
           href="/settings"

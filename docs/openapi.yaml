@@ -1,0 +1,930 @@
+openapi: 3.1.0
+
+info:
+  title: Pulse API
+  version: 1.0.0
+  description: |
+    Integration health monitoring for Lakeview Health Partners (a fictional healthcare
+    organisation). All data is synthetic; upstream vendor systems are simulated.
+
+    This document is hand-written and kept in step with `docs/plan/04-api-spec.md`. CI parses it
+    and asserts that every route below exists in the codebase, so drift fails the build rather
+    than quietly accumulating.
+
+    **Authentication.** Every `/api/v1/*` route except `/health` requires a session cookie issued
+    by Auth.js (`POST /api/auth/callback/credentials`). Roles are ordered
+    `VIEWER < OPS < ADMIN`; a route documented as `OPS` accepts OPS and ADMIN.
+
+    **Errors.** Every failure returns the same envelope with one of
+    `UNAUTHORIZED | FORBIDDEN | NOT_FOUND | VALIDATION | CONFLICT | INTERNAL`.
+
+    **Pagination.** List routes take `cursor` and `limit` and return
+    `{ data, nextCursor }`. Pass `withTotal=1` to additionally get `total`; it is opt-in because
+    it costs an extra COUNT query.
+
+servers:
+  - url: /api/v1
+    description: Application API
+
+tags:
+  - name: Overview
+  - name: Connectors
+  - name: Jobs
+  - name: Events
+  - name: Logs
+  - name: Incidents
+  - name: Admin
+  - name: Simulation
+  - name: System
+
+security:
+  - sessionCookie: []
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Liveness probe
+      description: |
+        Public — deliberately outside the auth middleware so uptime monitors and the e2e suite
+        can probe it without credentials.
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, db, redis]
+                properties:
+                  ok: { type: boolean }
+                  db: { type: boolean }
+                  redis: { type: boolean }
+
+  /openapi:
+    get:
+      tags: [System]
+      summary: This document
+      description: |
+        Returns `docs/openapi.yaml` verbatim as `application/yaml`, or the parsed document as
+        JSON with `?format=json`. Rendered by the in-app reference at `/docs/api`.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [json] }
+      responses:
+        "200":
+          description: The specification
+          content:
+            application/yaml:
+              schema: { type: string }
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /overview:
+    get:
+      tags: [Overview]
+      summary: Dashboard aggregate
+      responses:
+        "200":
+          description: Per-connector health plus fleet totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connectors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string }
+                        displayName: { type: string }
+                        status: { $ref: "#/components/schemas/ConnectorStatus" }
+                        errorRate: { type: number, format: float }
+                        lastActivity: { type: string, format: date-time, nullable: true }
+                        openIncidentId: { type: string, nullable: true }
+                  totals:
+                    type: object
+                    properties:
+                      deadJobs: { type: integer }
+                      openIncidents: { type: integer }
+                      eventsLastHour: { type: integer }
+                      jobsLastHour: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /connectors:
+    get:
+      tags: [Connectors]
+      summary: List connectors with 24h sparkline data
+      responses:
+        "200":
+          description: Connector list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Connector" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /connectors/{key}:
+    parameters:
+      - $ref: "#/components/parameters/ConnectorKey"
+    get:
+      tags: [Connectors]
+      summary: Connector detail
+      description: Connector, ten most recent sync runs, 24h of health snapshots, open incident.
+      responses:
+        "200":
+          description: Connector detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connector: { $ref: "#/components/schemas/Connector" }
+                  recentRuns:
+                    type: array
+                    items: { $ref: "#/components/schemas/SyncRun" }
+                  snapshots:
+                    type: array
+                    items: { $ref: "#/components/schemas/HealthSnapshot" }
+                  openIncident:
+                    oneOf:
+                      - $ref: "#/components/schemas/Incident"
+                      - type: "null"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Connectors]
+      summary: Update connector settings
+      description: "Role: ADMIN. Writes an AuditEntry (`connector.update`)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paused: { type: boolean }
+                syncIntervalSec: { type: integer, minimum: 10, nullable: true }
+      responses:
+        "200":
+          description: Updated connector
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connector: { $ref: "#/components/schemas/Connector" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /connectors/{key}/chaos:
+    parameters:
+      - $ref: "#/components/parameters/ConnectorKey"
+    post:
+      tags: [Connectors]
+      summary: Set the simulated upstream's failure mode
+      description: |
+        Role: ADMIN. Writes an AuditEntry (`connector.chaos_change`) carrying `{from, to}`.
+
+        Chaos is a first-class feature, not a test hook: it is what makes the failure demos
+        reproducible. Note that the chaos mode is deliberately withheld from the AI summary
+        context, so the model reasons from symptoms rather than restating the injected fault.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { $ref: "#/components/schemas/ChaosMode" }
+                config:
+                  type: object
+                  description: Mode-specific settings; `failureRate` (0–1) for DEGRADED.
+                  properties:
+                    failureRate: { type: number, minimum: 0, maximum: 1 }
+      responses:
+        "200":
+          description: Chaos mode applied
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /connectors/{key}/sync:
+    parameters:
+      - $ref: "#/components/parameters/ConnectorKey"
+    post:
+      tags: [Connectors]
+      summary: Trigger a manual sync
+      description: "Role: OPS. Enqueues a `sync` job with `trigger: manual`. Audited."
+      responses:
+        "200":
+          description: Sync enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  syncRunId: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: A sync run is already RUNNING for this connector
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/JobStatus" } }
+        - { name: connectorKey, in: query, schema: { type: string } }
+        - { name: queue, in: query, schema: { type: string } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/WithTotal"
+      responses:
+        "200":
+          description: Paginated jobs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /jobs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Jobs]
+      summary: Job detail including payload and full error history
+      responses:
+        "200":
+          description: Job
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job: { $ref: "#/components/schemas/Job" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /jobs/{id}/retry:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Jobs]
+      summary: Re-queue a single failed job
+      description: |
+        Role: OPS. Audited (`job.retry`). The job's `errorHistory` is preserved across the
+        re-queue — it is the record an operator needs to decide whether retrying is sensible.
+      responses:
+        "200":
+          description: Job re-queued
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Job is not DEAD or FAILED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /jobs/retry-bulk:
+    post:
+      tags: [Jobs]
+      summary: Re-queue all matching DEAD jobs
+      description: |
+        Role: OPS. Capped at 100 per call and ordered oldest-first, so repeated calls drain the
+        backlog instead of re-picking the same head. Audited with `{count}`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connectorKey: { type: string }
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Jobs re-queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /events:
+    get:
+      tags: [Events]
+      summary: List integration events
+      parameters:
+        - { name: connectorKey, in: query, schema: { type: string } }
+        - { name: direction, in: query, schema: { type: string, enum: [INBOUND, OUTBOUND] } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/EventStatus" } }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated events
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/IntegrationEvent" }
+
+  /events/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Events]
+      summary: Event detail with payload and captured headers
+      responses:
+        "200":
+          description: Event
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /logs:
+    get:
+      tags: [Logs]
+      summary: List log entries
+      parameters:
+        - { name: level, in: query, schema: { $ref: "#/components/schemas/LogLevel" } }
+        - { name: connectorKey, in: query, schema: { type: string } }
+        - { name: jobId, in: query, schema: { type: string } }
+        - { name: incidentId, in: query, schema: { type: string } }
+        - { name: q, in: query, description: Case-insensitive message search, schema: { type: string } }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated log entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/LogEntry" }
+
+  /incidents:
+    get:
+      tags: [Incidents]
+      summary: List incidents
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/IncidentStatus" } }
+        - { name: connectorKey, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated incidents
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Incident" }
+
+  /incidents/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Incidents]
+      summary: Incident with timeline and connector
+      responses:
+        "200":
+          description: Incident detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  incident: { $ref: "#/components/schemas/Incident" }
+                  timeline:
+                    type: array
+                    items: { $ref: "#/components/schemas/IncidentTimelineEntry" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /incidents/{id}/acknowledge:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Incidents]
+      summary: Acknowledge an incident
+      description: |
+        Role: OPS. Sets `acknowledgedAt`, writes a `status_change` and a `note` timeline entry,
+        and audits `incident.acknowledge` with `{from}`.
+
+        `acknowledgedAt` is also what lets a flapping incident roll back to ACKNOWLEDGED rather
+        than OPEN when it leaves MONITORING.
+      responses:
+        "200": { description: Acknowledged }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Incident is already acknowledged or resolved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /incidents/{id}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Incidents]
+      summary: Resolve an incident by hand
+      description: "Role: OPS. Audited (`incident.resolve`)."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        "200": { description: Resolved }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Incident is already resolved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /incidents/{id}/notes:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Incidents]
+      summary: Add a note to the incident timeline
+      description: "Role: OPS."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, minLength: 1 }
+      responses:
+        "200": { description: Note added }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /incidents/{id}/summary:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      tags: [Incidents]
+      summary: Edit the AI-drafted summary
+      description: |
+        Role: OPS. Sets `aiSummaryStatus` to `edited` and preserves the machine-generated version
+        under `aiSummary.original`, so an edit never destroys what the model actually said.
+        Audited (`incident.summary_edit`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncidentSummary" }
+      responses:
+        "200": { description: Summary updated }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: There is no ready or edited summary to edit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /incidents/{id}/summary/regenerate:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Incidents]
+      summary: Re-enqueue AI summary generation
+      description: "Role: OPS. Audited (`incident.summary_regenerate`)."
+      responses:
+        "202": { description: Generation enqueued }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: A summary is already generating
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /simulate/lab-results:
+    post:
+      tags: [Simulation]
+      summary: Make the simulated lab vendor emit inbound webhooks
+      description: "Role: OPS. Proxies to the simulator's `/labs/emit`."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count: { type: integer, minimum: 1, maximum: 50, default: 5 }
+      responses:
+        "200": { description: Emission triggered }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /simulate/claims:
+    post:
+      tags: [Simulation]
+      summary: Enqueue test claim submissions
+      description: "Role: OPS."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                count: { type: integer, minimum: 1, maximum: 50, default: 3 }
+      responses:
+        "200": { description: Claims enqueued }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /eligibility/check:
+    post:
+      tags: [Simulation]
+      summary: Run a synthetic eligibility check
+      description: |
+        Role: OPS. Enqueues an eligibility job and returns its id; the UI polls the job.
+
+        This is the connector that honours HTTP `Retry-After` on 429 rather than using
+        exponential backoff — the upstream told us how long to wait, so guessing over the top of
+        that would be wrong.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, payerId]
+              properties:
+                memberId: { type: string }
+                payerId: { type: string }
+      responses:
+        "200":
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /audit:
+    get:
+      tags: [Admin]
+      summary: Audit log
+      description: "Role: ADMIN. Also returns the distinct action names, for the filter dropdown."
+      parameters:
+        - { name: action, in: query, schema: { type: string } }
+        - { name: userId, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated audit entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/AuditEntry" }
+                      actions:
+                        type: array
+                        items: { type: string }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /users:
+    get:
+      tags: [Admin]
+      summary: List organisation users
+      description: |
+        Role: ADMIN. Read-only — there is no user management UI in scope. Password hashes are
+        never selected, let alone returned.
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+      description: Auth.js JWT session cookie, set by the credentials sign-in flow.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    ConnectorKey:
+      name: key
+      in: path
+      required: true
+      description: One of `ehr-fhir`, `lab-results`, `claims`, `eligibility`.
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      description: Id of the last row from the previous page.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    WithTotal:
+      name: withTotal
+      in: query
+      description: |
+        Set to `1` to include a `total` count of all matching rows. Opt-in because it costs an
+        extra COUNT query, and is only earned where the UI states a total.
+      schema: { type: string, enum: ["1"] }
+
+  responses:
+    Unauthorized:
+      description: No valid session
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Forbidden:
+      description: Session lacks the required role
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: Resource does not exist
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ValidationError:
+      description: Request body or query failed schema validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [UNAUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION, CONFLICT, INTERNAL]
+            message: { type: string }
+
+    Page:
+      type: object
+      required: [data, nextCursor]
+      properties:
+        data: { type: array, items: {} }
+        nextCursor: { type: string, nullable: true }
+        total:
+          type: integer
+          description: Present only when `withTotal=1` was passed.
+
+    ConnectorStatus:
+      type: string
+      enum: [HEALTHY, DEGRADED, DOWN, PAUSED]
+
+    ChaosMode:
+      type: string
+      enum: [HEALTHY, DEGRADED, OUTAGE, TIMEOUT, RATE_LIMIT, BAD_PAYLOAD, AUTH_FAILURE]
+
+    JobStatus:
+      type: string
+      enum: [QUEUED, ACTIVE, SUCCEEDED, FAILED, DEAD]
+
+    RunStatus:
+      type: string
+      enum: [RUNNING, SUCCEEDED, FAILED, PARTIAL]
+
+    EventStatus:
+      type: string
+      enum: [RECEIVED, PROCESSING, PROCESSED, FAILED, DUPLICATE, INVALID]
+
+    LogLevel:
+      type: string
+      enum: [DEBUG, INFO, WARN, ERROR]
+
+    IncidentStatus:
+      type: string
+      enum: [OPEN, ACKNOWLEDGED, MONITORING, RESOLVED]
+
+    IncidentSeverity:
+      type: string
+      enum: [CRITICAL, WARNING]
+
+    Role:
+      type: string
+      enum: [ADMIN, OPS, VIEWER]
+
+    Connector:
+      type: object
+      properties:
+        id: { type: string }
+        key: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        kind:
+          type: string
+          enum: [poll_sync, inbound_webhook, outbound_async, request_response]
+        status: { $ref: "#/components/schemas/ConnectorStatus" }
+        paused: { type: boolean }
+        chaosMode: { $ref: "#/components/schemas/ChaosMode" }
+        syncIntervalSec: { type: integer, nullable: true }
+
+    SyncRun:
+      type: object
+      properties:
+        id: { type: string }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        trigger: { type: string, enum: [schedule, manual] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        recordsFetched: { type: integer }
+        recordsFailed: { type: integer }
+        error: { type: string, nullable: true }
+
+    HealthSnapshot:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/ConnectorStatus" }
+        errorRate: { type: number, format: float }
+        p95LatencyMs: { type: integer, nullable: true }
+        totalCalls: { type: integer }
+        failedCalls: { type: integer }
+        windowStart: { type: string, format: date-time }
+        windowEnd: { type: string, format: date-time }
+
+    Job:
+      type: object
+      properties:
+        id: { type: string }
+        queue: { type: string }
+        type: { type: string }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        attempts: { type: integer }
+        maxAttempts: { type: integer }
+        payload: { type: object, additionalProperties: true }
+        lastError: { type: string, nullable: true }
+        errorHistory:
+          type: array
+          description: One entry per failed attempt. This is what the health engine expands into calls.
+          items:
+            type: object
+            properties:
+              attempt: { type: integer }
+              at: { type: string, format: date-time }
+              message: { type: string }
+              durationMs: { type: integer }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    IntegrationEvent:
+      type: object
+      properties:
+        id: { type: string }
+        direction: { type: string, enum: [INBOUND, OUTBOUND] }
+        eventType: { type: string }
+        dedupeKey: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/EventStatus" }
+        payload: { type: object, additionalProperties: true }
+        headers: { type: object, additionalProperties: true, nullable: true }
+        error: { type: string, nullable: true }
+        receivedAt: { type: string, format: date-time }
+        processedAt: { type: string, format: date-time, nullable: true }
+
+    LogEntry:
+      type: object
+      properties:
+        id: { type: string }
+        level: { $ref: "#/components/schemas/LogLevel" }
+        source: { type: string, enum: [worker, web, simulator] }
+        message: { type: string }
+        context: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    IncidentSummary:
+      type: object
+      description: Structured output; the schema is enforced on the model response, not parsed out of prose.
+      required: [summary, probableCause, impact, suggestedSteps, confidence]
+      properties:
+        summary: { type: string }
+        probableCause: { type: string }
+        impact: { type: string }
+        suggestedSteps:
+          type: array
+          maxItems: 5
+          items: { type: string }
+        confidence: { type: string, enum: [low, medium, high] }
+
+    Incident:
+      type: object
+      properties:
+        id: { type: string }
+        status: { $ref: "#/components/schemas/IncidentStatus" }
+        severity: { $ref: "#/components/schemas/IncidentSeverity" }
+        title: { type: string }
+        openedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: string, format: date-time, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        detectionSource: { type: string }
+        aiSummaryStatus:
+          type: string
+          enum: [none, queued, generating, ready, failed, edited]
+        aiSummary:
+          description: Null until generated. An edited summary keeps the machine original under `original`.
+          oneOf:
+            - $ref: "#/components/schemas/IncidentSummary"
+            - type: "null"
+
+    IncidentTimelineEntry:
+      type: object
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [opened, status_change, note, ai_summary, health_transition, retry_burst]
+        message: { type: string }
+        actor:
+          type: string
+          description: '"system" or a user id.'
+        createdAt: { type: string, format: date-time }
+
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        action: { type: string }
+        targetType: { type: string }
+        targetId: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            email: { type: string }
+
+    User:
+      type: object
+      description: Password hashes are never selected from the database for this shape.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+        createdAt: { type: string, format: date-time }

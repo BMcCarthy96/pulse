@@ -15,7 +15,8 @@
     "generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx --env-file=.env prisma/seed.ts"
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "metrics": "tsx --env-file=.env scripts/metrics.ts"
   },
   "dependencies": {
     "@faker-js/faker": "^9",

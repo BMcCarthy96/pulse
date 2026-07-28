@@ -13,12 +13,144 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 05 webhooks | done | 2026-07-14 | Verified live: 10 labs/emit events reached PROCESSED; tampered signature → 401 + INVALID row w/ headers captured; replayed delivery id → 200, original untouched (dedupe confirmed by row count); BAD_PAYLOAD → INVALID w/ full zod error in `error`; rejected claim.ack → WARN log + Job payload ackStatus updated; claims OUTAGE did not block lab-results ingestion (isolation confirmed) |
 | 06 dashboard UI | done | 2026-07-27 | Verified live across all three roles. Overview: 4 tiles w/ 15m error rate + last activity, KPIs (63 dead / 0 open incidents / 10 events 1h / 91 jobs 1h), 24h per-connector error-rate chart, 2 seeded RESOLVED CRITICAL incidents. EHR "Run sync now" → SUCCEEDED run (120 fetched) in Sync History within one poll. As ADMIN: chaos → OUTAGE via confirm dialog quoting `connector.chaos_change {from,to}`, matching AuditEntry; as VIEWER: chaos panel + all action buttons absent, direct `POST /chaos` → `{"error":{"code":"FORBIDDEN","message":"ADMIN role required"}}` 403. OUTAGE sync → attempts ticked 1/5…5/5 → DEAD, sidebar bubble incremented. Single retry ("Job re-queued") + "Retry all matching" w/ confirm, both audited (`job.retry`, `job.retry_bulk meta.count`). "Simulate incoming results" → 5 PROCESSED events, detail sheet shows payload + `x-pulse-signature`. Eligibility modal → job SUCCEEDED. `/logs`: level filter (ERROR → 30/30 ERROR rows), connector filter (Northside only), free-text (`sync.page`), row → sheet w/ context JSON. Empty states hit on /jobs (status QUEUED), /events (VerifyMed+INVALID), /logs (no-match `q`); DataTable skeletons on first load. `pnpm lint`/`typecheck`/`build` clean (26 routes); fresh-tab console clean on /jobs, /logs, /connectors/[key] |
 | 07 health + incidents | done | 2026-07-27 | Walked with `HEALTH_TICK_SEC=15`, `INCIDENT_STABILITY_MIN=1`. All healthy: 4 connectors × 6 snapshots per 2 min, all HEALTHY, no status drift. EHR OUTAGE + manual sync → DOWN → **one** CRITICAL incident (`Mercy General EHR (FHIR R4) is DOWN`, `aiSummaryStatus: queued`), still a single row after ~30 further ticks; timeline had `opened` + `health_transition`. Incident visible in sidebar bubble (1→2), `/incidents` list, overview tile link, and connector-detail banner; detail page rendered the AI card's "queued" state, timeline, and context panel (failed jobs 1, error logs 4, both pre-filtered links). Acknowledge as Marcus (OPS) → ACKNOWLEDGED + `status_change` + note entries + AuditEntry `incident.acknowledge {from: OPEN}`. As Priya (VIEWER): only "Sign out" rendered, no note box, and acknowledge/resolve/notes each returned `{"error":{"code":"FORBIDDEN","message":"OPS role required"}}` 403. Chaos → HEALTHY + bulk retry (45 jobs) → MONITORING, flapped back to **ACKNOWLEDGED** (not OPEN — `preMonitoringStatus` reads `acknowledgedAt`), re-entered MONITORING, then RESOLVED at 14:51:30 with `resolvedAt` set and the complete 9-entry timeline. Sustained DEGRADED (`failureRate 0.4`) on ClearPath → WARNING incident after the sustained window. `computeStatus`/`buildWindow` spot-checks: 16/16 pass via `apps/worker/src/scripts/check-health-rules.ts`, including the three doc 03 §4 cases (5 consecutive → DOWN, errorRate 0.12 → DEGRADED, empty window carries previous). lint/typecheck/build clean |
-| 08 AI + audit | **blocked** — 5 of 6 criteria verified; needs a real `ANTHROPIC_API_KEY` | | Verified without a key: redaction spot-checks 24/24 (`scripts/check-redaction.ts` — identifiers, DOB vs. operational timestamps, names, known-names list, nested JSON, idempotency); outgoing context contains **zero** `PAT-`/`CLM-`/`APT-` tokens and zero seeded names (`scripts/dump-incident-context.ts`, exits non-zero if either leaks); no-key path → `queued → generating → failed` with `{"error":"AI not configured"}`, WARN log, job completes without burning its retry, and the card renders the message plus the `ANTHROPIC_KEY` hint; regenerate → 202 + `incident.summary_regenerate` audit; edit → status `edited`, `editedBy: Dana Alvarez`, machine original preserved under `aiSummary.original`, `incident.summary_edit {firstEdit:true}` audit; `/settings` audit log shows the full session history with correct actors, action filter, and a metadata sheet, users table read-only with role badges; as OPS both `/api/v1/audit` and `/api/v1/users` → 403 `ADMIN role required` and Settings is absent from the nav. lint/typecheck/build clean (30 routes). **Not verified:** the live generation criterion (card → `ready`, footer showing model + prompt v1 + timestamp) — `ANTHROPIC_API_KEY` is empty locally and supplying one is the user's call |
-| 09 testing + CI | not started | | |
-| 10 deployment | not started | | |
-| 11 docs + polish | not started | | |
+| 08 AI + audit | done | 2026-07-28 | **Live generation verified 2026-07-28** with a real key: the ClearPath WARNING incident's card went `failed → queued → generating → ready` on Regenerate, footer read "Generated by claude-opus-4-8 · prompt v1", confidence chip "medium", and a `✨ AI summary generated (claude-opus-4-8, prompt v1)` timeline entry was written. The summary correctly identified the HTTP 500s and the ~7-minute window, **separated them from the unrelated "missing prior authorization" claim rejections in the same window**, and stated that "the underlying trigger of the 500s is not shown" — i.e. it reasoned from symptoms without being told the chaos mode, which is exactly what excluding it from the context is meant to force. Previously verified without a key: redaction spot-checks 24/24 (`scripts/check-redaction.ts` — identifiers, DOB vs. operational timestamps, names, known-names list, nested JSON, idempotency); outgoing context contains **zero** `PAT-`/`CLM-`/`APT-` tokens and zero seeded names (`scripts/dump-incident-context.ts`, exits non-zero if either leaks); no-key path → `queued → generating → failed` with `{"error":"AI not configured"}`, WARN log, job completes without burning its retry, and the card renders the message plus the `ANTHROPIC_KEY` hint; regenerate → 202 + `incident.summary_regenerate` audit; edit → status `edited`, `editedBy: Dana Alvarez`, machine original preserved under `aiSummary.original`, `incident.summary_edit {firstEdit:true}` audit; `/settings` audit log shows the full session history with correct actors, action filter, and a metadata sheet, users table read-only with role badges; as OPS both `/api/v1/audit` and `/api/v1/users` → 403 `ADMIN role required` and Settings is absent from the nav. lint/typecheck/build clean (30 routes). **Not verified:** the live generation criterion (card → `ready`, footer showing model + prompt v1 + timestamp) — `ANTHROPIC_API_KEY` is empty locally and supplying one is the user's call |
+| 09 testing + CI | done | 2026-07-28 | See the phase-9 section below |
+| 10 deployment | **code done; live deploy is the user's step** | 2026-07-28 | Prod-readiness pass + runbook complete; the five acceptance criteria all require account access (Railway/Vercel) and cannot be met from the repo |
+| 11 docs + polish | done except screenshots + Loom | 2026-07-28 | README case study, OpenAPI + `/docs/api`, metrics script, positioning, Loom script. Screenshots and the recording are user tasks |
+
+## Phase 9 — acceptance criteria
+
+- [x] **`pnpm test` green locally with only Docker services running** — 171 unit tests (8 files,
+      no services) + 51 integration tests (3 files, real Postgres + Redis) all pass.
+      `test:unit` needs nothing but Node; `test:integration` creates and migrates a dedicated
+      `pulse_test` database via its own global setup and truncates every table between tests.
+- [x] **`pnpm test:e2e` green locally from a fresh seed** — 7/7 pass in 2.4 min, including the
+      full doc-05 demo flow (2.2 min) end to end: chaos OUTAGE → sync → retries → DEAD → DOWN →
+      incident opens → AI degrades cleanly with no key → chaos HEALTHY → bulk retry → recovery →
+      MONITORING → RESOLVED → audit log shows the chaos change and retries attributed to Dana.
+      `scripts/prepare-e2e-db.mjs` creates, migrates, truncates and seeds `pulse_e2e` first.
+- [ ] **CI green on GitHub for the full pipeline** — `.github/workflows/ci.yml` implements the
+      specified `lint-typecheck → unit → integration → build → e2e` graph with Postgres/Redis
+      service containers, pnpm store caching, and Playwright report upload on failure. **Cannot
+      be verified**: the repository has no GitHub remote, so no workflow run exists. Every job's
+      commands were run locally and pass.
+- [x] **Coverage shows `health/rules.ts` and `ai/redact.ts` at 100% branch** — both at 100% on
+      statements, branches, functions and lines. Vitest's per-file thresholds fail the run on
+      regression, and `scripts/check-coverage-claims.mjs` prints the numbers, because the text
+      reporter omits files that are fully covered — the two files the README makes claims about
+      were precisely the two it would never print.
+- [x] **Prompt snapshot fails when the prompt is edited without a version bump** — verified by
+      editing `INCIDENT_SUMMARY_PROMPT_V1` and re-running: the snapshot assertion failed as
+      designed. Reverted.
+
+### Phase 9 — bugs the tests found
+
+Nine real defects, all fixed in the same phase:
+
+1. **Phone redaction left punctuation outside the token.** `\b` cannot open a pattern whose first
+   character may be `+` or `(`, so `(555) 867-5309` redacted to `([REDACTED:phone]`. Replaced with
+   a `(?<!\w)` lookbehind.
+2. **Known-name redaction silently failed for names ending in punctuation.** Same root cause —
+   `\b` requires a word character on the inside of the boundary, so `Kessler (Ops)` never matched
+   at all. Now uses lookarounds.
+3. **`INCIDENT_STABILITY_MIN=0` was treated as unset.** `n > 0 ? n : fallback` substituted the
+   10-minute production default, which made the e2e configuration documented in `.env.example`
+   and the phase-9 file impossible to actually run. Zero is now allowed for the stability windows
+   and still rejected for the tick interval and window length, where it would be meaningless.
+4. **`Retry-After` parsing could produce `NaN`.** `Number(header ?? "15")` on a non-numeric header
+   yields `NaN`, and a `NaN` delay makes BullMQ retry immediately — turning a rate-limit response
+   into a tight loop against an upstream that just asked for backoff. Extracted
+   `parseRetryAfterMs` with a fallback, a 5-minute clamp, and RFC 7231 HTTP-date support.
+5. **`Date.parse` accepted garbage as a date.** `Date.parse("Someday, 32 Jul")` returns a valid
+   far-future timestamp via V8's lenient fallback parser, so a malformed header was read as a
+   genuine 5-minute throttle. Now matched strictly against IMF-fixdate first.
+6. **Incidents opened with `aiSummaryStatus: "none"`** while a summary job was already enqueued,
+   so the card claimed no summary had been requested for as long as the worker was busy or down.
+   Now opens as `queued`.
+7. **The health rules' injection seam could not inject.** `StatusRules` was
+   `Pick<typeof HEALTH_RULES, ...>`; because `HEALTH_RULES` is `as const`, the picked types were
+   literals (`5`, `0.5`, …) and the `rules` parameter accepted only the default values. Widened to
+   an explicit interface.
+8. **A stale module-level org-id cache in `apps/web/lib/log.ts`** was never invalidated, so it
+   outlived the row it pointed at and turned every subsequent `logToDb` into a silent foreign-key
+   failure inside its own catch. Removed; the lookup is indexed and only runs on WARN/ERROR.
+9. **`node:crypto` reached the browser bundle.** Re-exporting the new `webhook-signature` module
+   from `packages/shared`'s barrel broke `next build` with
+   `UnhandledSchemeError: Reading from "node:crypto"`, because the barrel is reachable from the
+   login page. Moved to a `@pulse/shared/webhook-signature` subpath export.
+
+## Phase 10 — status
+
+The prod-readiness pass (task 1) and the runbook (task 7) are complete:
+
+- `apps/worker/Dockerfile` — multi-stage, builds from the repo root with pnpm workspace pruning,
+  `NODE_ENV=production`, non-root user, and a healthcheck against the simulator's `/healthz`
+  (which only listens once Postgres and Redis are connected, making it a real readiness signal).
+- `railway.json` — Dockerfile builder, healthcheck path, restart policy, `numReplicas: 1` (the
+  health tick is a singleton; two replicas would double every snapshot).
+- Migrations run at boot via `prisma migrate deploy` in the start command; the migration files
+  ship inside the image so no repository checkout is needed.
+- `docs/deployment.md` — full runbook: env tables for both platforms, the Vercel root-directory
+  trap, the public-vs-internal Railway endpoint trap, the circular `WEBHOOK_TARGET_URL`
+  dependency and its ordering, the one-time `SEED_FORCE=1` seed, a smoke-test checklist, restart
+  resilience checks, uptime monitoring, cost breakdown, and a troubleshooting table.
+
+**All five acceptance criteria are blocked on account access** (public URL, live demo flow,
+Railway restart behaviour, redeploy-from-zero verification, cost confirmation). The phase file
+anticipates this — it is marked human-in-the-loop for "account creation, tokens, and dashboard
+clicks". Nothing further can be verified from the repository.
+
+## Phase 11 — status
+
+Done:
+
+- **README** rewritten as an engineering case study: problem statement, why the failure modes are
+  simulated, mermaid architecture + event-flow + incident-state diagrams, retry/backoff table,
+  health rules with the two decisions that matter, AI design (redaction boundary, why the model
+  cannot see the chaos flag, structured output, prompt versioning, degradation, cost), real
+  metrics, testing strategy, security and RBAC matrix, quickstart, env table, tradeoffs.
+- **Metrics are real and reproducible** — `pnpm --filter @pulse/db metrics` prints each figure
+  with the SQL that produced it. Error rate 16.58% (697/4,203 attempts), retry success 75.16%
+  (478/636), MTTD 30s, MTTR 127m over 4 incidents, 15.8 jobs/hour over 201h.
+- **OpenAPI** — `docs/openapi.yaml` documents all 27 operations, served at `/api/v1/openapi` (YAML, or
+  JSON with `?format=json`) and rendered at `/docs/api`. The smoke test does more than parse: it
+  walks `app/api/v1` and asserts the spec and the implementation agree in **both** directions.
+  It immediately caught the `/openapi` route itself as undocumented.
+- **`docs/loom-script.md`** and **`docs/positioning.md`** written.
+
+Outstanding, and both genuinely user tasks:
+
+- **Screenshots** into `docs/media/` — needs a human to frame and capture them.
+- **The Loom recording** — script is written and rehearsable against the local app.
+- **Tag `v1.0.0`** — deferred until there is a remote to push it to and CI has actually run.
 
 ## Deviation log
+
+- **Phase 9**: Added `@playwright/test` (already in doc 01's stack table) and **`yaml`**
+  (not in the stack table). The parser is needed for phase 11's two OpenAPI deliverables — the
+  `/docs/api` page and the "smoke test that the YAML parses" that doc 04 §OpenAPI requires. It is
+  a zero-dependency package and there is no way to satisfy those tasks without one. Flagging it
+  here per CLAUDE.md rule 5 rather than treating it as free.
+- **Phase 9**: `packages/shared`'s barrel deliberately does **not** re-export
+  `webhook-signature.ts`; it is reached at `@pulse/shared/webhook-signature` via a subpath export.
+  The module imports `node:crypto`, and the barrel is reachable from client components (the login
+  page imports `APP_NAME`), so re-exporting it fails `next build` with
+  `UnhandledSchemeError: Reading from "node:crypto"`. Left as a subpath rather than splitting the
+  package.
+- **Phase 9**: The webhook route handler's logic moved into `apps/web/lib/ingest-webhook.ts`, as
+  phase 9 task 3 suggested ("extract signature-verify + persist + enqueue into a lib function
+  `ingestWebhook()` used by the route, and integration-test that"). The route is now a thin
+  status-code adapter.
+- **Phase 9**: The e2e database is prepared by `apps/web/scripts/prepare-e2e-db.mjs` running
+  *before* Playwright, not by Playwright's `globalSetup`. Playwright starts its `webServer`
+  processes before global setup runs, so the worker booted against a database that did not exist
+  yet and exited.
+- **Phase 9**: Root `package.json` gained `@pulse/db` and `@pulse/shared` as workspace
+  devDependencies so the shared integration-test harness under `test/integration/` can import
+  them. pnpm only links workspace packages into the packages that declare them.
+- **Phase 10**: `railway.json` pins `numReplicas: 1`. The health tick is a singleton by design —
+  two replicas would each register the repeatable and write two snapshots per interval, which is
+  the same class of bug as the duplicate-scheduler problem found in phase 7.
 
 - **Phase 0**: `create-next-app@latest` resolved Next 16 by default; pinned `next`/`react`/
   `react-dom` back to the 15.x/19.x lines to match the locked stack table.
