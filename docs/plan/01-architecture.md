@@ -63,7 +63,7 @@ Key decisions and the *why* (these appear in the README later — keep them hone
 ## Repository layout
 
 ```
-integrationHealth/
+Pulse/
 ├── package.json                 # workspace root: scripts, devDeps (prettier, eslint)
 ├── pnpm-workspace.yaml
 ├── docker-compose.yml           # postgres:16 + redis:7 for local dev
