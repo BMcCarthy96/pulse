@@ -161,6 +161,23 @@ Outstanding, and genuinely a user task:
 
 - **The Loom recording** — script is written and rehearsable against the local app.
 
+## Known issues
+
+- **`pnpm format:check` fails on 117 files** (105 code, 12 markdown) and always has — Prettier is
+  configured and the script is advertised in the README, but the codebase was never run through
+  it. CI does not run it, which is why it went unnoticed.
+
+  Deliberately **not** fixed in a bulk pass, for two reasons found by actually running it:
+  Prettier pads markdown tables to the width of the widest cell, which turns the phase table at
+  the top of this file into 400-character lines; and `prettier-plugin-tailwindcss` reorders
+  `className` strings across every component, which is a change to rendered CSS ordering, however
+  low-risk, and not something to land unreviewed on the same day as the `v1.0.0` tag.
+
+  The fix is a decision, not a task: either add `**/*.md` to `.prettierignore`, run
+  `pnpm format` over the code, and add `format:check` to CI so it stays true — or drop the script
+  and the Prettier config. Leaving an advertised command that fails is the one option worse than
+  both.
+
 ## Deviation log
 
 - **Phase 9**: Added `@playwright/test` (already in doc 01's stack table) and **`yaml`**
