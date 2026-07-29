@@ -23,9 +23,15 @@ const ADMIN_EMAIL = "dana@lakeviewhealth.example";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MEDIA_DIR = path.resolve(here, "../../../docs/media");
 
-/** 2x so the images stay sharp when GitHub scales them down inside the README. */
+/**
+ * Output is 1440px wide — about 1.6x the ~900px content column GitHub renders a README into, so
+ * text stays crisp after downscaling while each file stays around 100–200 KB.
+ *
+ * `deviceScaleFactor` is deliberately absent. Setting it to 2 does nothing here: `shoot()` passes
+ * `scale: "css"`, which pins the output to CSS pixels and overrides it. Keeping both would look
+ * like these are 2x captures when they are not.
+ */
 const VIEWPORT = { width: 1440, height: 900 };
-const SCALE = 2;
 
 /**
  * Next's dev-tools bubble renders into a `<nextjs-portal>` element and floats over the
@@ -52,7 +58,6 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({
     viewport: VIEWPORT,
-    deviceScaleFactor: SCALE,
     colorScheme: "light",
     // Pinned so relative timestamps ("2d ago") and the 24h chart axis read the same for every
     // person who regenerates these, rather than tracking the machine's locale.

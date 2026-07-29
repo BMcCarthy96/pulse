@@ -140,8 +140,13 @@ Done:
   — `pnpm --filter @pulse/web screenshots` runs
   [`apps/web/scripts/capture-screenshots.mjs`](../../apps/web/scripts/capture-screenshots.mjs)
   against a running stack, signs in as the admin persona, and picks the incident to shoot by
-  querying for one with a finished AI summary. Pinned viewport, locale and timezone, and Recharts
-  left to settle first, so a regeneration is a clean diff rather than a reshoot.
+  querying for one with a finished AI summary. Pinned viewport (1440px, ~1.6x GitHub's content
+  column), locale and timezone, and Recharts left to settle first.
+
+  Regeneration is stable in *framing*, not byte-identical: relative timestamps ("5m ago") and the
+  live 1h counters move while the worker is ticking, so re-running it against a live stack
+  rewrites four of the five files with the same layout and newer numbers. Worth knowing before
+  anyone treats an image diff as a regression.
 
   I had previously recorded this criterion as needing a human. That was wrong — scripting it is
   both possible and better, because "consistent seeded state" (phase 11 task 3) is a property a
