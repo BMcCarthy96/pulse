@@ -127,11 +127,17 @@ Done:
   It immediately caught the `/openapi` route itself as undocumented.
 - **`docs/loom-script.md`** and **`docs/positioning.md`** written.
 
+- **Tag `v1.0.0`** — annotated tag `v1.0.0` points at `5d13f60`, pushed to the published repo.
+  CI run [30453432114](https://github.com/BMcCarthy96/pulse/actions/runs/30453432114) on that
+  exact commit is green across all five jobs (lint-typecheck, unit + coverage, integration,
+  build, e2e). Note the workflow triggers on `push: branches: [main]` and `pull_request`, not on
+  tag refs, so pushing the tag did not start a second run — the criterion is met by the tagged
+  commit's own run rather than by a tag-triggered one.
+
 Outstanding, and both genuinely user tasks:
 
 - **Screenshots** into `docs/media/` — needs a human to frame and capture them.
 - **The Loom recording** — script is written and rehearsable against the local app.
-- **Tag `v1.0.0`** — tagged once CI went green on `main` at the published repo.
 
 ## Deviation log
 
