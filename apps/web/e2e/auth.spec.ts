@@ -7,7 +7,7 @@ test.describe("auth and role gates", () => {
     await expect(page).toHaveURL(/\/login/);
     // Asserting on the form itself rather than a "Sign in" heading: the card title is a styled
     // div, not an h-element, so it has no heading role to query.
-    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.getByLabel("Email")).toHaveCount(99); // TEMPORARY: forced failure to verify CI artifact upload
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByText("All data is synthetic. Upstream systems are simulated.")).toBeVisible();
   });
