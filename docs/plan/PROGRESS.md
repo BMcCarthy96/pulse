@@ -134,9 +134,31 @@ Done:
   tag refs, so pushing the tag did not start a second run — the criterion is met by the tagged
   commit's own run rather than by a tag-triggered one.
 
-Outstanding, and both genuinely user tasks:
+- **All five screenshots** are in `docs/media/` and embedded in the README at the point each one
+  illustrates, rather than dumped in a gallery: overview (hero), connector + chaos panel, DEAD
+  job queue, incident with its Claude summary, audit log. They are **generated, not hand-framed**
+  — `pnpm --filter @pulse/web screenshots` runs
+  [`apps/web/scripts/capture-screenshots.mjs`](../../apps/web/scripts/capture-screenshots.mjs)
+  against a running stack, signs in as the admin persona, and picks the incident to shoot by
+  querying for one with a finished AI summary. Pinned viewport, locale and timezone, and Recharts
+  left to settle first, so a regeneration is a clean diff rather than a reshoot.
 
-- **Screenshots** into `docs/media/` — needs a human to frame and capture them.
+  I had previously recorded this criterion as needing a human. That was wrong — scripting it is
+  both possible and better, because "consistent seeded state" (phase 11 task 3) is a property a
+  script can actually hold and a human cannot.
+
+  Two things checked while capturing, both worth recording:
+  - The Next dev-tools bubble floats over the bottom-left of every page under `pnpm dev` and
+    landed in the first set of captures. The script now hides `<nextjs-portal>` per navigation,
+    rather than disabling `devIndicators` globally and degrading normal development.
+  - The 24-hour error-rate chart is **flat on fresh seed data**, and that is correct, not a bug:
+    `docs/plan/05-ui-spec.md:35` specifies a 24h window and the seed's two failure clusters sit
+    at 2 and 5 days back. Verified before changing anything — a re-seed would not have altered
+    it, since the seed builds those windows relative to `NOW`. The README says so under the hero
+    instead of implying the chart is normally empty.
+
+Outstanding, and genuinely a user task:
+
 - **The Loom recording** — script is written and rehearsable against the local app.
 
 ## Deviation log

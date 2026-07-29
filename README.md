@@ -11,6 +11,12 @@ missing.
 each connector's health on a rolling window, opens an incident the moment one goes down, and
 drafts a first-pass incident summary with Claude — from PHI-redacted context.
 
+![The Pulse overview: dead-job and incident counters, per-connector health cards, a 24-hour error-rate chart, and recent incidents](docs/media/01-overview.png)
+
+> The error-rate chart is flat here because it covers 24 hours and the seed's two failure
+> clusters sit 2 and 5 days back — that is what a fresh `pnpm db:seed` actually looks like, not
+> a doctored screenshot. Drive the chaos panel for a minute and it fills in.
+
 > **All data in this project is synthetic.** The organisation (Lakeview Health Partners), the
 > patients, the claims, and the four upstream vendors are fictional. No real PHI is involved
 > anywhere; the redaction boundary described below exists as a design discipline, not because
@@ -42,6 +48,8 @@ process, and an admin-only **chaos panel** sets each one's failure mode on deman
 | `RATE_LIMIT` | 429 with `Retry-After: 15` |
 | `BAD_PAYLOAD` | 200 with a schema-invalid body |
 | `AUTH_FAILURE` | 401 |
+
+![Connector detail for the EHR connector, showing the seven-mode chaos panel, a 24-hour health timeline, and sync history](docs/media/02-connector-chaos-panel.png)
 
 This is a feature, not a test hook. Every failure path in the system is **reproducible in about
 ten seconds** — including in the automated end-to-end test, which drives the same panel.
@@ -177,6 +185,8 @@ Details that turned out to matter:
 - **Bulk retry is capped at 100 and ordered oldest-first**, so repeated runs drain the backlog
   instead of re-picking the same head.
 
+![The failed job queue filtered to DEAD, showing attempt counts, the last error per job, and per-row and bulk retry actions](docs/media/03-dead-jobs.png)
+
 ---
 
 ## Health scoring & incident lifecycle
@@ -234,6 +244,11 @@ stateDiagram-v2
 
 Incident summaries are drafted by Claude (`claude-opus-4-8`) and are the one place in the system
 where data leaves the process. The design is shaped almost entirely by that fact.
+
+![An incident detail page with a Claude-drafted summary — probable cause, impact, and five suggested steps — labelled with its confidence, model, and prompt version, beside the system-generated timeline](docs/media/04-incident-ai-summary.png)
+
+Note what the footer carries: model id, prompt version, and generation time. A summary you cannot
+attribute to a specific prompt is a summary you cannot debug.
 
 ### The redaction boundary
 
@@ -384,6 +399,8 @@ inject anything.
 
 - **Every mutation writes an `AuditEntry`** with actor, action, target and metadata — no
   exceptions. The audit log is an admin-only page.
+
+![The admin-only audit log: actor, action, target and metadata for chaos changes, bulk retries, and AI summary edits and regenerations](docs/media/05-audit-log.png)
 - **Password hashes are never selected** for the users endpoint's shape.
 - **Synthetic data only**, and anything bound for the Anthropic API passes through the redaction
   boundary with a leak check behind it.
@@ -410,6 +427,11 @@ pnpm test                     # unit + integration (needs Docker)
 pnpm test:coverage            # + the 100%-branch claims check
 pnpm test:e2e                 # builds, seeds pulse_e2e, runs Playwright
 ```
+
+The screenshots above are generated, not hand-captured — run
+`pnpm --filter @pulse/web screenshots` against a running stack to regenerate all five into
+`docs/media/`. It signs in as the admin persona (both the chaos panel and the audit log are
+ADMIN-gated) and picks the incident to shoot by querying for one with a finished AI summary.
 
 Two things worth knowing up front: the web app runs on **:3010**, not :3000; and you must stop
 `pnpm dev` before running `pnpm build`, because a dev server and a production build will fight
