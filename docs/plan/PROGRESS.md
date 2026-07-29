@@ -29,11 +29,20 @@ criteria with a one-line verification note. Deviations from reference docs get l
       incident opens → AI degrades cleanly with no key → chaos HEALTHY → bulk retry → recovery →
       MONITORING → RESOLVED → audit log shows the chaos change and retries attributed to Dana.
       `scripts/prepare-e2e-db.mjs` creates, migrates, truncates and seeds `pulse_e2e` first.
-- [ ] **CI green on GitHub for the full pipeline** — `.github/workflows/ci.yml` implements the
-      specified `lint-typecheck → unit → integration → build → e2e` graph with Postgres/Redis
-      service containers, pnpm store caching, and Playwright report upload on failure. **Cannot
-      be verified**: the repository has no GitHub remote, so no workflow run exists. Every job's
-      commands were run locally and pass.
+- [x] **CI green on GitHub for the full pipeline** — repo published at
+      `github.com/BMcCarthy96/pulse` on 2026-07-29; the first push went green on all five jobs,
+      first try:
+      lint-typecheck 51s · unit + coverage 19s · integration 54s · build 67s · e2e 4m28s
+      ([run 30452059391](https://github.com/BMcCarthy96/pulse/actions/runs/30452059391)).
+      The e2e job runs the full demo flow against a production build with real Postgres and Redis
+      service containers, so the slowest and most integration-heavy part of the suite is covered
+      in CI rather than only locally.
+
+      The artifact-on-failure clause was verified separately by forcing an e2e assertion to fail
+      on a throwaway branch (PR #1, closed unmerged, branch deleted — `main`'s history is clean):
+      the four preceding jobs passed, the e2e job failed, and `playwright-report` (1.6 MB)
+      uploaded as designed
+      ([run 30452689576](https://github.com/BMcCarthy96/pulse/actions/runs/30452689576)).
 - [x] **Coverage shows `health/rules.ts` and `ai/redact.ts` at 100% branch** — both at 100% on
       statements, branches, functions and lines. Vitest's per-file thresholds fail the run on
       regression, and `scripts/check-coverage-claims.mjs` prints the numbers, because the text
@@ -122,7 +131,7 @@ Outstanding, and both genuinely user tasks:
 
 - **Screenshots** into `docs/media/` — needs a human to frame and capture them.
 - **The Loom recording** — script is written and rehearsable against the local app.
-- **Tag `v1.0.0`** — deferred until there is a remote to push it to and CI has actually run.
+- **Tag `v1.0.0`** — tagged once CI went green on `main` at the published repo.
 
 ## Deviation log
 
