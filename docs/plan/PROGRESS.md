@@ -20,7 +20,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 
 ## Phase 9 — acceptance criteria
 
-- [x] **`pnpm test` green locally with only Docker services running** — 171 unit tests (8 files,
+- [x] **`pnpm test` green locally with only Docker services running** — 178 unit tests (9 files,
       no services) + 51 integration tests (3 files, real Postgres + Redis) all pass.
       `test:unit` needs nothing but Node; `test:integration` creates and migrates a dedicated
       `pulse_test` database via its own global setup and truncates every table between tests.
@@ -182,6 +182,27 @@ Outstanding, and genuinely a user task:
   `pnpm format` over the code, and add `format:check` to CI so it stays true — or drop the script
   and the Prettier config. Leaving an advertised command that fails is the one option worse than
   both.
+
+## Post-v1.0.0 fixes
+
+- **`HealthStrip` width tracked the health tick rate** (fixed 2026-07-30, commit `91b43ea`).
+  It rendered one segment per `HealthSnapshot`, and `gap-px` contributes 1px of min-content
+  width per segment — a flex container's automatic minimum size is its min-content width, so
+  `w-full` could not shrink it back. At doc 03's 60s tick that is 1,440 segments; at the 15s
+  tick this machine uses for walkthroughs it was 5,756, which stretched every ancestor and made
+  the connector page 6,059px wide inside a 1,440px viewport.
+
+  It hid well: `overflow-hidden` on the card clipped the strip itself, so the page looked
+  correct while carrying a horizontal scrollbar, and the chaos panel's radios sat 3,161px
+  off-screen — unreachable by mouse at any normal window size. Found by trying to drive the
+  phase-7 outage walkthrough through the UI rather than through scripts, which is the one thing
+  none of the 229 tests did: the e2e suite drives the panel by role selector, and a selector
+  does not care that its target is off-screen.
+
+  Now a fixed 96 buckets (15-minute resolution over the 24h the API returns), aggregated
+  worst-wins so a brief outage cannot average away. Pure logic split into
+  `apps/web/lib/health-strip-buckets.ts`, mirroring `health/rules.ts` vs `health/engine.ts`;
+  7 unit tests, verified failing (4 of 7) with the bucketing disabled.
 
 ## Deviation log
 

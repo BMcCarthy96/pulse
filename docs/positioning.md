@@ -17,7 +17,7 @@ code, it does not belong.
 
 > Healthcare integration monitoring console — BullMQ job queues with retry/backoff, rolling-window
 > health scoring, auto-opened incidents, and PHI-redacted AI incident summaries. Next.js,
-> Postgres, Redis, Vercel + Railway, 229 tests across unit/integration/e2e.
+> Postgres, Redis, Vercel + Railway, 236 tests across unit/integration/e2e.
 
 ### Supporting bullets (pick two, matched to the role)
 
@@ -99,7 +99,7 @@ Lead with **the whole system existing and being demonstrable in three minutes**.
 - One person, planned in phases, every phase's acceptance criteria verified and recorded —
   including the deviations, which is the part worth reading.
 - Two-service deployment with a real reason for the split (BullMQ needs a live process).
-- 229 tests across three layers, chosen by what each layer can actually prove.
+- 236 tests across three layers, chosen by what each layer can actually prove.
 - The demo is the pitch: break something, watch it get detected, watch it recover.
 
 ---
