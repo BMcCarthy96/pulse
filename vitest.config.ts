@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -32,5 +33,8 @@ export default defineConfig({
     // explicit .js specifiers (required by the worker's NodeNext build), which Vite has to
     // map back onto the .ts sources.
     extensions: [".ts", ".tsx", ".js", ".json"],
+    // Same `@` → apps/web mapping the app and the integration config use, so a web unit test can
+    // import a component without rewriting its specifiers.
+    alias: { "@": fileURLToPath(new URL("./apps/web", import.meta.url)) },
   },
 });
