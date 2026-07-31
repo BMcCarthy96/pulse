@@ -425,8 +425,15 @@ Open http://localhost:3010 and sign in with one of the demo persona buttons.
 pnpm lint | typecheck | build
 pnpm test                     # unit + integration (needs Docker)
 pnpm test:coverage            # + the 100%-branch claims check
-pnpm test:e2e                 # builds, seeds pulse_e2e, runs Playwright
+pnpm build && pnpm test:e2e   # seeds pulse_e2e, runs Playwright — see below
 ```
+
+`test:e2e` does **not** build. Its Playwright config starts the web app with `next start`, which
+needs an existing production build, so a missing or stale `.next` fails the run before a single
+test executes (`Could not find a production build in the '.next' directory`). CI has a separate
+build step ahead of its e2e job for exactly this reason. The script itself seeds `pulse_e2e` via
+`apps/web/scripts/prepare-e2e-db.mjs` before Playwright starts — that runs ahead of the servers,
+which a Playwright `globalSetup` could not do, since `webServer` boots first.
 
 The screenshots above are generated, not hand-captured — run
 `pnpm --filter @pulse/web screenshots` against a running stack to regenerate all five into

@@ -156,8 +156,14 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @pulse/web exec playwright install --with-deps chromium
 
-      # `next start` needs a build; the e2e config's globalSetup creates, migrates and seeds
-      # pulse_e2e before the servers come up.
+      # `next start` needs a build, and `pnpm test:e2e` does not do one — it goes straight to
+      # prepare-e2e-db.mjs and `playwright test`. Without this step the run dies at webServer
+      # startup with "Could not find a production build in the '.next' directory".
+      #
+      # The pulse_e2e database is created, migrated and seeded by prepare-e2e-db.mjs, which the
+      # `test:e2e` script runs before Playwright. It is deliberately not a Playwright
+      # `globalSetup`: `webServer` processes start before globalSetup runs, so the worker would
+      # boot against a database that does not exist yet.
       - name: Build
         run: pnpm build
         env:
