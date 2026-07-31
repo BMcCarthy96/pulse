@@ -1,0 +1,39 @@
+# Without this file the worker image does not build at all.
+#
+# apps/worker/Dockerfile does `COPY packages ./packages` and `COPY apps/worker ./apps/worker`
+# from the repo root, so the whole working tree is sent as build context. pnpm's node_modules is
+# a farm of symlinks into .pnpm/, and Docker refuses to load them:
+#
+#   ERROR: invalid file request apps/worker/node_modules/@anthropic-ai/sdk
+#
+# Even where it does not error, shipping host node_modules into the image is wrong twice over:
+# they are Windows/darwin builds being copied into a linux container, and they would shadow the
+# Linux dependency tree the build stage installs from the lockfile.
+node_modules
+**/node_modules
+
+# Build output — regenerated inside the image.
+dist
+**/dist
+.next
+**/.next
+out
+**/out
+*.tsbuildinfo
+
+# Never send secrets or local state to the daemon.
+.env
+.env.*
+!.env.example
+
+# Nothing here affects the runtime image; excluding it keeps the context small.
+.git
+.github
+.vscode
+.idea
+coverage
+playwright-report
+test-results
+docs
+*.log
+README.md
