@@ -168,6 +168,9 @@ importers:
       '@hono/node-server':
         specifier: ^1
         version: 1.19.14(hono@4.12.30)
+      '@prisma/client':
+        specifier: ^6
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       '@pulse/db':
         specifier: workspace:*
         version: link:../../packages/db

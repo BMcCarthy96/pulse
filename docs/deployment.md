@@ -11,10 +11,32 @@ Pulse deploys as two services against two managed data stores:
 
 Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#costs).
 
-> **Status:** the configs, Dockerfile and runbook below are complete and the code is
-> production-ready. The live deployment itself has **not been performed** — it needs account
-> access, so it is the reader's step, not something that could be done from the repo. Everything
-> in this document is written to be executed top to bottom without improvisation.
+> **Status:** the live deployment has **not been performed** — it needs Railway and Vercel
+> account access, so it is the reader's step. Everything in this document is written to be
+> executed top to bottom without improvisation.
+>
+> The worker image, however, is no longer merely *written* — it is **built and booted** on every
+> CI run (the `Worker image` job), against real Postgres and Redis containers, asserting that it
+> migrates from an empty database, starts all six queues, and answers `/healthz`.
+>
+> That job exists because an earlier version of this document called the Dockerfile "complete and
+> production-ready" when the image had never once been built. It contained four independent
+> defects, each of which would have failed the Railway deploy:
+>
+> 1. **No `.dockerignore`** — the build context included pnpm's symlink farm and Docker refused
+>    it outright: `invalid file request apps/worker/node_modules/@anthropic-ai/sdk`.
+> 2. **No `prisma` CLI in the runtime image** — it was a devDependency of `packages/db`, so
+>    `pnpm --prod deploy` stripped it, leaving `npx prisma migrate deploy` to download the CLI
+>    from npm on every boot, against a 60s healthcheck and a 5-retry restart policy.
+> 3. **Raw TypeScript package entry points** — `@pulse/shared` and `@pulse/db` published `.ts`
+>    files, so `node dist/index.js` died with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`.
+>    They now compile to `dist/` and expose it under the `default` export condition.
+> 4. **Prisma client lost in the prune** — `pnpm deploy` rebuilds `node_modules` from the store,
+>    so the generated client did not come along: *"@prisma/client did not initialize yet"*.
+>    Generation now runs inside the pruned tree, from a schema copied in beside it.
+>
+> The lesson generalises past this repo: a Dockerfile that has never been built is not
+> configuration, it is a guess.
 
 ---
 

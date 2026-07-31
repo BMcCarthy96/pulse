@@ -30,10 +30,30 @@ COPY packages ./packages
 COPY apps/worker ./apps/worker
 
 RUN pnpm --filter @pulse/db generate
+
+# The workspace packages must be compiled, not just the worker. Their `exports` resolve to
+# `dist/*.js` for the `default` condition precisely so this image can run plain `node
+# dist/index.js`; without these two builds the container starts and immediately dies with
+# ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING, because Node will not strip types from a `.ts`
+# file inside node_modules.
+RUN pnpm --filter @pulse/shared build
+RUN pnpm --filter @pulse/db build
 RUN pnpm --filter @pulse/worker build
 
 # Drop dev dependencies from the tree that gets copied forward.
 RUN pnpm --filter @pulse/worker --prod deploy /prune
+
+# Regenerate the Prisma client *inside* the pruned tree. The earlier `@pulse/db generate` wrote
+# into /app's node_modules, and `pnpm deploy` builds /prune a fresh copy from the store, so the
+# generated client does not come along — the container would boot, migrate, and then die with
+# "@prisma/client did not initialize yet. Please run prisma generate".
+#
+# The schema is copied into /prune first and generated from there: Prisma resolves its output
+# directory relative to the schema file, so pointing `--schema` back at /app regenerates into
+# /app's node_modules and leaves /prune untouched — the same failure, silently.
+RUN cp -r /app/packages/db/prisma /prune/prisma \
+ && cd /prune \
+ && ./node_modules/.bin/prisma generate --schema ./prisma/schema.prisma
 
 # ── Stage 2: runtime ────────────────────────────────────────────────────────────
 FROM node:22-slim AS runtime

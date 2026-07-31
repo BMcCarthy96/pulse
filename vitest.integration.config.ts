@@ -48,6 +48,15 @@ export default defineConfig({
   resolve: {
     extensions: [".ts", ".tsx", ".js", ".json"],
     alias: {
+      // `@pulse/*` resolve to source for the same reason as in vitest.config.ts: those packages
+      // publish `dist` for the `default` condition so the worker container can run plain Node,
+      // and without these the integration suite would need a `pnpm build` first. Subpath entry
+      // comes first — these are prefix matches.
+      "@pulse/shared/webhook-signature": fileURLToPath(
+        new URL("./packages/shared/src/webhook-signature.ts", import.meta.url),
+      ),
+      "@pulse/shared": fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url)),
+      "@pulse/db": fileURLToPath(new URL("./packages/db/src/index.ts", import.meta.url)),
       // Mirrors apps/web/tsconfig.json's path mapping so web lib modules can be imported and
       // tested directly, without a Next server in the way.
       "@": fileURLToPath(new URL("./apps/web", import.meta.url)),

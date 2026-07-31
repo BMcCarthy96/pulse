@@ -185,6 +185,48 @@ Outstanding, and genuinely a user task:
 
 ## Post-v1.0.0 fixes
 
+- **The worker image had never been built, and did not work** (fixed 2026-07-31). Phase 10 was
+  recorded as "code done"; the Dockerfile, `railway.json` and runbook were all written, and the
+  runbook called them "production-ready". Attempting the actual deployment turned up **four**
+  independent defects, each fatal to a Railway deploy, discovered strictly one at a time because
+  each one masked the next:
+
+  1. **No `.dockerignore`.** The build context included pnpm's symlink farm; Docker refused it
+     before pulling a layer — `invalid file request apps/worker/node_modules/@anthropic-ai/sdk`.
+  2. **No `prisma` CLI in the runtime image.** A devDependency of `packages/db`, correctly
+     stripped by `pnpm --prod deploy`, but the container boots with `npx prisma migrate deploy` —
+     which would have downloaded the CLI from npm on every start, against a 60s healthcheck and
+     `restartPolicyMaxRetries: 5`. Moved to `apps/worker`'s runtime dependencies.
+  3. **`packages/shared` and `packages/db` published raw TypeScript.** Fine under Next
+     (`transpilePackages`), tsx and vitest; fatal under `node dist/index.js`, which cannot strip
+     types inside `node_modules` — `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`. Both packages
+     now have `tsconfig.build.json` + a `build` script and expose `dist/*.js` under the `default`
+     export condition, while `types` still points at source so `pnpm typecheck` and editors need
+     no build. The vitest configs alias `@pulse/*` back to source, so the suites neither require
+     a build nor drift off the `packages/shared/src/**` paths the coverage thresholds name.
+     (Chosen by the user over bundling with esbuild, which would have added a dependency outside
+     doc 01's stack table.)
+  4. **The generated Prisma client did not survive the prune.** `pnpm deploy` rebuilds
+     `node_modules` from the store, so `@pulse/db generate`'s output was left behind —
+     *"@prisma/client did not initialize yet"*. Generation now runs inside `/prune`, from a
+     schema copied in beside it; pointing `--schema` back at `/app` silently regenerates into the
+     wrong tree, because Prisma resolves its output relative to the schema. `@prisma/client` also
+     had to become a direct worker dependency, or pnpm's strict layout leaves it unhoisted and
+     the generator tries to `npm i` it mid-build.
+
+  Verified by running it: image builds, boots against real Postgres and Redis, applies the
+  migration to an empty database, connects to both stores, starts all six queues, and answers
+  `/healthz` with `{"ok":true}` — container reports `healthy`.
+
+  A **`Worker image` CI job** now builds the image and asserts it boots and goes healthy on every
+  push. `pnpm build` proved nothing about the deployable artifact; three of these four defects
+  would have been caught by that job on day one. 178 unit / 51 integration / 7 e2e all still
+  green after the restructure.
+
+  Still outstanding and genuinely the user's: the deploy itself needs Railway and Vercel account
+  access.
+
+
 - **`HealthStrip` width tracked the health tick rate** (fixed 2026-07-30, commit `91b43ea`).
   It rendered one segment per `HealthSnapshot`, and `gap-px` contributes 1px of min-content
   width per segment — a flex container's automatic minimum size is its min-content width, so

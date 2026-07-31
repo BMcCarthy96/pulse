@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // NodeNext, not Bundler: the output is consumed by `node dist/index.js` in the worker
+    // container, with no bundler in the picture. The sources already use explicit `.js`
+    // specifiers on relative imports, which is exactly what NodeNext emit requires.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

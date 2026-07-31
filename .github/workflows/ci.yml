@@ -117,6 +117,69 @@ jobs:
           DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse
           AUTH_SECRET: build-time-placeholder
 
+  # The worker image is what Railway actually deploys, and `pnpm build` proves nothing about it:
+  # four separate defects (missing .dockerignore, missing prisma CLI, raw-TypeScript package
+  # entry points, and a Prisma client that did not survive the prune) all sat in a Dockerfile
+  # that had never been built. Building it here means the deployable artifact is covered by the
+  # same pipeline as the code.
+  docker:
+    name: Worker image
+    runs-on: ubuntu-latest
+    needs: [unit, integration]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: false
+          load: true
+          tags: pulse-worker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A build that produces an image which cannot start is not a passing build. This is the
+      # check that would have caught three of the four defects above.
+      - name: Verify the image boots, migrates and reports healthy
+        run: |
+          docker network create pulse-ci
+          docker run -d --name pg --network pulse-ci \
+            -e POSTGRES_USER=pulse -e POSTGRES_PASSWORD=pulse -e POSTGRES_DB=pulse \
+            --health-cmd "pg_isready -U pulse" --health-interval 5s --health-retries 20 postgres:16
+          docker run -d --name redis --network pulse-ci \
+            --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20 redis:7
+
+          for i in $(seq 1 40); do
+            pg=$(docker inspect -f '{{.State.Health.Status}}' pg)
+            rd=$(docker inspect -f '{{.State.Health.Status}}' redis)
+            [ "$pg" = healthy ] && [ "$rd" = healthy ] && break
+            sleep 3
+          done
+
+          docker run -d --name worker --network pulse-ci -p 4001:4001 \
+            -e DATABASE_URL=postgresql://pulse:pulse@pg:5432/pulse \
+            -e REDIS_URL=redis://redis:6379 \
+            -e WEBHOOK_SIGNING_SECRET=ci-not-a-real-secret \
+            -e SIMULATOR_BASE_URL=http://127.0.0.1:4001 \
+            -e ANTHROPIC_API_KEY= \
+            pulse-worker:ci
+
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:4001/healthz >/dev/null 2>&1; then
+              echo "worker healthy"
+              docker logs worker 2>&1 | grep -q "queue workers started" \
+                || { echo "queues never started"; docker logs worker; exit 1; }
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' worker)" != "true" ]; then
+              echo "worker exited before becoming healthy:"; docker logs worker; exit 1
+            fi
+            sleep 3
+          done
+          echo "worker never became healthy:"; docker logs worker; exit 1
+
   e2e:
     name: E2E (demo flow)
     runs-on: ubuntu-latest

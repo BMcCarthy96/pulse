@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  // `prisma/` is excluded from the build: seed.ts and the schema are tooling, run through tsx,
+  // and compiling them would drag @faker-js/faker into the published output.
+  "include": ["src"]
+}
