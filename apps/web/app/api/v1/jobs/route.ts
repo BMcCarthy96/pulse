@@ -35,5 +35,9 @@ export const GET = handleApiError("jobs.list", async (req) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ data: withConnector, nextCursor, ...(total !== undefined ? { total } : {}) });
+  return NextResponse.json({
+    data: withConnector,
+    nextCursor,
+    ...(total !== undefined ? { total } : {}),
+  });
 });

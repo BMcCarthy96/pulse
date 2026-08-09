@@ -8,14 +8,12 @@
     "start": "next start -p 3010",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"no unit tests in apps/web yet\" && exit 0",
     "test:e2e": "node scripts/prepare-e2e-db.mjs && playwright test",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68",
     "@base-ui/react": "^1.6.0",
     "@pulse/db": "workspace:*",
     "@pulse/shared": "workspace:*",
@@ -48,7 +46,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "15.5.20",
     "eslint-plugin-import": "^2.32.0",
     "tailwindcss": "^4",
     "typescript": "^5"

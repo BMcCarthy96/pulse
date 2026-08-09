@@ -17,7 +17,10 @@ export async function requireRole(minRole: RoleName) {
   return session;
 }
 
-type RouteHandler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+type RouteHandler = (
+  req: Request,
+  ctx: { params: Promise<Record<string, string>> },
+) => Promise<Response>;
 
 export function handleApiError(routeName: string, fn: RouteHandler): RouteHandler {
   return async (req, ctx) => {
@@ -28,7 +31,13 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
       userId = session?.user?.id;
       const res = await fn(req, ctx);
       log.info(
-        { route: routeName, method: req.method, userId, status: res.status, durationMs: Date.now() - start },
+        {
+          route: routeName,
+          method: req.method,
+          userId,
+          status: res.status,
+          durationMs: Date.now() - start,
+        },
         "api request",
       );
       return res;

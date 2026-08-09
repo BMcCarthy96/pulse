@@ -9,7 +9,8 @@ import {
 import { webhookProcessingQueue } from "@/lib/queue";
 import { log, logToDb } from "@/lib/log";
 
-const WEBHOOK_SIGNING_SECRET = process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
+const WEBHOOK_SIGNING_SECRET =
+  process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
 
 /**
  * The webhook ingest pipeline, extracted from the route handler so it can be integration-tested
@@ -45,10 +46,17 @@ function safeParseJson(raw: string): object {
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === "P2002";
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
 }
 
-export function readWebhookHeaders(headers: Headers): Omit<IngestInput, "connectorKey" | "rawBody"> {
+export function readWebhookHeaders(
+  headers: Headers,
+): Omit<IngestInput, "connectorKey" | "rawBody"> {
   return {
     signature: headers.get(WEBHOOK_SIGNATURE_HEADER),
     deliveryId: headers.get(WEBHOOK_DELIVERY_HEADER),
@@ -61,7 +69,9 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
   const eventType = input.eventType ?? "unknown";
 
   const def = getConnectorDef(connectorKey);
-  const connector = def ? await prisma.connector.findUnique({ where: { key: connectorKey } }) : null;
+  const connector = def
+    ? await prisma.connector.findUnique({ where: { key: connectorKey } })
+    : null;
   if (!def || !connector) return { outcome: "unknown-connector", status: 404 };
 
   const headersCapture = {
@@ -116,7 +126,10 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
       payload: { eventId: event.id, connectorKey, eventType },
     });
 
-    log.info({ connectorKey, deliveryId, eventId: event.id }, "webhook received, enqueued for processing");
+    log.info(
+      { connectorKey, deliveryId, eventId: event.id },
+      "webhook received, enqueued for processing",
+    );
     return { outcome: "accepted", status: 202, eventId: event.id };
   } catch (err) {
     // Dedupe is enforced by the unique index on (connectorId, dedupeKey), not by a read-then-

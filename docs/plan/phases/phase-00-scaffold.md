@@ -23,7 +23,7 @@ lint/typecheck/format wired, CI skeleton green.
    and one-line comments.
 4. **apps/web**: `create-next-app` equivalent (App Router, TS, Tailwind v4, src-less `app/`
    layout per architecture doc). Install shadcn/ui and generate `button card badge table tabs
-   dialog dropdown-menu input label select skeleton sonner tooltip sheet`. Placeholder home page
+dialog dropdown-menu input label select skeleton sonner tooltip sheet`. Placeholder home page
    rendering "Pulse" with a shadcn Button to prove the pipeline.
 5. **apps/worker**: TS package with `tsx watch src/index.ts` dev script and `tsc` build.
    `src/index.ts` logs "worker booted", connects to Redis (ioredis ping) and Postgres

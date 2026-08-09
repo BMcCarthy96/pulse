@@ -30,7 +30,9 @@ const TIMELINE_ICONS: Record<string, string> = {
 
 export default function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, isLoading, mutate } = usePolling<IncidentDetailResponse>(`/api/v1/incidents/${id}`);
+  const { data, error, isLoading, mutate } = usePolling<IncidentDetailResponse>(
+    `/api/v1/incidents/${id}`,
+  );
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
@@ -94,7 +96,11 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
             <IncidentStatusBadge status={incident.status} />
             <RoleGate minRole="OPS">
               {incident.status === "OPEN" && (
-                <Button size="sm" variant="outline" onClick={() => void act("acknowledge", "Incident acknowledged")}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void act("acknowledge", "Incident acknowledged")}
+                >
                   Acknowledge
                 </Button>
               )}
@@ -130,12 +136,13 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
             <ol className="space-y-3 border-l pl-4">
               {incident.timeline.map((entry) => (
                 <li key={entry.id} className="relative text-sm">
-                  <span className="text-muted-foreground absolute -left-[1.4rem] top-0.5 text-xs">
+                  <span className="text-muted-foreground absolute top-0.5 -left-[1.4rem] text-xs">
                     {TIMELINE_ICONS[entry.kind] ?? "•"}
                   </span>
                   <p>{entry.message}</p>
                   <p className="text-muted-foreground text-xs">
-                    {entry.actor === "system" ? "system" : "user"} · <Timestamp date={entry.createdAt} />
+                    {entry.actor === "system" ? "system" : "user"} ·{" "}
+                    <Timestamp date={entry.createdAt} />
                   </p>
                 </li>
               ))}
@@ -149,7 +156,12 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
                   placeholder="Add a note for the next responder..."
                   rows={2}
                 />
-                <Button size="sm" className="mt-2" disabled={!note.trim() || savingNote} onClick={() => void addNote()}>
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  disabled={!note.trim() || savingNote}
+                  onClick={() => void addNote()}
+                >
                   {savingNote ? "Adding..." : "Add note"}
                 </Button>
               </div>

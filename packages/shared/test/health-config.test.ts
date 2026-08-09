@@ -73,7 +73,15 @@ describe("getHealthConfig — bad input falls back", () => {
   });
 
   it("accepts the shrunk values the e2e suite uses", () => {
-    const cfg = withEnv({ HEALTH_TICK_SEC: "5", HEALTH_WINDOW_MIN: "2", INCIDENT_STABILITY_MIN: "0" });
-    expect(cfg).toMatchObject({ tickIntervalSec: 5, windowMinutes: 2, monitoringStabilityMinutes: 0 });
+    const cfg = withEnv({
+      HEALTH_TICK_SEC: "5",
+      HEALTH_WINDOW_MIN: "2",
+      INCIDENT_STABILITY_MIN: "0",
+    });
+    expect(cfg).toMatchObject({
+      tickIntervalSec: 5,
+      windowMinutes: 2,
+      monitoringStabilityMinutes: 0,
+    });
   });
 });

@@ -10,7 +10,9 @@ let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
   const ok = actual === expected;
   if (!ok) failures++;
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name} — got ${String(actual)}, expected ${String(expected)}`);
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  ${name} — got ${String(actual)}, expected ${String(expected)}`,
+  );
 }
 
 // doc 03 §4: DOWN if consecutiveFailures >= 5
@@ -59,12 +61,18 @@ check(
 // doc 03 §4: PAUSED short-circuits; empty window carries the previous status
 check(
   "paused short-circuits a failing window",
-  computeStatus({ totalCalls: 10, failedCalls: 10, consecutiveFailures: 10, p95LatencyMs: 9000 }, { paused: true }),
+  computeStatus(
+    { totalCalls: 10, failedCalls: 10, consecutiveFailures: 10, p95LatencyMs: 9000 },
+    { paused: true },
+  ),
   "PAUSED",
 );
 check(
   "empty window carries previous DOWN",
-  computeStatus({ totalCalls: 0, failedCalls: 0, consecutiveFailures: 0, p95LatencyMs: null }, { previousStatus: "DOWN" }),
+  computeStatus(
+    { totalCalls: 0, failedCalls: 0, consecutiveFailures: 0, p95LatencyMs: null },
+    { previousStatus: "DOWN" },
+  ),
   "DOWN",
 );
 check(
@@ -101,5 +109,7 @@ const reset = buildWindow(
 check("a success resets the streak", reset.consecutiveFailures, 0);
 check("p95 is null when no call reported a duration", reset.p95LatencyMs, null);
 
-console.log(failures === 0 ? "\nAll health-rule spot-checks passed." : `\n${failures} check(s) FAILED.`);
+console.log(
+  failures === 0 ? "\nAll health-rule spot-checks passed." : `\n${failures} check(s) FAILED.`,
+);
 process.exit(failures === 0 ? 0 : 1);

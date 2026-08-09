@@ -9,8 +9,20 @@ import { JsonViewer } from "@/components/json-viewer";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RoleGate } from "@/components/role-gate";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { CONNECTOR_DEFS } from "@pulse/shared";
 import { usePaginatedList } from "@/lib/use-paginated";
 import { usePolling } from "@/lib/hooks";
@@ -32,9 +44,8 @@ export default function JobsPage() {
   if (connectorKey !== "ALL") params.set("connectorKey", connectorKey);
   params.set("limit", "25");
 
-  const { items, error, isLoading, mutate, nextCursor, loadMore, loadingMore } = usePaginatedList<JobRow>(
-    `/api/v1/jobs?${params.toString()}`,
-  );
+  const { items, error, isLoading, mutate, nextCursor, loadMore, loadingMore } =
+    usePaginatedList<JobRow>(`/api/v1/jobs?${params.toString()}`);
 
   // "Retry all matching" ignores the status filter (it only ever touches DEAD) and is not
   // limited to the loaded page, so its count comes from its own COUNT query — not `items`.
@@ -65,7 +76,8 @@ export default function JobsPage() {
     {
       key: "lastError",
       header: "Last error",
-      render: (r) => (r.lastError ? <span className="text-red-600">{truncate(r.lastError, 60)}</span> : "—"),
+      render: (r) =>
+        r.lastError ? <span className="text-red-600">{truncate(r.lastError, 60)}</span> : "—",
     },
     { key: "createdAt", header: "Created", render: (r) => <Timestamp date={r.createdAt} /> },
     { key: "finishedAt", header: "Finished", render: (r) => <Timestamp date={r.finishedAt} /> },

@@ -11,7 +11,9 @@ import {
 
 describe("exponentialBackoffMs", () => {
   it("produces the 2s/4s/8s/16s/32s schedule the docs promise", () => {
-    expect([1, 2, 3, 4, 5].map((n) => exponentialBackoffMs(n))).toEqual([2000, 4000, 8000, 16_000, 32_000]);
+    expect([1, 2, 3, 4, 5].map((n) => exponentialBackoffMs(n))).toEqual([
+      2000, 4000, 8000, 16_000, 32_000,
+    ]);
   });
 
   it("caps at the ceiling instead of growing without bound", () => {
@@ -31,10 +33,9 @@ describe("exponentialBackoffMs", () => {
   it("never exceeds the retry budget in total wait", () => {
     // 5 attempts at the documented schedule = 62s of backoff. If someone raises `attempts`
     // without thinking about the ceiling, this is the line that should make them look.
-    const total = Array.from({ length: DEFAULT_JOB_OPTS.attempts }, (_, i) => exponentialBackoffMs(i + 1)).reduce(
-      (a, b) => a + b,
-      0,
-    );
+    const total = Array.from({ length: DEFAULT_JOB_OPTS.attempts }, (_, i) =>
+      exponentialBackoffMs(i + 1),
+    ).reduce((a, b) => a + b, 0);
     expect(total).toBe(62_000);
   });
 });

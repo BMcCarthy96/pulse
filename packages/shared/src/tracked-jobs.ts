@@ -57,7 +57,11 @@ export async function retryTrackedJob(
   const queue = queueByName[dbJob.queue];
   if (!queue) throw new Error(`unknown queue for retry: ${dbJob.queue}`);
 
-  const bullJob = await queue.add(dbJob.type, { ...(dbJob.payload as object), dbJobId: dbJob.id }, DEFAULT_JOB_OPTS);
+  const bullJob = await queue.add(
+    dbJob.type,
+    { ...(dbJob.payload as object), dbJobId: dbJob.id },
+    DEFAULT_JOB_OPTS,
+  );
 
   await prisma.job.update({
     where: { id: dbJobId },

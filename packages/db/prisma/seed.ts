@@ -66,7 +66,9 @@ async function chunkedCreateMany<T>(
 }
 
 async function main() {
-  console.log(`Seeding Pulse demo data (faker seed 42, window ${WINDOW_START.toISOString()} → ${NOW.toISOString()})`);
+  console.log(
+    `Seeding Pulse demo data (faker seed 42, window ${WINDOW_START.toISOString()} → ${NOW.toISOString()})`,
+  );
 
   // ── Org & users ────────────────────────────────────────────
   const org = await prisma.organization.upsert({
@@ -122,7 +124,9 @@ async function main() {
 
   // ── Clear previous history (idempotent re-seed) ────────────
   const connectorIds = connectors.map((c) => c.id);
-  await prisma.incidentTimelineEntry.deleteMany({ where: { incident: { connectorId: { in: connectorIds } } } });
+  await prisma.incidentTimelineEntry.deleteMany({
+    where: { incident: { connectorId: { in: connectorIds } } },
+  });
   await prisma.incident.deleteMany({ where: { connectorId: { in: connectorIds } } });
   await prisma.job.deleteMany({ where: { connectorId: { in: connectorIds } } });
   await prisma.syncRun.deleteMany({ where: { connectorId: { in: connectorIds } } });
@@ -138,7 +142,7 @@ async function main() {
     level: LogLevel,
     source: string,
     message: string,
-    opts: { connectorId?: string; jobId?: string; createdAt: Date; context?: object } ,
+    opts: { connectorId?: string; jobId?: string; createdAt: Date; context?: object },
   ) {
     logRows.push({
       orgId: org.id,
@@ -166,8 +170,16 @@ async function main() {
 
     const runId = randomUUID();
     const recordsFetched = faker.number.int({ min: 10, max: 200 });
-    const status = isFailure ? RunStatus.FAILED : isPartial ? RunStatus.PARTIAL : RunStatus.SUCCEEDED;
-    const recordsFailed = isFailure ? recordsFetched : isPartial ? faker.number.int({ min: 1, max: Math.max(1, Math.floor(recordsFetched * 0.3)) }) : 0;
+    const status = isFailure
+      ? RunStatus.FAILED
+      : isPartial
+        ? RunStatus.PARTIAL
+        : RunStatus.SUCCEEDED;
+    const recordsFailed = isFailure
+      ? recordsFetched
+      : isPartial
+        ? faker.number.int({ min: 1, max: Math.max(1, Math.floor(recordsFetched * 0.3)) })
+        : 0;
     const finishedAt = new Date(cursorTime.getTime() + faker.number.int({ min: 1000, max: 15000 }));
 
     syncRunRows.push({
@@ -214,19 +226,26 @@ async function main() {
         createdAt: cursorTime,
         updatedAt: finishedAt,
       });
-      pushLog(jobFails ? LogLevel.ERROR : LogLevel.INFO, "worker", jobFails ? "sync.page job failed" : "sync.page job succeeded", {
-        connectorId: ehrFhir.id,
-        jobId,
-        createdAt: finishedAt,
-        context: { syncRunId: runId },
-      });
+      pushLog(
+        jobFails ? LogLevel.ERROR : LogLevel.INFO,
+        "worker",
+        jobFails ? "sync.page job failed" : "sync.page job succeeded",
+        {
+          connectorId: ehrFhir.id,
+          jobId,
+          createdAt: finishedAt,
+          context: { syncRunId: runId },
+        },
+      );
     }
 
     syncRunCount++;
     cursorTime = new Date(cursorTime.getTime() + 20 * 60 * 1000); // every 20 min
   }
 
-  await chunkedCreateMany("sync runs", syncRunRows, (batch) => prisma.syncRun.createMany({ data: batch }));
+  await chunkedCreateMany("sync runs", syncRunRows, (batch) =>
+    prisma.syncRun.createMany({ data: batch }),
+  );
   console.log(`  (${syncRunCount} runs generated)`);
 
   // ── Integration events for lab-results & claims ─────────────
@@ -263,7 +282,14 @@ async function main() {
                 patientRef: `PAT-${faker.number.int({ min: 1000, max: 9999 })}`,
                 orderId: `ORD-${faker.number.int({ min: 100000, max: 999999 })}`,
                 panel: faker.helpers.arrayElement(["Basic Metabolic Panel", "CBC", "Lipid Panel"]),
-                results: [{ code: "2345-7", name: "Glucose", value: String(faker.number.int({ min: 70, max: 200 })), unit: "mg/dL" }],
+                results: [
+                  {
+                    code: "2345-7",
+                    name: "Glucose",
+                    value: String(faker.number.int({ min: 70, max: 200 })),
+                    unit: "mg/dL",
+                  },
+                ],
                 observedAt: receivedAt.toISOString(),
               }
             : {
@@ -274,10 +300,15 @@ async function main() {
         headers: { "x-pulse-delivery": dedupeKey },
         error,
         receivedAt,
-        processedAt: status === EventStatus.PROCESSED || status === EventStatus.FAILED ? new Date(receivedAt.getTime() + 1500) : null,
+        processedAt:
+          status === EventStatus.PROCESSED || status === EventStatus.FAILED
+            ? new Date(receivedAt.getTime() + 1500)
+            : null,
       });
       pushLog(
-        status === EventStatus.FAILED || status === EventStatus.INVALID ? LogLevel.ERROR : LogLevel.INFO,
+        status === EventStatus.FAILED || status === EventStatus.INVALID
+          ? LogLevel.ERROR
+          : LogLevel.INFO,
         "web",
         `${eventType} event ${status.toLowerCase()}`,
         { connectorId, createdAt: receivedAt, context: { dedupeKey } },
@@ -287,7 +318,9 @@ async function main() {
 
   generateEvents(labResults.id, "lab.result.created", 850);
   generateEvents(claims.id, "claim.ack", 650);
-  await chunkedCreateMany("integration events", eventRows, (batch) => prisma.integrationEvent.createMany({ data: batch }));
+  await chunkedCreateMany("integration events", eventRows, (batch) =>
+    prisma.integrationEvent.createMany({ data: batch }),
+  );
 
   // ── Jobs for lab-results / claims / eligibility ─────────────
   console.log("  generating supporting jobs...");
@@ -308,7 +341,16 @@ async function main() {
         maxAttempts: 5,
         payload: { demo: true },
         lastError: failed ? "downstream processing error" : null,
-        errorHistory: failed ? [{ attempt: 1, at: createdAt.toISOString(), message: "downstream processing error", durationMs: 300 }] : [],
+        errorHistory: failed
+          ? [
+              {
+                attempt: 1,
+                at: createdAt.toISOString(),
+                message: "downstream processing error",
+                durationMs: 300,
+              },
+            ]
+          : [],
         startedAt: createdAt,
         finishedAt,
         createdAt,
@@ -330,7 +372,14 @@ async function main() {
       id: randomUUID(),
       orgId: org.id,
       connectorId: connector.id,
-      queue: connector.key === "eligibility" ? "eligibility" : connector.key === "claims" ? "claims-submit" : connector.key === "lab-results" ? "webhook-processing" : "sync",
+      queue:
+        connector.key === "eligibility"
+          ? "eligibility"
+          : connector.key === "claims"
+            ? "claims-submit"
+            : connector.key === "lab-results"
+              ? "webhook-processing"
+              : "sync",
       type: "demo.dead-job",
       status: JobStatus.DEAD,
       attempts: 5,
@@ -351,7 +400,9 @@ async function main() {
   }
 
   await chunkedCreateMany("jobs", jobRows, (batch) => prisma.job.createMany({ data: batch }));
-  await chunkedCreateMany("log entries", logRows, (batch) => prisma.logEntry.createMany({ data: batch }));
+  await chunkedCreateMany("log entries", logRows, (batch) =>
+    prisma.logEntry.createMany({ data: batch }),
+  );
 
   // ── Health snapshots every 15 min for 7 days per connector ──
   console.log("  generating health snapshots...");
@@ -362,7 +413,9 @@ async function main() {
       const windowEnd = new Date(t.getTime() + 15 * 60 * 1000);
       const hit = connector.key === "ehr-fhir" ? inBadWindow(t).hit : false;
       const totalCalls = faker.number.int({ min: 4, max: 20 });
-      const errorRate = hit ? faker.number.float({ min: 0.4, max: 0.9 }) : faker.number.float({ min: 0, max: 0.05 });
+      const errorRate = hit
+        ? faker.number.float({ min: 0.4, max: 0.9 })
+        : faker.number.float({ min: 0, max: 0.05 });
       const failedCalls = Math.round(totalCalls * errorRate);
       const status: ConnectorStatus = hit
         ? errorRate >= 0.5
@@ -373,7 +426,9 @@ async function main() {
         connectorId: connector.id,
         status,
         errorRate,
-        p95LatencyMs: hit ? faker.number.int({ min: 4000, max: 9000 }) : faker.number.int({ min: 100, max: 900 }),
+        p95LatencyMs: hit
+          ? faker.number.int({ min: 4000, max: 9000 })
+          : faker.number.int({ min: 100, max: 900 }),
         totalCalls,
         failedCalls,
         windowStart: t,
@@ -383,7 +438,9 @@ async function main() {
       t = windowEnd;
     }
   }
-  await chunkedCreateMany("health snapshots", snapshotRows, (batch) => prisma.healthSnapshot.createMany({ data: batch }));
+  await chunkedCreateMany("health snapshots", snapshotRows, (batch) =>
+    prisma.healthSnapshot.createMany({ data: batch }),
+  );
 
   // ── Two resolved incidents on ehr-fhir (one per bad afternoon) ──
   console.log("  generating incidents...");
@@ -397,8 +454,10 @@ async function main() {
     const aiSummary = {
       summary:
         "The Mercy General EHR sync connector experienced a sustained outage, with the majority of scheduled sync jobs failing after exhausting all retry attempts.",
-      probableCause: "Upstream FHIR service returned repeated 503 Service Unavailable responses across multiple sync cycles.",
-      impact: "Patient and appointment record updates from Mercy General EHR were delayed; downstream views showed stale data during the window.",
+      probableCause:
+        "Upstream FHIR service returned repeated 503 Service Unavailable responses across multiple sync cycles.",
+      impact:
+        "Patient and appointment record updates from Mercy General EHR were delayed; downstream views showed stale data during the window.",
       suggestedSteps: [
         "Confirm upstream EHR service status with Mercy General's integration team.",
         "Once healthy, retry all DEAD jobs from the Failed Jobs queue for this connector.",
@@ -426,11 +485,36 @@ async function main() {
         aiSummaryStatus: "ready",
         timeline: {
           create: [
-            { kind: "opened", message: "Incident opened: connector transitioned to DOWN.", actor: "system", createdAt: openedAt },
-            { kind: "status_change", message: "Acknowledged by Marcus Webb.", actor: marcus.id, createdAt: new Date(openedAt.getTime() + 3 * 60 * 1000) },
-            { kind: "ai_summary", message: "Draft summary generated (AI-generated).", actor: "system", createdAt: new Date(openedAt.getTime() + 4 * 60 * 1000) },
-            { kind: "health_transition", message: "Connector recovered to HEALTHY; incident moved to monitoring.", actor: "system", createdAt: monitoringAt },
-            { kind: "status_change", message: "Incident auto-resolved after stability window.", actor: "system", createdAt: resolvedAt },
+            {
+              kind: "opened",
+              message: "Incident opened: connector transitioned to DOWN.",
+              actor: "system",
+              createdAt: openedAt,
+            },
+            {
+              kind: "status_change",
+              message: "Acknowledged by Marcus Webb.",
+              actor: marcus.id,
+              createdAt: new Date(openedAt.getTime() + 3 * 60 * 1000),
+            },
+            {
+              kind: "ai_summary",
+              message: "Draft summary generated (AI-generated).",
+              actor: "system",
+              createdAt: new Date(openedAt.getTime() + 4 * 60 * 1000),
+            },
+            {
+              kind: "health_transition",
+              message: "Connector recovered to HEALTHY; incident moved to monitoring.",
+              actor: "system",
+              createdAt: monitoringAt,
+            },
+            {
+              kind: "status_change",
+              message: "Incident auto-resolved after stability window.",
+              actor: "system",
+              createdAt: resolvedAt,
+            },
           ],
         },
       },

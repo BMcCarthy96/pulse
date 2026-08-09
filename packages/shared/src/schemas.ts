@@ -85,7 +85,12 @@ export const labResultWebhookSchema = z.object({
   orderId: z.string(),
   panel: z.string(),
   results: z.array(
-    z.object({ code: z.string(), name: z.string(), value: z.string(), unit: z.string().optional() }),
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      value: z.string(),
+      unit: z.string().optional(),
+    }),
   ),
   observedAt: z.string(),
 });

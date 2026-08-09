@@ -35,7 +35,10 @@ const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
  * (a 60s and a 15s health tick both firing, so every minute ticked twice). Clearing the queue's
  * repeatables first makes "the config at boot" the only thing that decides what runs.
  */
-async function clearRepeatables(queue: { getRepeatableJobs: () => Promise<{ key: string }[]>; removeRepeatableByKey: (key: string) => Promise<boolean> }) {
+async function clearRepeatables(queue: {
+  getRepeatableJobs: () => Promise<{ key: string }[]>;
+  removeRepeatableByKey: (key: string) => Promise<boolean>;
+}) {
   for (const rep of await queue.getRepeatableJobs()) {
     await queue.removeRepeatableByKey(rep.key);
   }
@@ -49,7 +52,10 @@ async function registerRepeatables() {
     const repeatKey = `sync-start-${connector.key}`;
 
     if (connector.paused || !connector.syncIntervalSec) {
-      log.info({ connectorId: connector.id }, `${connector.key}: repeatable sync skipped (paused or no interval)`);
+      log.info(
+        { connectorId: connector.id },
+        `${connector.key}: repeatable sync skipped (paused or no interval)`,
+      );
       continue;
     }
 
@@ -58,12 +64,19 @@ async function registerRepeatables() {
       { connectorId: connector.id, orgId: connector.orgId, trigger: "schedule" },
       { repeat: { every: connector.syncIntervalSec * 1000 }, jobId: repeatKey },
     );
-    log.info({ connectorId: connector.id }, `${connector.key}: registered repeatable sync every ${connector.syncIntervalSec}s`);
+    log.info(
+      { connectorId: connector.id },
+      `${connector.key}: registered repeatable sync every ${connector.syncIntervalSec}s`,
+    );
   }
 
   const tickSec = getHealthConfig().tickIntervalSec;
   await clearRepeatables(healthTickQueue);
-  await healthTickQueue.add("health.tick", {}, { repeat: { every: tickSec * 1000 }, jobId: "health-tick" });
+  await healthTickQueue.add(
+    "health.tick",
+    {},
+    { repeat: { every: tickSec * 1000 }, jobId: "health-tick" },
+  );
   log.info(`health engine: tick registered every ${tickSec}s`);
 }
 
@@ -90,17 +103,29 @@ async function main() {
   });
 
   const syncWorker = createTrackedWorker(QUEUE_NAMES.sync, processSyncJob, { concurrency: 2 });
-  const claimsWorker = createTrackedWorker(QUEUE_NAMES.claimsSubmit, processClaimJob, { concurrency: 3 });
+  const claimsWorker = createTrackedWorker(QUEUE_NAMES.claimsSubmit, processClaimJob, {
+    concurrency: 3,
+  });
   const eligibilityWorker = createTrackedWorker(QUEUE_NAMES.eligibility, processEligibilityJob, {
     concurrency: 3,
     backoffStrategy: eligibilityBackoffStrategy,
   });
-  const webhookWorker = createTrackedWorker(QUEUE_NAMES.webhookProcessing, processWebhookJob, { concurrency: 5 });
-  const incidentSummaryWorker = createTrackedWorker(QUEUE_NAMES.incidentSummary, processIncidentSummaryJob, {
+  const webhookWorker = createTrackedWorker(QUEUE_NAMES.webhookProcessing, processWebhookJob, {
+    concurrency: 5,
+  });
+  const incidentSummaryWorker = createTrackedWorker(
+    QUEUE_NAMES.incidentSummary,
+    processIncidentSummaryJob,
+    {
+      concurrency: 1,
+    },
+  );
+  const healthTickWorker = createTrackedWorker(QUEUE_NAMES.healthTick, () => runHealthTick(), {
     concurrency: 1,
   });
-  const healthTickWorker = createTrackedWorker(QUEUE_NAMES.healthTick, () => runHealthTick(), { concurrency: 1 });
-  log.info("queue workers started: sync, claims-submit, eligibility, webhook-processing, incident-summary, health-tick");
+  log.info(
+    "queue workers started: sync, claims-submit, eligibility, webhook-processing, incident-summary, health-tick",
+  );
 
   await registerRepeatables();
   log.info(`${APP_NAME} worker ready`);

@@ -15,7 +15,11 @@ export const GET = handleApiError("logs.list", async (req) => {
   const q = url.searchParams.get("q") ?? undefined;
   const levelsParam = url.searchParams.get("level");
   const levels = levelsParam
-    ? levelsParam.split(",").map((l) => logLevelSchema.safeParse(l)).filter((r) => r.success).map((r) => r.data)
+    ? levelsParam
+        .split(",")
+        .map((l) => logLevelSchema.safeParse(l))
+        .filter((r) => r.success)
+        .map((r) => r.data)
     : [];
 
   const where: Prisma.LogEntryWhereInput = {

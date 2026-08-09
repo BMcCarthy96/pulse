@@ -51,7 +51,9 @@ describe("ingestWebhook — happy path", () => {
 
     expect(result).toMatchObject({ outcome: "accepted", status: 202 });
 
-    const event = await prisma.integrationEvent.findFirstOrThrow({ where: { connectorId: connector.id } });
+    const event = await prisma.integrationEvent.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
     expect(event.status).toBe("RECEIVED");
     expect(event.direction).toBe("INBOUND");
     expect(event.eventType).toBe("lab.result");
@@ -95,7 +97,9 @@ describe("ingestWebhook — signature rejection", () => {
 
     expect(result).toMatchObject({ outcome: "invalid-signature", status: 401 });
 
-    const event = await prisma.integrationEvent.findFirstOrThrow({ where: { connectorId: connector.id } });
+    const event = await prisma.integrationEvent.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
     expect(event.status).toBe("INVALID");
     expect(event.error).toBe("signature verification failed");
     // The rejected delivery is kept, not dropped — it is the evidence an operator needs.
@@ -110,7 +114,9 @@ describe("ingestWebhook — signature rejection", () => {
 
   it("rejects a signature made with the wrong secret", async () => {
     await seedLabConnector();
-    const result = await ingestWebhook(delivery({ signature: signWebhookBody(LAB_BODY, "wrong-secret") }));
+    const result = await ingestWebhook(
+      delivery({ signature: signWebhookBody(LAB_BODY, "wrong-secret") }),
+    );
     expect(result).toMatchObject({ outcome: "invalid-signature", status: 401 });
   });
 
@@ -124,7 +130,9 @@ describe("ingestWebhook — signature rejection", () => {
     const { connector } = await seedLabConnector();
     await ingestWebhook(delivery({ signature: null }));
 
-    const logs = await prisma.logEntry.findMany({ where: { connectorId: connector.id, level: "WARN" } });
+    const logs = await prisma.logEntry.findMany({
+      where: { connectorId: connector.id, level: "WARN" },
+    });
     expect(logs).toHaveLength(1);
     expect(logs[0].message).toContain("signature verification failed");
     expect(logs[0].source).toBe("web");
@@ -137,7 +145,9 @@ describe("ingestWebhook — malformed body", () => {
     const raw = "{not json at all";
 
     // Correctly signed, but the payload is garbage — this is the BAD_PAYLOAD chaos mode.
-    const result = await ingestWebhook(delivery({ rawBody: raw, signature: signWebhookBody(raw, SECRET) }));
+    const result = await ingestWebhook(
+      delivery({ rawBody: raw, signature: signWebhookBody(raw, SECRET) }),
+    );
 
     expect(result.outcome).toBe("accepted");
     const event = await prisma.integrationEvent.findFirstOrThrow({});

@@ -8,7 +8,8 @@ import { defineConfig } from "vitest/config";
  * a unit suite that quietly needs Docker is a unit suite people stop running.
  */
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_test";
+const TEST_DATABASE_URL =
+  process.env.TEST_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_test";
 
 // Redis logical database 1, so a test run cannot drain or corrupt the queues a dev server is
 // working against on database 0.

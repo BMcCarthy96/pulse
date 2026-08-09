@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +25,13 @@ export function EligibilityDialog() {
   async function submit() {
     setPending(true);
     try {
-      const res = await apiPost<{ jobId: string }>("/api/v1/eligibility/check", { memberId, payerId });
-      toast.success(`Eligibility check queued (job ${res.jobId.slice(-6)}) — see Jobs tab for the result`);
+      const res = await apiPost<{ jobId: string }>("/api/v1/eligibility/check", {
+        memberId,
+        payerId,
+      });
+      toast.success(
+        `Eligibility check queued (job ${res.jobId.slice(-6)}) — see Jobs tab for the result`,
+      );
       setOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run eligibility check");
@@ -29,11 +42,15 @@ export function EligibilityDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>Run eligibility check</DialogTrigger>
+      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+        Run eligibility check
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Run eligibility check</DialogTitle>
-          <DialogDescription>Submits a 270/271-style request to VerifyMed Eligibility.</DialogDescription>
+          <DialogDescription>
+            Submits a 270/271-style request to VerifyMed Eligibility.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">

@@ -10,7 +10,9 @@ export const GET = handleApiError("incidents.detail", async (_req, ctx) => {
   const incident = await prisma.incident.findUnique({
     where: { id },
     include: {
-      connector: { select: { key: true, displayName: true, kind: true, status: true, chaosMode: true } },
+      connector: {
+        select: { key: true, displayName: true, kind: true, status: true, chaosMode: true },
+      },
       timeline: { orderBy: { createdAt: "asc" } },
     },
   });

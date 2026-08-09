@@ -45,7 +45,10 @@ async function processSyncStart(job: Job<SyncStartPayload>) {
     where: { connectorId, status: "RUNNING" },
   });
   if (existingRun) {
-    log.info({ connectorId, syncRunId: existingRun.id }, "sync.start skipped: run already in progress");
+    log.info(
+      { connectorId, syncRunId: existingRun.id },
+      "sync.start skipped: run already in progress",
+    );
     return;
   }
 
@@ -70,9 +73,12 @@ async function processSyncPage(job: Job<SyncPagePayload>) {
   const timeout = setTimeout(() => controller.abort(), SIMULATOR_HTTP_TIMEOUT_MS);
   let bundle: FhirBundle;
   try {
-    const res = await fetch(`${SIMULATOR_BASE_URL}/ehr/fhir/${resource}?_page=${page}&_count=${PAGE_COUNT}`, {
-      signal: controller.signal,
-    });
+    const res = await fetch(
+      `${SIMULATOR_BASE_URL}/ehr/fhir/${resource}?_page=${page}&_count=${PAGE_COUNT}`,
+      {
+        signal: controller.signal,
+      },
+    );
     if (!res.ok) throw new Error(`simulator returned ${res.status}`);
     bundle = (await res.json()) as FhirBundle;
   } finally {
@@ -84,7 +90,10 @@ async function processSyncPage(job: Job<SyncPagePayload>) {
   }
 
   const fetched = bundle.entry.length;
-  await prisma.syncRun.update({ where: { id: syncRunId }, data: { recordsFetched: { increment: fetched } } });
+  await prisma.syncRun.update({
+    where: { id: syncRunId },
+    data: { recordsFetched: { increment: fetched } },
+  });
   log.info(
     { connectorId, syncRunId, context: { page, resource, fetched } },
     `sync page ${page} (${resource}) fetched ${fetched} records`,

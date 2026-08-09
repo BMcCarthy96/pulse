@@ -11,7 +11,14 @@ export function Sparkline({ data }: { data: { errorRate: number }[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data}>
           <YAxis domain={[0, 1]} hide />
-          <Area type="monotone" dataKey="errorRate" stroke="#64748b" fill="#cbd5e1" strokeWidth={1.5} isAnimationActive={false} />
+          <Area
+            type="monotone"
+            dataKey="errorRate"
+            stroke="#64748b"
+            fill="#cbd5e1"
+            strokeWidth={1.5}
+            isAnimationActive={false}
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>

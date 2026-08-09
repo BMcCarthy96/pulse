@@ -10,7 +10,7 @@ export function JsonViewer({ data, label = "JSON" }: { data: unknown; label?: st
   const text = JSON.stringify(data, null, 2);
 
   return (
-    <div className="rounded-md border bg-muted/30">
+    <div className="bg-muted/30 rounded-md border">
       <div className="flex items-center justify-between border-b px-2 py-1">
         <button
           type="button"

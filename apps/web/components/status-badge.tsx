@@ -40,7 +40,10 @@ const STATUS_TONES: Record<string, Tone> = {
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
-    <Badge variant="outline" className={cn("font-medium", TONE_STYLES[STATUS_TONES[status] ?? "neutral"])}>
+    <Badge
+      variant="outline"
+      className={cn("font-medium", TONE_STYLES[STATUS_TONES[status] ?? "neutral"])}
+    >
       {label ?? status}
     </Badge>
   );

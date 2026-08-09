@@ -16,7 +16,11 @@ export const POST = handleApiError("incidents.summary_regenerate", async (_req, 
   }
 
   await prisma.incident.update({ where: { id }, data: { aiSummaryStatus: "queued" } });
-  await incidentSummaryQueue.add("incident.summary", { incidentId: id, reason: "manual" }, INCIDENT_SUMMARY_JOB_OPTS);
+  await incidentSummaryQueue.add(
+    "incident.summary",
+    { incidentId: id, reason: "manual" },
+    INCIDENT_SUMMARY_JOB_OPTS,
+  );
 
   await writeAudit({
     orgId: session.user.orgId,

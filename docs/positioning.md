@@ -57,7 +57,7 @@ Lead with **the operator's experience**. This is a tool for someone on call at 2
   the endpoint re-queued everything matching. A dialog that lies about its own blast radius is
   worse than no dialog.
 - Role-gating is enforced server-side first, then reflected in the UI — a VIEWER does not see
-  buttons they cannot use, *and* the API refuses them.
+  buttons they cannot use, _and_ the API refuses them.
 - Audit coverage is total: every mutation writes an entry with actor, action, target, metadata.
 
 ### AI Solutions Engineer
@@ -115,7 +115,7 @@ product when the key is absent.
 **"Why simulate the upstreams instead of integrating something real?"**
 Because a monitoring tool is only interesting when something is broken, and no real vendor will
 produce a 429 storm on demand. Simulation makes every failure mode reproducible in ten seconds —
-in the demo *and* in CI.
+in the demo _and_ in CI.
 
 **"What was the hardest bug?"**
 Counting job rows as calls instead of attempts. A sync page that burned five retries against a

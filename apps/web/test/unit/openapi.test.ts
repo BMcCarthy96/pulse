@@ -45,7 +45,9 @@ function discoverRoutes(dir: string, prefix = ""): { path: string; methods: stri
     if (entry !== "route.ts") continue;
 
     const source = readFileSync(full, "utf8");
-    const methods = HTTP_METHODS.filter((m) => new RegExp(`export const ${m.toUpperCase()}\\b`).test(source));
+    const methods = HTTP_METHODS.filter((m) =>
+      new RegExp(`export const ${m.toUpperCase()}\\b`).test(source),
+    );
     found.push({ path: prefix || "/", methods });
   }
 
@@ -80,7 +82,10 @@ describe("openapi.yaml — structure", () => {
       for (const method of HTTP_METHODS) {
         const op = item[method];
         if (!op) continue;
-        expect(Object.keys(op.responses ?? {}).length, `${method.toUpperCase()} ${path}`).toBeGreaterThan(0);
+        expect(
+          Object.keys(op.responses ?? {}).length,
+          `${method.toUpperCase()} ${path}`,
+        ).toBeGreaterThan(0);
       }
     }
   });

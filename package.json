@@ -1,6 +1,7 @@
 {
   "name": "pulse",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=22"
   },
@@ -22,14 +23,14 @@
     "db:seed": "pnpm --filter @pulse/db db:seed"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.5",
     "@pulse/db": "workspace:*",
     "@pulse/shared": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
     "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.3",
-    "eslint": "^10.7.0",
+    "eslint": "^9.39.5",
     "prettier": "^3.9.5",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "^5.9.3",

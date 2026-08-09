@@ -9,7 +9,9 @@ test.describe("auth and role gates", () => {
     // div, not an h-element, so it has no heading role to query.
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
-    await expect(page.getByText("All data is synthetic. Upstream systems are simulated.")).toBeVisible();
+    await expect(
+      page.getByText("All data is synthetic. Upstream systems are simulated."),
+    ).toBeVisible();
   });
 
   test("rejects a wrong password without leaking which field was wrong", async ({ page }) => {
@@ -50,6 +52,8 @@ test.describe("auth and role gates", () => {
     });
 
     expect(res.status()).toBe(403);
-    expect(await res.json()).toMatchObject({ error: { code: "FORBIDDEN", message: /ADMIN role required/ } });
+    expect(await res.json()).toMatchObject({
+      error: { code: "FORBIDDEN", message: /ADMIN role required/ },
+    });
   });
 });

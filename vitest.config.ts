@@ -17,14 +17,28 @@ export default defineConfig({
       // that are at 100%, so the two files the README makes claims about are precisely the ones
       // it will not print — the JSON is what makes the claim checkable.
       reporter: ["text", "html", "json-summary"],
-      include: ["apps/worker/src/health/**/*.ts", "apps/worker/src/ai/**/*.ts", "packages/shared/src/**/*.ts"],
+      include: [
+        "apps/worker/src/health/**/*.ts",
+        "apps/worker/src/ai/**/*.ts",
+        "packages/shared/src/**/*.ts",
+      ],
       // engine.ts and summarize.ts are I/O shells over the pure cores below; they are covered by
       // the integration suite, not here, and their presence would only dilute the numbers.
       exclude: ["apps/worker/src/health/engine.ts", "apps/worker/src/ai/summarize.ts"],
       // The two files the README makes claims about (phase 9 acceptance).
       thresholds: {
-        "apps/worker/src/health/rules.ts": { branches: 100, functions: 100, lines: 100, statements: 100 },
-        "apps/worker/src/ai/redact.ts": { branches: 100, functions: 100, lines: 100, statements: 100 },
+        "apps/worker/src/health/rules.ts": {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
+        "apps/worker/src/ai/redact.ts": {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
       },
     },
   },

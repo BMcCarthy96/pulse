@@ -11,12 +11,19 @@ export const POST = handleApiError("connectors.sync", async (_req, ctx) => {
 
   const connector = await prisma.connector.findUnique({ where: { key } });
   if (!connector) throw ApiError.notFound(`connector "${key}" not found`);
-  if (connector.kind !== "poll_sync") throw ApiError.validation(`connector "${key}" is not a poll_sync connector`);
+  if (connector.kind !== "poll_sync")
+    throw ApiError.validation(`connector "${key}" is not a poll_sync connector`);
 
-  const existingRun = await prisma.syncRun.findFirst({ where: { connectorId: connector.id, status: "RUNNING" } });
+  const existingRun = await prisma.syncRun.findFirst({
+    where: { connectorId: connector.id, status: "RUNNING" },
+  });
   if (existingRun) throw ApiError.conflict("a sync run is already in progress for this connector");
 
-  await syncQueue.add("sync.start", { connectorId: connector.id, orgId: connector.orgId, trigger: "manual" });
+  await syncQueue.add("sync.start", {
+    connectorId: connector.id,
+    orgId: connector.orgId,
+    trigger: "manual",
+  });
 
   await writeAudit({
     orgId: session.user.orgId,

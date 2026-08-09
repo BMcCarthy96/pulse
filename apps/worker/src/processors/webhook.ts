@@ -26,7 +26,10 @@ async function processLabResult(event: IntegrationEvent) {
     throw new InvalidPayloadError(parsed.error.message);
   }
   await sleep(randomBetween(50, 200));
-  log.info({ connectorId: event.connectorId }, `lab result processed: order ${parsed.data.orderId}`);
+  log.info(
+    { connectorId: event.connectorId },
+    `lab result processed: order ${parsed.data.orderId}`,
+  );
 }
 
 async function processClaimAck(event: IntegrationEvent) {
@@ -45,17 +48,27 @@ async function processClaimAck(event: IntegrationEvent) {
     await prisma.job.update({
       where: { id: claimJob.id },
       data: {
-        payload: { ...existingPayload, ackStatus: status, ackReason: reason ?? null } as Prisma.InputJsonValue,
+        payload: {
+          ...existingPayload,
+          ackStatus: status,
+          ackReason: reason ?? null,
+        } as Prisma.InputJsonValue,
       },
     });
   } else {
-    log.warn({ connectorId: event.connectorId }, `claim.ack for unknown claimId ${claimId} (no matching claim.submit job)`);
+    log.warn(
+      { connectorId: event.connectorId },
+      `claim.ack for unknown claimId ${claimId} (no matching claim.submit job)`,
+    );
   }
 
   if (status === "rejected") {
     // A business rejection is not a pipeline failure — the ack was processed successfully,
     // the claim just didn't get paid. Surface it as a WARN, not an event failure.
-    log.warn({ connectorId: event.connectorId }, `claim ${claimId} rejected: ${reason ?? "no reason given"}`);
+    log.warn(
+      { connectorId: event.connectorId },
+      `claim ${claimId} rejected: ${reason ?? "no reason given"}`,
+    );
   } else {
     log.info({ connectorId: event.connectorId }, `claim ${claimId} accepted`);
   }

@@ -7,7 +7,13 @@ import { DataTable, type Column } from "@/components/data-table";
 import { SeverityBadge } from "@/components/severity-badge";
 import { IncidentStatusBadge } from "@/components/incident-status-badge";
 import { Timestamp } from "@/components/timestamp";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CONNECTOR_DEFS } from "@pulse/shared";
 import { usePaginatedList } from "@/lib/use-paginated";
 import type { IncidentRow } from "@/lib/types";
@@ -24,9 +30,8 @@ export default function IncidentsPage() {
   if (connectorKey !== "ALL") params.set("connectorKey", connectorKey);
   params.set("limit", "25");
 
-  const { items, error, isLoading, mutate, nextCursor, loadMore, loadingMore } = usePaginatedList<IncidentRow>(
-    `/api/v1/incidents?${params.toString()}`,
-  );
+  const { items, error, isLoading, mutate, nextCursor, loadMore, loadingMore } =
+    usePaginatedList<IncidentRow>(`/api/v1/incidents?${params.toString()}`);
 
   const columns: Column<IncidentRow>[] = [
     { key: "severity", header: "Severity", render: (r) => <SeverityBadge severity={r.severity} /> },
@@ -46,13 +51,17 @@ export default function IncidentsPage() {
       key: "duration",
       header: "Duration",
       // Open incidents keep counting; the 10s poll is what makes it tick.
-      render: (r) => formatDuration(new Date(r.openedAt), r.resolvedAt ? new Date(r.resolvedAt) : new Date()),
+      render: (r) =>
+        formatDuration(new Date(r.openedAt), r.resolvedAt ? new Date(r.resolvedAt) : new Date()),
     },
   ];
 
   return (
     <div>
-      <PageHeader title="Incidents" description="Detected by the health engine, plus anything resolved by hand." />
+      <PageHeader
+        title="Incidents"
+        description="Detected by the health engine, plus anything resolved by hand."
+      />
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Select value={status} onValueChange={(v) => setStatus(v ?? "ALL")}>

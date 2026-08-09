@@ -13,10 +13,16 @@ export const GET = handleApiError("overview", async () => {
   const perConnector = await Promise.all(
     connectors.map(async (c) => {
       const [snapshot, openIncident, lastJob, lastEvent] = await Promise.all([
-        prisma.healthSnapshot.findFirst({ where: { connectorId: c.id }, orderBy: { createdAt: "desc" } }),
+        prisma.healthSnapshot.findFirst({
+          where: { connectorId: c.id },
+          orderBy: { createdAt: "desc" },
+        }),
         prisma.incident.findFirst({ where: { connectorId: c.id, status: { not: "RESOLVED" } } }),
         prisma.job.findFirst({ where: { connectorId: c.id }, orderBy: { createdAt: "desc" } }),
-        prisma.integrationEvent.findFirst({ where: { connectorId: c.id }, orderBy: { receivedAt: "desc" } }),
+        prisma.integrationEvent.findFirst({
+          where: { connectorId: c.id },
+          orderBy: { receivedAt: "desc" },
+        }),
       ]);
       const lastActivity = [lastJob?.createdAt, lastEvent?.receivedAt]
         .filter((d): d is Date => !!d)
@@ -35,17 +41,18 @@ export const GET = handleApiError("overview", async () => {
     }),
   );
 
-  const [deadJobs, openIncidents, eventsLastHour, jobsLastHour, recentIncidents] = await Promise.all([
-    prisma.job.count({ where: { status: "DEAD" } }),
-    prisma.incident.count({ where: { status: { not: "RESOLVED" } } }),
-    prisma.integrationEvent.count({ where: { receivedAt: { gte: oneHourAgo } } }),
-    prisma.job.count({ where: { createdAt: { gte: oneHourAgo } } }),
-    prisma.incident.findMany({
-      orderBy: { openedAt: "desc" },
-      take: 5,
-      include: { connector: { select: { key: true, displayName: true } } },
-    }),
-  ]);
+  const [deadJobs, openIncidents, eventsLastHour, jobsLastHour, recentIncidents] =
+    await Promise.all([
+      prisma.job.count({ where: { status: "DEAD" } }),
+      prisma.incident.count({ where: { status: { not: "RESOLVED" } } }),
+      prisma.integrationEvent.count({ where: { receivedAt: { gte: oneHourAgo } } }),
+      prisma.job.count({ where: { createdAt: { gte: oneHourAgo } } }),
+      prisma.incident.findMany({
+        orderBy: { openedAt: "desc" },
+        take: 5,
+        include: { connector: { select: { key: true, displayName: true } } },
+      }),
+    ]);
 
   return NextResponse.json({
     connectors: perConnector,

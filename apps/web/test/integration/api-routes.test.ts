@@ -20,7 +20,8 @@ const { POST: addNote } = await import("@/app/api/v1/incidents/[id]/notes/route"
 const { POST: retryJob } = await import("@/app/api/v1/jobs/[id]/retry/route");
 const { GET: listAudit } = await import("@/app/api/v1/audit/route");
 const { GET: listUsers } = await import("@/app/api/v1/users/route");
-const { webhookProcessingQueue, syncQueue, claimsSubmitQueue, eligibilityQueue } = await import("@/lib/queue");
+const { webhookProcessingQueue, syncQueue, claimsSubmitQueue, eligibilityQueue } =
+  await import("@/lib/queue");
 
 type Ctx = { params: Promise<Record<string, string>> };
 const ctx = (params: Record<string, string>): Ctx => ({ params: Promise.resolve(params) });
@@ -44,7 +45,11 @@ function signOut() {
   session.current = null;
 }
 
-async function seedIncident(orgId: string, connectorId: string, over: Record<string, unknown> = {}) {
+async function seedIncident(
+  orgId: string,
+  connectorId: string,
+  over: Record<string, unknown> = {},
+) {
   return prisma.incident.create({
     data: {
       orgId,
@@ -74,21 +79,28 @@ describe("role gates", () => {
   it("returns the UNAUTHORIZED envelope with no session", async () => {
     const res = await acknowledgeIncident(req(), ctx({ id: "whatever" }));
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: { code: "UNAUTHORIZED", message: expect.any(String) } });
+    expect(await res.json()).toEqual({
+      error: { code: "UNAUTHORIZED", message: expect.any(String) },
+    });
   });
 
   it("returns the FORBIDDEN envelope for a VIEWER on an OPS route", async () => {
     await signIn("VIEWER");
     const res = await acknowledgeIncident(req(), ctx({ id: "whatever" }));
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: { code: "FORBIDDEN", message: "OPS role required" } });
+    expect(await res.json()).toEqual({
+      error: { code: "FORBIDDEN", message: "OPS role required" },
+    });
   });
 
   it("gates the audit log to ADMIN", async () => {
     await signIn("OPS");
     const res = await listAudit(new Request("http://localhost:3010/api/v1/audit"), ctx({}));
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toMatchObject({ code: "FORBIDDEN", message: "ADMIN role required" });
+    expect((await res.json()).error).toMatchObject({
+      code: "FORBIDDEN",
+      message: "ADMIN role required",
+    });
   });
 
   it("gates the users list to ADMIN", async () => {
@@ -119,7 +131,9 @@ describe("incidents.acknowledge", () => {
     expect(after.status).toBe("ACKNOWLEDGED");
     expect(after.acknowledgedAt).toBeInstanceOf(Date);
 
-    const timeline = await prisma.incidentTimelineEntry.findMany({ where: { incidentId: incident.id } });
+    const timeline = await prisma.incidentTimelineEntry.findMany({
+      where: { incidentId: incident.id },
+    });
     expect(timeline.map((t) => t.kind).sort()).toEqual(["note", "status_change"]);
     expect(timeline.every((t) => t.actor === user.id)).toBe(true);
 
@@ -151,7 +165,10 @@ describe("incidents.acknowledge", () => {
   it("409s on a resolved incident", async () => {
     const { org } = await signIn("OPS");
     const connector = await createConnector(org.id);
-    const incident = await seedIncident(org.id, connector.id, { status: "RESOLVED", resolvedAt: new Date() });
+    const incident = await seedIncident(org.id, connector.id, {
+      status: "RESOLVED",
+      resolvedAt: new Date(),
+    });
 
     const res = await acknowledgeIncident(req(), ctx({ id: incident.id }));
     expect(res.status).toBe(409);
@@ -183,7 +200,10 @@ describe("incidents.resolve", () => {
   it("409s when the incident is already resolved", async () => {
     const { org } = await signIn("OPS");
     const connector = await createConnector(org.id);
-    const incident = await seedIncident(org.id, connector.id, { status: "RESOLVED", resolvedAt: new Date() });
+    const incident = await seedIncident(org.id, connector.id, {
+      status: "RESOLVED",
+      resolvedAt: new Date(),
+    });
 
     const res = await resolveIncident(req({}), ctx({ id: incident.id }));
     expect(res.status).toBe(409);
@@ -229,7 +249,11 @@ describe("incidents.notes — zod validation", () => {
 });
 
 describe("jobs.retry", () => {
-  async function seedJob(orgId: string, connectorId: string, status: "DEAD" | "SUCCEEDED" | "QUEUED") {
+  async function seedJob(
+    orgId: string,
+    connectorId: string,
+    status: "DEAD" | "SUCCEEDED" | "QUEUED",
+  ) {
     return prisma.job.create({
       data: {
         orgId,
@@ -241,7 +265,8 @@ describe("jobs.retry", () => {
         maxAttempts: 5,
         payload: { page: 1 },
         lastError: status === "DEAD" ? "simulator returned 503" : null,
-        errorHistory: status === "DEAD" ? [{ attempt: 1, at: new Date().toISOString(), message: "boom" }] : [],
+        errorHistory:
+          status === "DEAD" ? [{ attempt: 1, at: new Date().toISOString(), message: "boom" }] : [],
       },
     });
   }
@@ -292,7 +317,13 @@ describe("admin surfaces", () => {
   it("lets an ADMIN read the audit log", async () => {
     const { org, user } = await signIn("ADMIN");
     await prisma.auditEntry.create({
-      data: { orgId: org.id, userId: user.id, action: "chaos.change", targetType: "connector", targetId: "c1" },
+      data: {
+        orgId: org.id,
+        userId: user.id,
+        action: "chaos.change",
+        targetType: "connector",
+        targetId: "c1",
+      },
     });
 
     const res = await listAudit(new Request("http://localhost:3010/api/v1/audit"), ctx({}));

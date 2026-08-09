@@ -5,7 +5,10 @@ import { emitWebhook } from "./webhooks.js";
 
 const CONNECTOR_KEY = "lab-results";
 
-const PANELS: { name: string; results: { code: string; name: string; unit: string; range: [number, number] }[] }[] = [
+const PANELS: {
+  name: string;
+  results: { code: string; name: string; unit: string; range: [number, number] }[];
+}[] = [
   {
     name: "Basic Metabolic Panel",
     results: [

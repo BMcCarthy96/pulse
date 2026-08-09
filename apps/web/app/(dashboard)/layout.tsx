@@ -11,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 border-r bg-card">
+      <aside className="bg-card w-56 shrink-0 border-r">
         <div className="border-b px-4 py-4">
           <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
           <p className="text-muted-foreground text-xs">Lakeview Health Partners</p>
@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b bg-card px-4">
+        <header className="bg-card flex h-14 items-center justify-between border-b px-4">
           <GlobalHealthDot />
           <div className="flex items-center gap-3">
             {user && (
@@ -44,7 +44,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </header>
 
-        <main className="flex-1 bg-muted/20 p-6">{children}</main>
+        <main className="bg-muted/20 flex-1 p-6">{children}</main>
       </div>
     </div>
   );

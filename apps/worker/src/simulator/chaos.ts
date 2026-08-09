@@ -76,7 +76,11 @@ export async function applyChaos(
       const failureRate = config.failureRate ?? CHAOS_DEFAULTS.degradedFailureRate;
       const latencyMs =
         config.latencyMs ??
-        randomBetween(CHAOS_DEFAULTS.degradedLatencyMinMs, CHAOS_DEFAULTS.degradedLatencyMaxMs, rng);
+        randomBetween(
+          CHAOS_DEFAULTS.degradedLatencyMinMs,
+          CHAOS_DEFAULTS.degradedLatencyMaxMs,
+          rng,
+        );
       await sleep(latencyMs);
       if (rng() < failureRate) {
         return { response: c.json({ error: "upstream error" }, 500), mode };

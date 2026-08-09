@@ -11,7 +11,9 @@ describe("HealthStrip bucketing", () => {
 
   it("passes through at exactly the segment cap", () => {
     const input = Array<string>(HEALTH_STRIP_MAX_SEGMENTS).fill("HEALTHY");
-    expect(bucketed(snap(input), HEALTH_STRIP_MAX_SEGMENTS)).toHaveLength(HEALTH_STRIP_MAX_SEGMENTS);
+    expect(bucketed(snap(input), HEALTH_STRIP_MAX_SEGMENTS)).toHaveLength(
+      HEALTH_STRIP_MAX_SEGMENTS,
+    );
   });
 
   /**

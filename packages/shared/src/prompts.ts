@@ -19,9 +19,15 @@ export type IncidentSummary = z.infer<typeof IncidentSummarySchema>;
  * they travel to the model as the JSON-schema field descriptions.
  */
 export const IncidentSummaryAiSchema = z4.object({
-  summary: z4.string().describe("2-3 sentences in plain operations language: what is happening and since when."),
-  probableCause: z4.string().describe("The most likely cause supported by the evidence given. Say so if ambiguous."),
-  impact: z4.string().describe("Which downstream clinical or billing workflow is affected, and how badly."),
+  summary: z4
+    .string()
+    .describe("2-3 sentences in plain operations language: what is happening and since when."),
+  probableCause: z4
+    .string()
+    .describe("The most likely cause supported by the evidence given. Say so if ambiguous."),
+  impact: z4
+    .string()
+    .describe("Which downstream clinical or billing workflow is affected, and how badly."),
   suggestedSteps: z4
     .array(z4.string())
     .max(5)

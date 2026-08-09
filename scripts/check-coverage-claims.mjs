@@ -36,8 +36,12 @@ for (const claim of CLAIMS) {
   }
 
   const [, metrics] = entry;
-  const parts = ["statements", "branches", "functions", "lines"].map((m) => `${m} ${metrics[m].pct}%`);
-  const perfect = ["statements", "branches", "functions", "lines"].every((m) => metrics[m].pct === 100);
+  const parts = ["statements", "branches", "functions", "lines"].map(
+    (m) => `${m} ${metrics[m].pct}%`,
+  );
+  const perfect = ["statements", "branches", "functions", "lines"].every(
+    (m) => metrics[m].pct === 100,
+  );
 
   console.log(`${perfect ? "OK      " : "BELOW   "}${claim} — ${parts.join(", ")}`);
   if (!perfect) failed = true;

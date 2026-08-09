@@ -33,7 +33,9 @@ export function Timestamp({ date }: { date: string | Date | null | undefined }) 
 
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="cursor-default" />}>{relativeTime(d)}</TooltipTrigger>
+      <TooltipTrigger render={<span className="cursor-default" />}>
+        {relativeTime(d)}
+      </TooltipTrigger>
       <TooltipContent>{d.toLocaleString()}</TooltipContent>
     </Tooltip>
   );

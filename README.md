@@ -25,11 +25,37 @@ drafts a first-pass incident summary with Claude — from PHI-redacted context.
 **Live demo:** not yet deployed — the runbook is in [docs/deployment.md](docs/deployment.md).
 **Demo logins** (password `pulse-demo-2026`):
 
-| Persona | Email | Role | Can do |
-|---|---|---|---|
-| Dana Alvarez | `dana@lakeviewhealth.example` | ADMIN | Everything, plus chaos panel, users, audit log |
-| Marcus Webb | `marcus@lakeviewhealth.example` | OPS | Retry jobs, acknowledge/resolve incidents, regenerate summaries |
-| Priya Nair | `priya@lakeviewhealth.example` | VIEWER | Read-only |
+| Persona      | Email                           | Role   | Can do                                                          |
+| ------------ | ------------------------------- | ------ | --------------------------------------------------------------- |
+| Dana Alvarez | `dana@lakeviewhealth.example`   | ADMIN  | Everything, plus chaos panel, users, audit log                  |
+| Marcus Webb  | `marcus@lakeviewhealth.example` | OPS    | Retry jobs, acknowledge/resolve incidents, regenerate summaries |
+| Priya Nair   | `priya@lakeviewhealth.example`  | VIEWER | Read-only                                                       |
+
+---
+
+## What this demonstrates
+
+- **Integration reliability:** connector health windows, retries, backoff, incident lifecycle, and webhook isolation.
+- **Production-minded AI:** PHI redaction, structured output, prompt versioning, measured cost/latency, and graceful degradation.
+- **AI engineering:** deterministic evals, prompt regression gates, evidence-bounded tool use, and persisted run telemetry.
+- **Operational safety:** RBAC, audit entries, replay protection, rate limits, budgets, and distributed traces.
+
+## Stack at a glance
+
+Next.js 15 dashboard and API · Railway worker with BullMQ · PostgreSQL/Prisma · Redis · Hono simulator · Anthropic Messages API · Zod contracts · Vitest/Playwright CI.
+
+## Quickstart
+
+```bash
+docker compose up -d
+corepack pnpm install
+corepack pnpm db:push
+corepack pnpm db:seed
+corepack pnpm dev
+```
+
+Open http://localhost:3010 and choose a demo persona. The detailed local-development notes and
+environment table are below.
 
 ---
 
@@ -39,15 +65,15 @@ A monitoring tool is only interesting when something is broken. Rather than wait
 upstream to misbehave, Pulse ships the upstreams: four simulated vendors run inside the worker
 process, and an admin-only **chaos panel** sets each one's failure mode on demand.
 
-| Chaos mode | What the simulated vendor does |
-|---|---|
-| `HEALTHY` | Normal responses, 50–300 ms jittered latency |
-| `DEGRADED` | `failureRate` (default 40%) of requests → 500; survivors get +2–8 s latency |
-| `OUTAGE` | Every request → 503 |
-| `TIMEOUT` | Sleeps 30 s; the client aborts at 10 s |
-| `RATE_LIMIT` | 429 with `Retry-After: 15` |
-| `BAD_PAYLOAD` | 200 with a schema-invalid body |
-| `AUTH_FAILURE` | 401 |
+| Chaos mode     | What the simulated vendor does                                              |
+| -------------- | --------------------------------------------------------------------------- |
+| `HEALTHY`      | Normal responses, 50–300 ms jittered latency                                |
+| `DEGRADED`     | `failureRate` (default 40%) of requests → 500; survivors get +2–8 s latency |
+| `OUTAGE`       | Every request → 503                                                         |
+| `TIMEOUT`      | Sleeps 30 s; the client aborts at 10 s                                      |
+| `RATE_LIMIT`   | 429 with `Retry-After: 15`                                                  |
+| `BAD_PAYLOAD`  | 200 with a schema-invalid body                                              |
+| `AUTH_FAILURE` | 401                                                                         |
 
 ![Connector detail for the EHR connector, showing the seven-mode chaos panel, a 24-hour health timeline, and sync history](docs/media/02-connector-chaos-panel.png)
 
@@ -106,7 +132,7 @@ The split is forced by one constraint: **BullMQ workers need a long-running proc
 serverless functions are not. So the dashboard and API live on Vercel, and everything that runs
 continuously lives on Railway. Both talk to the same Postgres and Redis.
 
-The simulator lives *inside* the worker rather than as a fifth service — it is the thing being
+The simulator lives _inside_ the worker rather than as a fifth service — it is the thing being
 monitored, and co-locating it keeps the deployment to two services instead of three.
 
 ---
@@ -163,13 +189,13 @@ sequenceDiagram
 
 Implemented in [`packages/shared/src/queue-config.ts`](packages/shared/src/queue-config.ts).
 
-| Queue | Attempts | Backoff | Why |
-|---|---|---|---|
-| `sync` | 5 | exponential 2s → 32s (capped) | Transient upstream errors usually clear inside a minute |
-| `webhook-processing` | 5 | exponential 2s → 32s | Same, and the dedupe key makes replays safe |
-| `claims-submit` | 5 | exponential 2s → 32s | Acks arrive later as a separate webhook |
-| `eligibility` | 3 | **honours `Retry-After`** | A 429 tells us exactly how long to wait; guessing over the top of an authoritative answer is wrong |
-| `incident-summary` | 2 | exponential 2s | An LLM failure should surface fast, not thrash |
+| Queue                | Attempts | Backoff                       | Why                                                                                                |
+| -------------------- | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `sync`               | 5        | exponential 2s → 32s (capped) | Transient upstream errors usually clear inside a minute                                            |
+| `webhook-processing` | 5        | exponential 2s → 32s          | Same, and the dedupe key makes replays safe                                                        |
+| `claims-submit`      | 5        | exponential 2s → 32s          | Acks arrive later as a separate webhook                                                            |
+| `eligibility`        | 3        | **honours `Retry-After`**     | A 429 tells us exactly how long to wait; guessing over the top of an authoritative answer is wrong |
+| `incident-summary`   | 2        | exponential 2s                | An LLM failure should surface fast, not thrash                                                     |
 
 Details that turned out to matter:
 
@@ -209,7 +235,7 @@ Two of those deserve a note.
 
 **A job row is not a call.** This was the most consequential bug in the build. The engine
 originally counted each `Job` once, so a sync page that burned five retries against a dead
-upstream registered as *one* failure. A total outage then produced one failing call per sync run,
+upstream registered as _one_ failure. A total outage then produced one failing call per sync run,
 the `consecutiveFailures ≥ 5` rule needed ~25 minutes to trip, and the 15-minute window (holding
 ~225 successes) diluted the error rate to 0.9%. Expanding each job into one call per attempt
 moved failed calls in the outage window from 2 to 15, and detection landed where it should.
@@ -323,13 +349,13 @@ pnpm --filter @pulse/db metrics
 That script ([`packages/db/scripts/metrics.ts`](packages/db/scripts/metrics.ts)) prints the SQL
 alongside each result, so the definitions are checkable rather than merely asserted.
 
-| Metric | Value | Definition |
-|---|---|---|
-| Job error rate | **16.58%** (697 / 4,203) | Failed **attempts** over total attempts — the same definition the health engine uses |
-| Retry success rate | **75.16%** (478 / 636) | Jobs that failed at least once and still ended `SUCCEEDED` |
-| MTTD | **30s** | First unhealthy snapshot → incident opened. Floored by the tick interval: you cannot detect faster than you look |
-| MTTR | **127m** (4 incidents; 7m–245m) | Incident opened → resolved, across seeded history and live walkthroughs |
-| Throughput | **15.8 jobs/hour** | 3,182 jobs over 201 hours of history |
+| Metric             | Value                           | Definition                                                                                                       |
+| ------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Job error rate     | **16.58%** (697 / 4,203)        | Failed **attempts** over total attempts — the same definition the health engine uses                             |
+| Retry success rate | **75.16%** (478 / 636)          | Jobs that failed at least once and still ended `SUCCEEDED`                                                       |
+| MTTD               | **30s**                         | First unhealthy snapshot → incident opened. Floored by the tick interval: you cannot detect faster than you look |
+| MTTR               | **127m** (4 incidents; 7m–245m) | Incident opened → resolved, across seeded history and live walkthroughs                                          |
+| Throughput         | **15.8 jobs/hour**              | 3,182 jobs over 201 hours of history                                                                             |
 
 Corpus: 4 connectors · 3,182 jobs · 1,615 events · 4,277 log entries · 3,687 health snapshots ·
 4 incidents · 27 audit entries.
@@ -342,11 +368,11 @@ no failures in it would demonstrate nothing.
 
 ## Testing strategy
 
-| Layer | Runs against | Covers | Count |
-|---|---|---|---|
-| **Unit** (`pnpm test:unit`) | nothing — pure Node | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly, prompt snapshot, health-strip bucketing, OpenAPI drift | 178 |
-| **Integration** (`pnpm test:integration`) | real Postgres + Redis | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions | 51 |
-| **E2E** (`pnpm test:e2e`) | built app + real worker | The full demo flow, plus auth and role gates | 7 |
+| Layer                                     | Runs against            | Covers                                                                                                                                                  | Count |
+| ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly, prompt snapshot, health-strip bucketing, OpenAPI drift | 178   |
+| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                          | 51    |
+| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, plus auth and role gates                                                                                                            | 7     |
 
 The split follows one rule: **if it can be a pure function, test it as one.** The health rules and
 the redactor are pure by design precisely so they can be tested exhaustively — table-driven across
@@ -391,23 +417,24 @@ inject anything.
   resource is looked up, so a probe for a nonexistent id gets 403 rather than disclosing which ids
   exist.
 
-| | VIEWER | OPS | ADMIN |
-|---|:-:|:-:|:-:|
-| Read dashboards, jobs, events, logs, incidents | ✅ | ✅ | ✅ |
-| Retry jobs · acknowledge/resolve incidents · notes · regenerate summaries | | ✅ | ✅ |
-| Chaos panel · pause connectors · users · audit log | | | ✅ |
+|                                                                           | VIEWER | OPS | ADMIN |
+| ------------------------------------------------------------------------- | :----: | :-: | :---: |
+| Read dashboards, jobs, events, logs, incidents                            |   ✅   | ✅  |  ✅   |
+| Retry jobs · acknowledge/resolve incidents · notes · regenerate summaries |        | ✅  |  ✅   |
+| Chaos panel · pause connectors · users · audit log                        |        |     |  ✅   |
 
 - **Every mutation writes an `AuditEntry`** with actor, action, target and metadata — no
   exceptions. The audit log is an admin-only page.
 
 ![The admin-only audit log: actor, action, target and metadata for chaos changes, bulk retries, and AI summary edits and regenerations](docs/media/05-audit-log.png)
+
 - **Password hashes are never selected** for the users endpoint's shape.
 - **Synthetic data only**, and anything bound for the Anthropic API passes through the redaction
   boundary with a leak check behind it.
 
 ---
 
-## Local development
+## Detailed local development
 
 Prerequisites: Node 22+, pnpm 9, Docker.
 
@@ -450,21 +477,21 @@ it, the tests and screenshots depend on it.
 Copy `.env.example` to `.env` (and `apps/worker/.env`, `apps/web/.env.local`). Names and local
 defaults only — no secrets are committed.
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Postgres connection string |
-| `REDIS_URL` | Redis connection string (BullMQ) |
-| `AUTH_SECRET` | Auth.js JWT signing secret |
-| `AUTH_URL` | Base URL for auth callbacks |
-| `ANTHROPIC_API_KEY` | Optional — omit to exercise the graceful-degradation path |
-| `ANTHROPIC_MODEL` | Defaults to `claude-opus-4-8` |
-| `WEBHOOK_SIGNING_SECRET` | Shared HMAC secret; **must match** between worker and web |
-| `SIMULATOR_PORT` / `SIMULATOR_BASE_URL` | Simulated upstreams |
-| `WEBHOOK_TARGET_URL` | Where the simulator POSTs inbound webhooks |
-| `SEED_DEMO_PASSWORD` | Password for the three demo users |
-| `HEALTH_TICK_SEC` | Health engine interval (default 60) |
-| `HEALTH_WINDOW_MIN` | Rolling window length (default 15) |
-| `INCIDENT_STABILITY_MIN` | Minutes stable before auto-resolve (default 10; `0` = next healthy tick) |
+| Variable                                | Purpose                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `DATABASE_URL`                          | Postgres connection string                                               |
+| `REDIS_URL`                             | Redis connection string (BullMQ)                                         |
+| `AUTH_SECRET`                           | Auth.js JWT signing secret                                               |
+| `AUTH_URL`                              | Base URL for auth callbacks                                              |
+| `ANTHROPIC_API_KEY`                     | Optional — omit to exercise the graceful-degradation path                |
+| `ANTHROPIC_MODEL`                       | Defaults to `claude-opus-4-8`                                            |
+| `WEBHOOK_SIGNING_SECRET`                | Shared HMAC secret; **must match** between worker and web                |
+| `SIMULATOR_PORT` / `SIMULATOR_BASE_URL` | Simulated upstreams                                                      |
+| `WEBHOOK_TARGET_URL`                    | Where the simulator POSTs inbound webhooks                               |
+| `SEED_DEMO_PASSWORD`                    | Password for the three demo users                                        |
+| `HEALTH_TICK_SEC`                       | Health engine interval (default 60)                                      |
+| `HEALTH_WINDOW_MIN`                     | Rolling window length (default 15)                                       |
+| `INCIDENT_STABILITY_MIN`                | Minutes stable before auto-resolve (default 10; `0` = next healthy tick) |
 
 ---
 

@@ -168,7 +168,9 @@ describe("buildIncidentContext — repeat collapsing", () => {
 
 describe("buildIncidentContext — redaction", () => {
   it("redacts identifiers in log messages", async () => {
-    db.logEntry.findMany.mockResolvedValue([logRow({ message: "failed for PAT-4821 on claim CLM-9" })]);
+    db.logEntry.findMany.mockResolvedValue([
+      logRow({ message: "failed for PAT-4821 on claim CLM-9" }),
+    ]);
     const { markdown } = await buildIncidentContext("inc-1");
     expect(markdown).not.toContain("PAT-4821");
     expect(markdown).toContain("[REDACTED:patient-ref]");
@@ -178,7 +180,9 @@ describe("buildIncidentContext — redaction", () => {
     db.user.findMany.mockResolvedValue([{ name: "Dana Alvarez" }, { name: null }]);
     db.incident.findUnique.mockResolvedValue(
       incident({
-        timeline: [{ createdAt: OPENED_AT, kind: "note", message: "Dana Alvarez acknowledged this" }],
+        timeline: [
+          { createdAt: OPENED_AT, kind: "note", message: "Dana Alvarez acknowledged this" },
+        ],
       }),
     );
     const { markdown } = await buildIncidentContext("inc-1");
@@ -205,10 +209,14 @@ describe("buildIncidentContext — budget", () => {
   it("stays under the cap and reports truncation", async () => {
     // Distinct messages so repeat-collapsing cannot do the shrinking for us.
     db.logEntry.findMany.mockResolvedValue(
-      Array.from({ length: 50 }, (_, i) => logRow({ message: `distinct failure ${i} ${"x".repeat(300)}` })),
+      Array.from({ length: 50 }, (_, i) =>
+        logRow({ message: `distinct failure ${i} ${"x".repeat(300)}` }),
+      ),
     );
     db.job.findMany.mockResolvedValue(
-      Array.from({ length: 20 }, (_, i) => jobRow({ lastError: `distinct job error ${i} ${"y".repeat(300)}` })),
+      Array.from({ length: 20 }, (_, i) =>
+        jobRow({ lastError: `distinct job error ${i} ${"y".repeat(300)}` }),
+      ),
     );
 
     const { markdown, truncated } = await buildIncidentContext("inc-1");
@@ -228,10 +236,18 @@ describe("buildIncidentContext — budget", () => {
 
   it("drops later sections before cutting mid-line", async () => {
     db.logEntry.findMany.mockResolvedValue(
-      Array.from({ length: 50 }, (_, i) => logRow({ message: `distinct failure ${i} ${"x".repeat(300)}` })),
+      Array.from({ length: 50 }, (_, i) =>
+        logRow({ message: `distinct failure ${i} ${"x".repeat(300)}` }),
+      ),
     );
     db.integrationEvent.findMany.mockResolvedValue([
-      { receivedAt: OPENED_AT, direction: "INBOUND", eventType: "lab.result", status: "PROCESSED", error: null },
+      {
+        receivedAt: OPENED_AT,
+        direction: "INBOUND",
+        eventType: "lab.result",
+        status: "PROCESSED",
+        error: null,
+      },
     ]);
 
     const { markdown } = await buildIncidentContext("inc-1");
@@ -251,13 +267,16 @@ describe("buildIncidentContext — claim rejections", () => {
 
   it("adds the claim-ack section for the claims connector", async () => {
     db.incident.findUnique.mockResolvedValue(
-      incident({ connector: connector({ key: "claims", displayName: "ClearPath Clearinghouse (X12 837)" }) }),
+      incident({
+        connector: connector({ key: "claims", displayName: "ClearPath Clearinghouse (X12 837)" }),
+      }),
     );
-    db.integrationEvent.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { receivedAt: OPENED_AT, payload: { ackStatus: "rejected", reason: "missing prior authorization" } },
-      ]);
+    db.integrationEvent.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        receivedAt: OPENED_AT,
+        payload: { ackStatus: "rejected", reason: "missing prior authorization" },
+      },
+    ]);
 
     const { markdown } = await buildIncidentContext("inc-1");
 

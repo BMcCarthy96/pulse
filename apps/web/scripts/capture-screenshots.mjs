@@ -40,7 +40,9 @@ const VIEWPORT = { width: 1440, height: 900 };
  * `next.config.ts`, which would take the indicator away from normal development too.
  */
 async function hideDevOverlay(page) {
-  await page.addStyleTag({ content: "nextjs-portal, [data-nextjs-toast] { display: none !important; }" });
+  await page.addStyleTag({
+    content: "nextjs-portal, [data-nextjs-toast] { display: none !important; }",
+  });
 }
 
 async function shoot(page, name, { fullPage = false } = {}) {
@@ -97,7 +99,9 @@ async function main() {
     if (!res.ok) throw new Error(`incidents list failed: ${res.status}`);
     return (await res.json()).data;
   });
-  const withSummary = incidents.find((i) => i.aiSummaryStatus === "ready" || i.aiSummaryStatus === "edited");
+  const withSummary = incidents.find(
+    (i) => i.aiSummaryStatus === "ready" || i.aiSummaryStatus === "edited",
+  );
   if (!withSummary) {
     throw new Error(
       "No incident has a completed AI summary. Run the worker with ANTHROPIC_API_KEY set, or re-seed.",

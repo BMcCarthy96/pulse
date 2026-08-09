@@ -23,7 +23,10 @@ export function usePaginatedList<T>(baseUrl: string | null) {
     setExtraPages([]);
   }
 
-  const cursor = extraPages.length > 0 ? extraPages[extraPages.length - 1].nextCursor : (firstPage?.nextCursor ?? null);
+  const cursor =
+    extraPages.length > 0
+      ? extraPages[extraPages.length - 1].nextCursor
+      : (firstPage?.nextCursor ?? null);
 
   async function loadMore() {
     if (!cursor || !baseUrl) return;
@@ -39,5 +42,14 @@ export function usePaginatedList<T>(baseUrl: string | null) {
 
   const items = firstPage ? [...firstPage.data, ...extraPages.flatMap((p) => p.data)] : undefined;
 
-  return { items, total: firstPage?.total, error, isLoading, mutate, nextCursor: cursor, loadMore, loadingMore };
+  return {
+    items,
+    total: firstPage?.total,
+    error,
+    isLoading,
+    mutate,
+    nextCursor: cursor,
+    loadMore,
+    loadingMore,
+  };
 }

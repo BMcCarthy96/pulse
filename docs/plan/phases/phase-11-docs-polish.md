@@ -48,7 +48,7 @@ engineering case study, OpenAPI docs, metrics, screenshots, Loom script, resume 
 ## Acceptance criteria
 
 - [ ] A stranger can clone → `docker compose up -d && pnpm install && pnpm db:push && pnpm db:seed
-      && pnpm dev` → working app, from README alone
+&& pnpm dev` → working app, from README alone
 - [ ] README metrics are real numbers with reproducible queries, not invented
 - [ ] All five screenshots current; diagrams match implemented reality (cross-check queue names,
       routes, statuses)

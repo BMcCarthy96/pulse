@@ -23,7 +23,9 @@ function jobToCalls(job: {
   finishedAt: Date | null;
   errorHistory: unknown;
 }): HealthCall[] {
-  const history: ErrorHistoryEntry[] = Array.isArray(job.errorHistory) ? (job.errorHistory as ErrorHistoryEntry[]) : [];
+  const history: ErrorHistoryEntry[] = Array.isArray(job.errorHistory)
+    ? (job.errorHistory as ErrorHistoryEntry[])
+    : [];
   const failedAttempts: HealthCall[] = history.map((entry) => ({
     at: entry.at ? new Date(entry.at) : (job.finishedAt ?? job.createdAt),
     failed: true,
@@ -35,7 +37,8 @@ function jobToCalls(job: {
     failedAttempts.push({
       at: job.finishedAt ?? job.createdAt,
       failed: false,
-      durationMs: job.startedAt && job.finishedAt ? job.finishedAt.getTime() - job.startedAt.getTime() : null,
+      durationMs:
+        job.startedAt && job.finishedAt ? job.finishedAt.getTime() - job.startedAt.getTime() : null,
     });
   }
 
@@ -46,7 +49,8 @@ function jobToCalls(job: {
     {
       at: job.createdAt,
       failed: job.status === "FAILED" || job.status === "DEAD",
-      durationMs: job.startedAt && job.finishedAt ? job.finishedAt.getTime() - job.startedAt.getTime() : null,
+      durationMs:
+        job.startedAt && job.finishedAt ? job.finishedAt.getTime() - job.startedAt.getTime() : null,
     },
   ];
 }
@@ -59,7 +63,13 @@ async function loadCalls(connectorId: string, since: Date): Promise<HealthCall[]
   const [jobs, events] = await Promise.all([
     prisma.job.findMany({
       where: { connectorId, createdAt: { gt: since } },
-      select: { createdAt: true, status: true, startedAt: true, finishedAt: true, errorHistory: true },
+      select: {
+        createdAt: true,
+        status: true,
+        startedAt: true,
+        finishedAt: true,
+        errorHistory: true,
+      },
     }),
     prisma.integrationEvent.findMany({
       where: { connectorId, receivedAt: { gt: since } },
@@ -80,7 +90,14 @@ async function loadCalls(connectorId: string, since: Date): Promise<HealthCall[]
 
 /** One connector, one tick: compute → snapshot → (maybe) status change → lifecycle. */
 async function tickConnector(
-  connector: { id: string; orgId: string; key: string; displayName: string; status: ConnectorStatusValue; paused: boolean },
+  connector: {
+    id: string;
+    orgId: string;
+    key: string;
+    displayName: string;
+    status: ConnectorStatusValue;
+    paused: boolean;
+  },
   now: Date,
 ) {
   const cfg = getHealthConfig();
@@ -88,7 +105,11 @@ async function tickConnector(
 
   const calls = await loadCalls(connector.id, windowStart);
   const window = buildWindow(calls, now, cfg.windowMinutes);
-  const status = computeStatus(window, { paused: connector.paused, previousStatus: connector.status }, cfg);
+  const status = computeStatus(
+    window,
+    { paused: connector.paused, previousStatus: connector.status },
+    cfg,
+  );
 
   await prisma.healthSnapshot.create({
     data: {

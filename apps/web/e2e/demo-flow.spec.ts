@@ -133,12 +133,17 @@ test("the full demo flow: healthy → outage → incident → recovery → audit
 // just a stable way to ask "has the background work finished yet".
 
 async function countJobs(page: import("@playwright/test").Page, status: string): Promise<number> {
-  const res = await page.request.get(`/api/v1/jobs?status=${status}&limit=1&withTotal=1&connectorKey=${EHR}`);
+  const res = await page.request.get(
+    `/api/v1/jobs?status=${status}&limit=1&withTotal=1&connectorKey=${EHR}`,
+  );
   if (!res.ok()) return -1;
   return (await res.json()).total ?? 0;
 }
 
-async function connectorStatus(page: import("@playwright/test").Page, key: string): Promise<string> {
+async function connectorStatus(
+  page: import("@playwright/test").Page,
+  key: string,
+): Promise<string> {
   const res = await page.request.get(`/api/v1/connectors/${key}`);
   if (!res.ok()) return "unknown";
   return (await res.json()).connector.status;
@@ -164,7 +169,10 @@ async function incidentStatus(page: import("@playwright/test").Page, id: string)
   return (await res.json()).incident.status;
 }
 
-async function incidentSummaryStatus(page: import("@playwright/test").Page, id: string): Promise<string> {
+async function incidentSummaryStatus(
+  page: import("@playwright/test").Page,
+  id: string,
+): Promise<string> {
   const res = await page.request.get(`/api/v1/incidents/${id}`);
   if (!res.ok()) return "unknown";
   return (await res.json()).incident.aiSummaryStatus;

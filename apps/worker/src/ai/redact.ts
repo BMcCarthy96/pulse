@@ -145,7 +145,12 @@ export function redact(text: string, knownNames: string[] = []): string {
  */
 export function redactDeep<T>(value: T, knownNames: string[] = []): T {
   if (typeof value === "string") return redact(value, knownNames) as unknown as T;
-  if (typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null ||
+    value === undefined
+  ) {
     return value;
   }
   if (Array.isArray(value)) return value.map((v) => redactDeep(v, knownNames)) as unknown as T;

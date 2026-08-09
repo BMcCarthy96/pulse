@@ -71,7 +71,7 @@ Point at the footer.
 > before it's sent, and the job fails rather than shipping PHI. That file is at a hundred percent
 > branch coverage."
 >
-> "Second — the model is deliberately *not* told the chaos mode. That's the ground truth. If I
+> "Second — the model is deliberately _not_ told the chaos mode. That's the ground truth. If I
 > fed it in, the summary would just restate the fault I injected and prove nothing. It has to
 > reason from the symptoms."
 
@@ -128,7 +128,7 @@ Close:
 
 - **Total: 2:30.** The retry cycle in the 0:45 segment is the part that runs long — if the tick
   interval is not shrunk it will eat thirty seconds of dead air. Shrink it, or cut.
-- Do not narrate clicking. Narrate *why*.
+- Do not narrate clicking. Narrate _why_.
 - If the AI summary fails to generate on the take, keep going — the "AI not configured" state is
   a legitimate thing to show, and recovering from it on camera is better than a reshoot.
 - Say "synthetic data" out loud at least once. Anyone from healthcare will be listening for it.

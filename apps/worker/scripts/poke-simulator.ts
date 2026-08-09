@@ -15,7 +15,9 @@ async function main() {
   while (next && pages < 10) {
     const res = await fetch(`${BASE_URL}${next}`);
     const json = (await res.json()) as { entry?: unknown[]; link?: { next?: string } };
-    console.log(`  page ${page}: status=${res.status} entries=${json.entry?.length ?? 0} next=${json.link?.next ?? "none"}`);
+    console.log(
+      `  page ${page}: status=${res.status} entries=${json.entry?.length ?? 0} next=${json.link?.next ?? "none"}`,
+    );
     next = json.link?.next;
     page++;
     pages++;
@@ -49,7 +51,9 @@ async function main() {
     body: JSON.stringify({ count: 3 }),
   });
   console.log(`  status=${labsRes.status} body=${JSON.stringify(await labsRes.json())}`);
-  console.log("  (webhook delivery attempts logged by the worker process — 404/refused is fine until phase 5)");
+  console.log(
+    "  (webhook delivery attempts logged by the worker process — 404/refused is fine until phase 5)",
+  );
 }
 
 main().catch((err) => {

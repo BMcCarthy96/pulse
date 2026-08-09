@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 import { usePolling } from "@/lib/hooks";
 import type { OverviewResponse, ConnectorRow } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
@@ -23,7 +32,8 @@ const CONNECTOR_COLORS: Record<string, string> = {
 
 export default function OverviewPage() {
   const router = useRouter();
-  const { data: overview, isLoading: overviewLoading } = usePolling<OverviewResponse>("/api/v1/overview");
+  const { data: overview, isLoading: overviewLoading } =
+    usePolling<OverviewResponse>("/api/v1/overview");
   const { data: connectorsResp } = usePolling<{ data: ConnectorRow[] }>("/api/v1/connectors");
 
   const connectors = connectorsResp?.data ?? [];
@@ -34,8 +44,16 @@ export default function OverviewPage() {
       <PageHeader title="Overview" description="Integration health across all connectors." />
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Dead jobs" value={overview?.totals.deadJobs ?? "—"} tone={overview && overview.totals.deadJobs > 0 ? "danger" : "default"} />
-        <KpiCard label="Open incidents" value={overview?.totals.openIncidents ?? "—"} tone={overview && overview.totals.openIncidents > 0 ? "danger" : "default"} />
+        <KpiCard
+          label="Dead jobs"
+          value={overview?.totals.deadJobs ?? "—"}
+          tone={overview && overview.totals.deadJobs > 0 ? "danger" : "default"}
+        />
+        <KpiCard
+          label="Open incidents"
+          value={overview?.totals.openIncidents ?? "—"}
+          tone={overview && overview.totals.openIncidents > 0 ? "danger" : "default"}
+        />
         <KpiCard label="Events (1h)" value={overview?.totals.eventsLastHour ?? "—"} />
         <KpiCard label="Jobs (1h)" value={overview?.totals.jobsLastHour ?? "—"} />
       </div>
@@ -92,14 +110,21 @@ export default function OverviewPage() {
         </CardHeader>
         <CardContent>
           {chartData.length === 0 ? (
-            <EmptyState title="No snapshot data yet" hint="Health snapshots accumulate every 60 seconds." />
+            <EmptyState
+              title="No snapshot data yet"
+              hint="Health snapshots accumulate every 60 seconds."
+            />
           ) : (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={40} />
-                  <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+                  <YAxis
+                    domain={[0, 1]}
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => `${Math.round(v * 100)}%`}
+                  />
                   <Tooltip formatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   {connectors.map((c) => (
@@ -127,14 +152,17 @@ export default function OverviewPage() {
         </CardHeader>
         <CardContent>
           {overview && overview.recentIncidents.length === 0 ? (
-            <EmptyState title="No incidents" hint="Incidents auto-open when a connector degrades or goes down." />
+            <EmptyState
+              title="No incidents"
+              hint="Incidents auto-open when a connector degrades or goes down."
+            />
           ) : (
             <div className="divide-y">
               {overview?.recentIncidents.map((i) => (
                 <Link
                   key={i.id}
                   href={`/incidents/${i.id}`}
-                  className="flex items-center justify-between py-2 text-sm hover:bg-muted/40"
+                  className="hover:bg-muted/40 flex items-center justify-between py-2 text-sm"
                 >
                   <div className="flex items-center gap-3">
                     <SeverityBadge severity={i.severity} />
@@ -166,7 +194,10 @@ function buildChartData(connectors: ConnectorRow[]) {
       const point = c.sparkline[i];
       if (point) {
         row[c.key] = point.errorRate;
-        label = new Date(point.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        label = new Date(point.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
       }
     }
     row.label = label;

@@ -20,7 +20,7 @@ function MethodChip({ method }: { method: string }) {
   return (
     <span
       className={`inline-block rounded border px-1.5 py-0.5 font-mono text-[11px] font-medium ${
-        METHOD_STYLES[method] ?? "bg-slate-100 text-slate-700 border-slate-200"
+        METHOD_STYLES[method] ?? "border-slate-200 bg-slate-100 text-slate-700"
       }`}
     >
       {method}
@@ -49,7 +49,7 @@ export default async function ApiDocsPage() {
         actions={
           <a
             href="/api/v1/openapi"
-            className="text-primary rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            className="text-primary hover:bg-muted rounded-md border px-3 py-1.5 text-sm"
           >
             Download openapi.yaml
           </a>
@@ -74,8 +74,8 @@ export default async function ApiDocsPage() {
           </p>
           <p>
             List routes are cursor-paginated and return{" "}
-            <code className="text-foreground font-mono text-xs">{"{ data, nextCursor }"}</code>. Pass{" "}
-            <code className="text-foreground font-mono text-xs">?withTotal=1</code> for a total
+            <code className="text-foreground font-mono text-xs">{"{ data, nextCursor }"}</code>.
+            Pass <code className="text-foreground font-mono text-xs">?withTotal=1</code> for a total
             count — opt-in, because it costs an extra query.
           </p>
         </CardContent>

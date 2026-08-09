@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@pulse/db";
 import { runHealthTick } from "../../src/health/engine.js";
-import { createConnector, createFailedJobs, createOrg, createSucceededJobs } from "../../../../test/integration/fixtures.js";
+import {
+  createConnector,
+  createFailedJobs,
+  createOrg,
+  createSucceededJobs,
+} from "../../../../test/integration/fixtures.js";
 
 /**
  * The health engine against a real database. The rules themselves are unit-tested exhaustively;
@@ -23,7 +28,10 @@ describe("runHealthTick — snapshots", () => {
   it("writes one snapshot per connector per tick", async () => {
     const { org } = await seedConnector();
     const orgRow = await prisma.organization.findUniqueOrThrow({ where: { id: org.id } });
-    await createConnector(orgRow.id, { key: "claims", displayName: "ClearPath Clearinghouse (X12 837)" });
+    await createConnector(orgRow.id, {
+      key: "claims",
+      displayName: "ClearPath Clearinghouse (X12 837)",
+    });
 
     await runHealthTick();
 
@@ -37,7 +45,9 @@ describe("runHealthTick — snapshots", () => {
 
     await runHealthTick();
 
-    const snapshot = await prisma.healthSnapshot.findFirstOrThrow({ where: { connectorId: connector.id } });
+    const snapshot = await prisma.healthSnapshot.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
     // 8 successes + 2 failed attempts = 10 calls, 2 failed.
     expect(snapshot.totalCalls).toBe(10);
     expect(snapshot.failedCalls).toBe(2);
@@ -52,7 +62,9 @@ describe("runHealthTick — snapshots", () => {
 
     await runHealthTick();
 
-    const snapshot = await prisma.healthSnapshot.findFirstOrThrow({ where: { connectorId: connector.id } });
+    const snapshot = await prisma.healthSnapshot.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
     expect(snapshot.failedCalls).toBe(5);
     expect(await statusOf(connector.id)).toBe("DOWN");
   });
@@ -63,7 +75,9 @@ describe("runHealthTick — snapshots", () => {
 
     await runHealthTick();
 
-    const snapshot = await prisma.healthSnapshot.findFirstOrThrow({ where: { connectorId: connector.id } });
+    const snapshot = await prisma.healthSnapshot.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
     expect(snapshot.totalCalls).toBe(0);
   });
 });
@@ -121,7 +135,10 @@ describe("runHealthTick — status transitions", () => {
 
   it("keeps ticking the other connectors when one fails", async () => {
     const { org } = await seedConnector();
-    await createConnector(org.id, { key: "claims", displayName: "ClearPath Clearinghouse (X12 837)" });
+    await createConnector(org.id, {
+      key: "claims",
+      displayName: "ClearPath Clearinghouse (X12 837)",
+    });
 
     await runHealthTick();
 
@@ -151,8 +168,12 @@ describe("runHealthTick — incident lifecycle", () => {
 
     await runHealthTick();
 
-    const incident = await prisma.incident.findFirstOrThrow({ where: { connectorId: connector.id } });
-    const timeline = await prisma.incidentTimelineEntry.findMany({ where: { incidentId: incident.id } });
+    const incident = await prisma.incident.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
+    const timeline = await prisma.incidentTimelineEntry.findMany({
+      where: { incidentId: incident.id },
+    });
     expect(timeline.some((t) => t.kind === "opened")).toBe(true);
     expect(incident.title).toContain("Mercy General EHR (FHIR R4)");
   });
@@ -163,7 +184,9 @@ describe("runHealthTick — incident lifecycle", () => {
 
     await runHealthTick();
 
-    const incident = await prisma.incident.findFirstOrThrow({ where: { connectorId: connector.id } });
+    const incident = await prisma.incident.findFirstOrThrow({
+      where: { connectorId: connector.id },
+    });
     // Queued, not generated: the summarizer degrades to a `failed` card rather than blocking
     // incident creation on a third-party call.
     expect(incident.aiSummaryStatus).toBe("queued");
@@ -219,7 +242,9 @@ describe("runHealthTick — incident lifecycle", () => {
     await prisma.job.deleteMany({ where: { connectorId: connector.id } });
     await createSucceededJobs(connector.id, org.id, 20, { minutesAgo: 1 });
     await runHealthTick();
-    expect((await prisma.incident.findUniqueOrThrow({ where: { id: opened.id } })).status).toBe("MONITORING");
+    expect((await prisma.incident.findUniqueOrThrow({ where: { id: opened.id } })).status).toBe(
+      "MONITORING",
+    );
 
     await prisma.job.deleteMany({ where: { connectorId: connector.id } });
     await createFailedJobs(connector.id, org.id, 2, { attempts: 5, minutesAgo: 1 });

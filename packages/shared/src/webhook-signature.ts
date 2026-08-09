@@ -24,7 +24,11 @@ export function signWebhookBody(rawBody: string, secret: string): string {
  * correctness requirement and not just a guard for `timingSafeEqual`: without it a garbage
  * signature could be compared against a truncated expectation.
  */
-export function verifyWebhookSignature(rawBody: string, signature: string | null | undefined, secret: string): boolean {
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string | null | undefined,
+  secret: string,
+): boolean {
   if (!signature) return false;
 
   const expected = Buffer.from(signWebhookBody(rawBody, secret), "hex");

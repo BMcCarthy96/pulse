@@ -9,10 +9,15 @@ import { prisma, type ChaosMode, type ConnectorStatus, type Role } from "@pulse/
  */
 
 export async function createOrg(name = "Lakeview Health Partners") {
-  return prisma.organization.create({ data: { name, slug: `test-${Math.random().toString(36).slice(2, 10)}` } });
+  return prisma.organization.create({
+    data: { name, slug: `test-${Math.random().toString(36).slice(2, 10)}` },
+  });
 }
 
-export async function createUser(orgId: string, over: Partial<{ email: string; name: string; role: Role }> = {}) {
+export async function createUser(
+  orgId: string,
+  over: Partial<{ email: string; name: string; role: Role }> = {},
+) {
   return prisma.user.create({
     data: {
       orgId,

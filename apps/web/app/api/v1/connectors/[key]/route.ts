@@ -17,12 +17,18 @@ export const GET = handleApiError("connectors.detail", async (_req, ctx) => {
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [runs, snapshots, openIncident] = await Promise.all([
-    prisma.syncRun.findMany({ where: { connectorId: connector.id }, orderBy: { startedAt: "desc" }, take: 10 }),
+    prisma.syncRun.findMany({
+      where: { connectorId: connector.id },
+      orderBy: { startedAt: "desc" },
+      take: 10,
+    }),
     prisma.healthSnapshot.findMany({
       where: { connectorId: connector.id, createdAt: { gte: since } },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.incident.findFirst({ where: { connectorId: connector.id, status: { not: "RESOLVED" } } }),
+    prisma.incident.findFirst({
+      where: { connectorId: connector.id, status: { not: "RESOLVED" } },
+    }),
   ]);
 
   return NextResponse.json({ connector, recentRuns: runs, snapshots, openIncident });

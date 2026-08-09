@@ -20,14 +20,28 @@ async function getOrgId(): Promise<string | null> {
 export async function logToDb(
   level: LogLevel,
   message: string,
-  context: { connectorId?: string; jobId?: string; incidentId?: string; [key: string]: unknown } = {},
+  context: {
+    connectorId?: string;
+    jobId?: string;
+    incidentId?: string;
+    [key: string]: unknown;
+  } = {},
 ) {
   try {
     const orgId = await getOrgId();
     if (!orgId) return;
     const { connectorId, jobId, incidentId, ...rest } = context;
     await prisma.logEntry.create({
-      data: { orgId, level, source: "web", connectorId, jobId, incidentId, message, context: rest as Prisma.InputJsonValue },
+      data: {
+        orgId,
+        level,
+        source: "web",
+        connectorId,
+        jobId,
+        incidentId,
+        message,
+        context: rest as Prisma.InputJsonValue,
+      },
     });
   } catch (err) {
     log.warn({ err }, "failed to persist LogEntry to DB");

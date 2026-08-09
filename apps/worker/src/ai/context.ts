@@ -46,11 +46,15 @@ function collapseRepeats(lines: { key: string; text: string }[]): string[] {
  * feeding it in would let the model restate the fault injection instead of reasoning from
  * symptoms — the summaries would look brilliant and prove nothing.
  */
-export async function buildIncidentContext(incidentId: string): Promise<{ markdown: string; truncated: boolean }> {
+export async function buildIncidentContext(
+  incidentId: string,
+): Promise<{ markdown: string; truncated: boolean }> {
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     include: {
-      connector: { select: { id: true, key: true, displayName: true, kind: true, description: true } },
+      connector: {
+        select: { id: true, key: true, displayName: true, kind: true, description: true },
+      },
       timeline: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -64,12 +68,20 @@ export async function buildIncidentContext(incidentId: string): Promise<{ markdo
 
   const [logs, failedJobs, events, claimRejections] = await Promise.all([
     prisma.logEntry.findMany({
-      where: { connectorId, level: { in: ["WARN", "ERROR"] }, createdAt: { gte: incident.openedAt, lte: windowEnd } },
+      where: {
+        connectorId,
+        level: { in: ["WARN", "ERROR"] },
+        createdAt: { gte: incident.openedAt, lte: windowEnd },
+      },
       orderBy: { createdAt: "desc" },
       take: MAX_LOGS,
     }),
     prisma.job.findMany({
-      where: { connectorId, status: { in: ["FAILED", "DEAD"] }, createdAt: { gte: incident.openedAt, lte: windowEnd } },
+      where: {
+        connectorId,
+        status: { in: ["FAILED", "DEAD"] },
+        createdAt: { gte: incident.openedAt, lte: windowEnd },
+      },
       orderBy: { createdAt: "desc" },
       take: MAX_FAILED_JOBS,
     }),
@@ -175,7 +187,9 @@ export async function buildIncidentContext(incidentId: string): Promise<{ markdo
     sections.push(
       [
         `## Clearinghouse claim acknowledgements (${claimRejections.length}, newest first)`,
-        ...claimRejections.map((e) => `- ${e.receivedAt.toISOString()} ${asJson(e.payload, knownNames)}`),
+        ...claimRejections.map(
+          (e) => `- ${e.receivedAt.toISOString()} ${asJson(e.payload, knownNames)}`,
+        ),
       ].join("\n"),
     );
   }

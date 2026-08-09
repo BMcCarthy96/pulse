@@ -9,7 +9,8 @@ import { log } from "../log.js";
 import { getChaosState } from "./chaos.js";
 
 const WEBHOOK_TARGET_URL = process.env.WEBHOOK_TARGET_URL ?? "http://localhost:3010";
-const WEBHOOK_SIGNING_SECRET = process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
+const WEBHOOK_SIGNING_SECRET =
+  process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
 const EMIT_TIMEOUT_MS = 5000;
 
 async function post(connectorKey: string, eventType: string, body: string, deliveryId: string) {
@@ -51,11 +52,15 @@ export async function emitWebhook(
   const { mode } = await getChaosState(connectorKey);
   const deliveryId = randomUUID();
 
-  const bodyObj = mode === "BAD_PAYLOAD" ? { malformed: true, eventType } : { eventType, ...(payload as object) };
+  const bodyObj =
+    mode === "BAD_PAYLOAD" ? { malformed: true, eventType } : { eventType, ...(payload as object) };
   const body = JSON.stringify(bodyObj);
 
   if (mode === "BAD_PAYLOAD") {
-    log.warn({ connectorKey, eventType, deliveryId, body: bodyObj }, "emitting schema-invalid webhook body (chaos: BAD_PAYLOAD)");
+    log.warn(
+      { connectorKey, eventType, deliveryId, body: bodyObj },
+      "emitting schema-invalid webhook body (chaos: BAD_PAYLOAD)",
+    );
   }
 
   void post(connectorKey, eventType, body, deliveryId);

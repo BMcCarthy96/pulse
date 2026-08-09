@@ -54,7 +54,10 @@ export async function setup() {
     console.log(`[integration] created database ${databaseName}`);
   } catch (err) {
     // Already exists is the normal case on every run after the first.
-    const message = err instanceof Error ? `${err.message}${"stderr" in err ? String(err.stderr) : ""}` : String(err);
+    const message =
+      err instanceof Error
+        ? `${err.message}${"stderr" in err ? String(err.stderr) : ""}`
+        : String(err);
     if (!/already exists/i.test(message)) throw err;
   }
 

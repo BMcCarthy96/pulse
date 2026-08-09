@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@pulse/db";
-import { ApiError, eligibilityCheckSchema, QUEUE_NAMES, ELIGIBILITY_JOB_OPTS, createTrackedJob } from "@pulse/shared";
+import {
+  ApiError,
+  eligibilityCheckSchema,
+  QUEUE_NAMES,
+  ELIGIBILITY_JOB_OPTS,
+  createTrackedJob,
+} from "@pulse/shared";
 import { handleApiError, requireRole } from "@/lib/authz";
 import { writeAudit } from "@/lib/audit";
 import { eligibilityQueue } from "@/lib/queue";
@@ -20,7 +26,12 @@ export const POST = handleApiError("eligibility.check", async (req) => {
     type: "eligibility.check",
     connectorId: connector.id,
     orgId: connector.orgId,
-    payload: { connectorId: connector.id, orgId: connector.orgId, memberId: body.data.memberId, payerId: body.data.payerId },
+    payload: {
+      connectorId: connector.id,
+      orgId: connector.orgId,
+      memberId: body.data.memberId,
+      payerId: body.data.payerId,
+    },
     opts: ELIGIBILITY_JOB_OPTS,
   });
 

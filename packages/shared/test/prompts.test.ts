@@ -70,8 +70,13 @@ describe("incident summary schema", () => {
     for (const field of Object.keys(valid)) {
       const partial = { ...valid } as Record<string, unknown>;
       delete partial[field];
-      expect(IncidentSummarySchema.safeParse(partial).success, `v3 accepted missing ${field}`).toBe(false);
-      expect(IncidentSummaryAiSchema.safeParse(partial).success, `v4 accepted missing ${field}`).toBe(false);
+      expect(IncidentSummarySchema.safeParse(partial).success, `v3 accepted missing ${field}`).toBe(
+        false,
+      );
+      expect(
+        IncidentSummaryAiSchema.safeParse(partial).success,
+        `v4 accepted missing ${field}`,
+      ).toBe(false);
     }
   });
 });

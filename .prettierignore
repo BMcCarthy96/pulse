@@ -5,3 +5,4 @@ build
 coverage
 pnpm-lock.yaml
 docs/openapi.yaml
+docs/plan/PROGRESS.md

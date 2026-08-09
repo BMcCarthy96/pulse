@@ -17,9 +17,15 @@ const rows = await prisma.incident.findMany({
 
 for (const r of rows) {
   console.log(
-    [r.id, r.connector.key, r.status, r.severity, `ai=${r.aiSummaryStatus}`, r.openedAt.toISOString(), r.title].join(
-      " | ",
-    ),
+    [
+      r.id,
+      r.connector.key,
+      r.status,
+      r.severity,
+      `ai=${r.aiSummaryStatus}`,
+      r.openedAt.toISOString(),
+      r.title,
+    ].join(" | "),
   );
 }
 

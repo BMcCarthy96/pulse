@@ -16,17 +16,28 @@ const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 export const connectionOptions = getRedisConnectionOptions(REDIS_URL);
 
 export const syncQueue = new Queue(QUEUE_NAMES.sync, { connection: connectionOptions });
-export const webhookProcessingQueue = new Queue(QUEUE_NAMES.webhookProcessing, { connection: connectionOptions });
-export const claimsSubmitQueue = new Queue(QUEUE_NAMES.claimsSubmit, { connection: connectionOptions });
-export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, { connection: connectionOptions });
-export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, { connection: connectionOptions });
+export const webhookProcessingQueue = new Queue(QUEUE_NAMES.webhookProcessing, {
+  connection: connectionOptions,
+});
+export const claimsSubmitQueue = new Queue(QUEUE_NAMES.claimsSubmit, {
+  connection: connectionOptions,
+});
+export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, {
+  connection: connectionOptions,
+});
+export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, {
+  connection: connectionOptions,
+});
 export const healthTickQueue = new Queue(QUEUE_NAMES.healthTick, { connection: connectionOptions });
 
 /**
  * Not a tracked job: incident summaries are internal work, not a connector call, so they stay
  * out of the failed-job queue the ops team triages.
  */
-export function enqueueIncidentSummary(incidentId: string, opts: { reason?: "opened" | "resolution" } = {}) {
+export function enqueueIncidentSummary(
+  incidentId: string,
+  opts: { reason?: "opened" | "resolution" } = {},
+) {
   return incidentSummaryQueue.add(
     "incident.summary",
     { incidentId, reason: opts.reason ?? "opened" },
@@ -49,7 +60,10 @@ export function retryTrackedJob(dbJobId: string) {
   return sharedRetryTrackedJob(prisma, queueByName, dbJobId);
 }
 
-async function markWebhookEventFailed(dbJob: { queue: string; payload: Prisma.JsonValue }, error: string) {
+async function markWebhookEventFailed(
+  dbJob: { queue: string; payload: Prisma.JsonValue },
+  error: string,
+) {
   if (dbJob.queue !== QUEUE_NAMES.webhookProcessing) return;
   const eventId = (dbJob.payload as { eventId?: string } | null)?.eventId;
   if (!eventId) return;
@@ -100,7 +114,9 @@ async function handleFailed(job: BullJob | undefined, err: Error) {
 
   const attemptsMade = job.attemptsMade;
   const isDead = attemptsMade >= (job.opts.attempts ?? 1);
-  const priorHistory = Array.isArray(dbJob.errorHistory) ? (dbJob.errorHistory as Record<string, unknown>[]) : [];
+  const priorHistory = Array.isArray(dbJob.errorHistory)
+    ? (dbJob.errorHistory as Record<string, unknown>[])
+    : [];
   const errorHistory = [
     ...priorHistory,
     {
@@ -145,7 +161,10 @@ function attachJobLifecycle(worker: Worker) {
 export function createTrackedWorker(
   queueName: string,
   processor: (job: BullJob) => Promise<unknown>,
-  opts: { concurrency: number; backoffStrategy?: (attemptsMade: number, type?: string, err?: Error) => number },
+  opts: {
+    concurrency: number;
+    backoffStrategy?: (attemptsMade: number, type?: string, err?: Error) => number;
+  },
 ): Worker {
   const worker = new Worker(queueName, processor, {
     connection: connectionOptions,
@@ -160,7 +179,11 @@ export function createTrackedWorker(
  * A 429 tells us exactly how long to wait; exponential backoff would be guessing over the top of
  * an authoritative answer. Everything else falls back to the standard schedule.
  */
-export const eligibilityBackoffStrategy = (attemptsMade: number, _type?: string, err?: Error): number => {
+export const eligibilityBackoffStrategy = (
+  attemptsMade: number,
+  _type?: string,
+  err?: Error,
+): number => {
   if (err instanceof RetryAfterError) return err.retryAfterMs;
   return exponentialBackoffMs(attemptsMade);
 };

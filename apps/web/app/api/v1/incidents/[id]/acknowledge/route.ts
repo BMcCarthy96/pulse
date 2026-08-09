@@ -11,7 +11,8 @@ export const POST = handleApiError("incidents.acknowledge", async (_req, ctx) =>
   const incident = await prisma.incident.findUnique({ where: { id } });
   if (!incident) throw ApiError.notFound(`incident "${id}" not found`);
   if (incident.status === "RESOLVED") throw ApiError.conflict("incident is already resolved");
-  if (incident.status === "ACKNOWLEDGED") throw ApiError.conflict("incident is already acknowledged");
+  if (incident.status === "ACKNOWLEDGED")
+    throw ApiError.conflict("incident is already acknowledged");
 
   const updated = await prisma.$transaction(async (tx) => {
     const next = await tx.incident.update({

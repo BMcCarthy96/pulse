@@ -25,7 +25,10 @@ export async function processIncidentSummaryJob(job: BullJob) {
     return;
   }
 
-  await prisma.incident.update({ where: { id: incidentId }, data: { aiSummaryStatus: "generating" } });
+  await prisma.incident.update({
+    where: { id: incidentId },
+    data: { aiSummaryStatus: "generating" },
+  });
 
   try {
     const result = await summarizeIncident(incidentId);
@@ -66,7 +69,11 @@ export async function processIncidentSummaryJob(job: BullJob) {
     );
   } catch (err) {
     const notConfigured = err instanceof AiNotConfiguredError;
-    const message = notConfigured ? "AI not configured" : err instanceof Error ? err.message : String(err);
+    const message = notConfigured
+      ? "AI not configured"
+      : err instanceof Error
+        ? err.message
+        : String(err);
 
     await prisma.incident.update({
       where: { id: incidentId },
@@ -79,11 +86,17 @@ export async function processIncidentSummaryJob(job: BullJob) {
     if (notConfigured) {
       // Not an error the operator can act on inside the app, and the app is designed to run
       // fully without a key — log it once at WARN and let the job succeed.
-      log.warn({ incidentId, connectorId: incident.connectorId }, "incident summary skipped: AI not configured");
+      log.warn(
+        { incidentId, connectorId: incident.connectorId },
+        "incident summary skipped: AI not configured",
+      );
       return;
     }
 
-    log.error({ incidentId, connectorId: incident.connectorId }, `incident summary failed: ${message}`);
+    log.error(
+      { incidentId, connectorId: incident.connectorId },
+      `incident summary failed: ${message}`,
+    );
     throw err;
   }
 }

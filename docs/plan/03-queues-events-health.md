@@ -5,14 +5,14 @@ where the portfolio signal lives.
 
 ## 1. Queue topology (BullMQ)
 
-| Queue | Producer | Processor | Concurrency | Purpose |
-|---|---|---|---|---|
-| `sync` | Repeatable job (per poll connector) + manual trigger API | `processors/sync.ts` | 2 | Pull pages from simulator EHR, upsert records, checkpoint cursor |
-| `webhook-processing` | Web app webhook route (after persisting `IntegrationEvent`) | `processors/webhook.ts` | 5 | Validate + process inbound lab results / claim acks |
-| `claims-submit` | API (`POST /v1/claims/submit-batch` demo trigger) + seed | `processors/claim.ts` | 3 | Submit claims to simulator; ack arrives later as webhook |
-| `eligibility` | API on-demand | `processors/eligibility.ts` | 3 | Request/response check against rate-limited upstream |
-| `incident-summary` | Incident lifecycle | `processors/incident-summary.ts` | 1 | Generate AI summary (redact → Claude → store) |
-| `health-tick` | Repeatable, every 60s | `health/engine.ts` | 1 | Compute statuses, write snapshots, drive incident lifecycle |
+| Queue                | Producer                                                    | Processor                        | Concurrency | Purpose                                                          |
+| -------------------- | ----------------------------------------------------------- | -------------------------------- | ----------- | ---------------------------------------------------------------- |
+| `sync`               | Repeatable job (per poll connector) + manual trigger API    | `processors/sync.ts`             | 2           | Pull pages from simulator EHR, upsert records, checkpoint cursor |
+| `webhook-processing` | Web app webhook route (after persisting `IntegrationEvent`) | `processors/webhook.ts`          | 5           | Validate + process inbound lab results / claim acks              |
+| `claims-submit`      | API (`POST /v1/claims/submit-batch` demo trigger) + seed    | `processors/claim.ts`            | 3           | Submit claims to simulator; ack arrives later as webhook         |
+| `eligibility`        | API on-demand                                               | `processors/eligibility.ts`      | 3           | Request/response check against rate-limited upstream             |
+| `incident-summary`   | Incident lifecycle                                          | `processors/incident-summary.ts` | 1           | Generate AI summary (redact → Claude → store)                    |
+| `health-tick`        | Repeatable, every 60s                                       | `health/engine.ts`               | 1           | Compute statuses, write snapshots, drive incident lifecycle      |
 
 ### Retry policy (uniform default, per-queue overrides)
 
@@ -20,7 +20,7 @@ where the portfolio signal lives.
 // packages/shared/src/queue-config.ts
 export const DEFAULT_JOB_OPTS = {
   attempts: 5,
-  backoff: { type: "exponential", delay: 2_000 },   // 2s, 4s, 8s, 16s, 32s
+  backoff: { type: "exponential", delay: 2_000 }, // 2s, 4s, 8s, 16s, 32s
   removeOnComplete: { count: 1000 },
   removeOnFail: false,
 };
@@ -29,11 +29,12 @@ export const DEFAULT_JOB_OPTS = {
 ```
 
 Rules:
+
 - Every attempt appends `{attempt, at, message, durationMs}` to `Job.errorHistory` and writes an
   ERROR `LogEntry`.
 - BullMQ `failed` event with attempts exhausted → mark DB `Job.status = DEAD`. DEAD jobs are the
   "failed job queue" in the UI.
-- **Manual retry** = create a *new* BullMQ job with the same payload, link it to the same DB Job
+- **Manual retry** = create a _new_ BullMQ job with the same payload, link it to the same DB Job
   row (reset status to QUEUED, keep errorHistory), write an AuditEntry.
 - HTTP calls to the simulator use a 10s timeout (AbortController). Timeouts are failures like any
   other — the point is to demonstrate they're handled.
@@ -45,15 +46,15 @@ Rules:
 Hono app on `SIMULATOR_PORT`. Each upstream is a module. On every request, first consult the
 connector's chaos state (read from DB, cached 5s) and apply:
 
-| ChaosMode | Behavior |
-|---|---|
-| `HEALTHY` | Normal response, 50–300ms jittered latency |
-| `DEGRADED` | `chaosConfig.failureRate` (default 0.4) of requests → 500; survivors +2–8s latency |
-| `OUTAGE` | Always 503 `{"error":"upstream unavailable"}` |
-| `TIMEOUT` | Sleep 30s (client aborts at 10s) |
-| `RATE_LIMIT` | 429 with `Retry-After: 15` |
-| `BAD_PAYLOAD` | 200 with schema-invalid JSON (missing required fields) |
-| `AUTH_FAILURE` | 401 `{"error":"invalid credentials"}` |
+| ChaosMode      | Behavior                                                                           |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `HEALTHY`      | Normal response, 50–300ms jittered latency                                         |
+| `DEGRADED`     | `chaosConfig.failureRate` (default 0.4) of requests → 500; survivors +2–8s latency |
+| `OUTAGE`       | Always 503 `{"error":"upstream unavailable"}`                                      |
+| `TIMEOUT`      | Sleep 30s (client aborts at 10s)                                                   |
+| `RATE_LIMIT`   | 429 with `Retry-After: 15`                                                         |
+| `BAD_PAYLOAD`  | 200 with schema-invalid JSON (missing required fields)                             |
+| `AUTH_FAILURE` | 401 `{"error":"invalid credentials"}`                                              |
 
 Endpoints:
 
@@ -98,6 +99,7 @@ computeStatus(window: {totalCalls, failedCalls, consecutiveFailures, p95LatencyM
 ```
 
 Rules over a **rolling 15-minute window** of Jobs + IntegrationEvents per connector:
+
 - `DOWN` if consecutiveFailures ≥ 5, or errorRate ≥ 0.5 with totalCalls ≥ 4
 - `DEGRADED` if errorRate ≥ 0.1, or p95LatencyMs ≥ 5000
 - else `HEALTHY`
@@ -111,14 +113,14 @@ Each tick, per connector: compute → write `HealthSnapshot` → if status chang
 
 State machine driven by health transitions + human actions:
 
-| Trigger | Action |
-|---|---|
-| Transition → `DOWN` | If no non-RESOLVED incident for connector: open `Incident{severity: CRITICAL}`, timeline "opened", enqueue `incident-summary` |
-| Transition → `DEGRADED` sustained ≥ 10 min (two+ consecutive degraded snapshots ≥10min apart) | Same but `severity: WARNING` |
-| Transition → `HEALTHY` while incident OPEN/ACKNOWLEDGED | Incident → `MONITORING`, timeline entry |
-| `MONITORING` and healthy for 10 more min | → `RESOLVED`, `resolvedAt`, timeline entry, enqueue summary refresh ("resolution note") |
-| `MONITORING` and unhealthy again | → back to previous status (OPEN/ACKNOWLEDGED), timeline entry |
-| Human: acknowledge / resolve / add note | Status change + timeline + AuditEntry (API, phase 7) |
+| Trigger                                                                                       | Action                                                                                                                        |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Transition → `DOWN`                                                                           | If no non-RESOLVED incident for connector: open `Incident{severity: CRITICAL}`, timeline "opened", enqueue `incident-summary` |
+| Transition → `DEGRADED` sustained ≥ 10 min (two+ consecutive degraded snapshots ≥10min apart) | Same but `severity: WARNING`                                                                                                  |
+| Transition → `HEALTHY` while incident OPEN/ACKNOWLEDGED                                       | Incident → `MONITORING`, timeline entry                                                                                       |
+| `MONITORING` and healthy for 10 more min                                                      | → `RESOLVED`, `resolvedAt`, timeline entry, enqueue summary refresh ("resolution note")                                       |
+| `MONITORING` and unhealthy again                                                              | → back to previous status (OPEN/ACKNOWLEDGED), timeline entry                                                                 |
+| Human: acknowledge / resolve / add note                                                       | Status change + timeline + AuditEntry (API, phase 7)                                                                          |
 
 Only one active (non-RESOLVED) incident per connector — enforce in code with a transaction.
 
@@ -144,9 +146,9 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
 const IncidentSummary = z.object({
-  summary: z.string(),            // 2-3 sentences, plain ops language
+  summary: z.string(), // 2-3 sentences, plain ops language
   probableCause: z.string(),
-  impact: z.string(),             // what downstream workflows are affected
+  impact: z.string(), // what downstream workflows are affected
   suggestedSteps: z.array(z.string()).max(5),
   confidence: z.enum(["low", "medium", "high"]),
 });
@@ -155,7 +157,7 @@ const client = new Anthropic(); // ANTHROPIC_API_KEY from env
 const response = await client.messages.parse({
   model: process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8",
   max_tokens: 1500,
-  system: SYSTEM_PROMPT,          // versioned constant PROMPT_V1 in packages/shared
+  system: SYSTEM_PROMPT, // versioned constant PROMPT_V1 in packages/shared
   messages: [{ role: "user", content: redactedContextAsMarkdown }],
   output_config: { format: zodOutputFormat(IncidentSummary) },
 });

@@ -49,7 +49,11 @@ export const RETRY_AFTER_MAX_MS = 300_000;
  * BullMQ's `backoff: { type: "exponential" }` config) so the schedule the docs promise is
  * testable without a queue.
  */
-export function exponentialBackoffMs(attemptsMade: number, baseMs = BACKOFF_BASE_MS, maxMs = BACKOFF_MAX_MS): number {
+export function exponentialBackoffMs(
+  attemptsMade: number,
+  baseMs = BACKOFF_BASE_MS,
+  maxMs = BACKOFF_MAX_MS,
+): number {
   const exponent = Math.max(0, attemptsMade - 1);
   return Math.min(baseMs * 2 ** exponent, maxMs);
 }
@@ -62,7 +66,10 @@ export function exponentialBackoffMs(attemptsMade: number, baseMs = BACKOFF_BASE
  * than propagating. `Number("soon")` is `NaN`, and a `NaN` delay silently disables the backoff
  * in BullMQ, which is a far worse failure than waiting 15 seconds.
  */
-export function parseRetryAfterMs(header: string | null | undefined, now: Date = new Date()): number {
+export function parseRetryAfterMs(
+  header: string | null | undefined,
+  now: Date = new Date(),
+): number {
   if (header == null) return RETRY_AFTER_FALLBACK_MS;
 
   const trimmed = header.trim();

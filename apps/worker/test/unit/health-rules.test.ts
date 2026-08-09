@@ -1,13 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { buildWindow, computeStatus, errorRateOf, type HealthWindow } from "../../src/health/rules.js";
+import {
+  buildWindow,
+  computeStatus,
+  errorRateOf,
+  type HealthWindow,
+} from "../../src/health/rules.js";
 
-const base: HealthWindow = { totalCalls: 100, failedCalls: 0, consecutiveFailures: 0, p95LatencyMs: 100 };
+const base: HealthWindow = {
+  totalCalls: 100,
+  failedCalls: 0,
+  consecutiveFailures: 0,
+  p95LatencyMs: 100,
+};
 const w = (over: Partial<HealthWindow>): HealthWindow => ({ ...base, ...over });
 
 describe("computeStatus — doc 03 §4", () => {
   describe("PAUSED short-circuits everything", () => {
     it.each([
-      ["a catastrophic window", w({ failedCalls: 100, consecutiveFailures: 99, p95LatencyMs: 30_000 })],
+      [
+        "a catastrophic window",
+        w({ failedCalls: 100, consecutiveFailures: 99, p95LatencyMs: 30_000 }),
+      ],
       ["a healthy window", w({})],
       ["an empty window", w({ totalCalls: 0, p95LatencyMs: null })],
     ])("%s", (_label, window) => {
@@ -18,9 +31,12 @@ describe("computeStatus — doc 03 §4", () => {
   describe("empty window carries the previous status forward", () => {
     const empty = w({ totalCalls: 0, failedCalls: 0, consecutiveFailures: 0, p95LatencyMs: null });
 
-    it.each(["HEALTHY", "DEGRADED", "DOWN", "PAUSED"] as const)("previous %s is preserved", (previousStatus) => {
-      expect(computeStatus(empty, { previousStatus })).toBe(previousStatus);
-    });
+    it.each(["HEALTHY", "DEGRADED", "DOWN", "PAUSED"] as const)(
+      "previous %s is preserved",
+      (previousStatus) => {
+        expect(computeStatus(empty, { previousStatus })).toBe(previousStatus);
+      },
+    );
 
     it("defaults to HEALTHY when there is no previous status", () => {
       expect(computeStatus(empty)).toBe("HEALTHY");
@@ -40,9 +56,11 @@ describe("computeStatus — doc 03 §4", () => {
       [6, "DOWN"],
     ])("%i consecutive failures → %s", (consecutiveFailures, expected) => {
       // failedCalls kept low so the error-rate rules cannot be what fires.
-      expect(computeStatus(w({ totalCalls: 1000, failedCalls: consecutiveFailures, consecutiveFailures }))).toBe(
-        expected,
-      );
+      expect(
+        computeStatus(
+          w({ totalCalls: 1000, failedCalls: consecutiveFailures, consecutiveFailures }),
+        ),
+      ).toBe(expected);
     });
   });
 
@@ -84,18 +102,24 @@ describe("computeStatus — doc 03 §4", () => {
 
   describe("rule precedence", () => {
     it("consecutive failures beat a healthy error rate", () => {
-      expect(computeStatus(w({ totalCalls: 1000, failedCalls: 5, consecutiveFailures: 5 }))).toBe("DOWN");
-    });
-
-    it("DOWN beats DEGRADED when both would apply", () => {
-      expect(computeStatus(w({ totalCalls: 10, failedCalls: 8, consecutiveFailures: 1, p95LatencyMs: 9000 }))).toBe(
+      expect(computeStatus(w({ totalCalls: 1000, failedCalls: 5, consecutiveFailures: 5 }))).toBe(
         "DOWN",
       );
     });
 
+    it("DOWN beats DEGRADED when both would apply", () => {
+      expect(
+        computeStatus(
+          w({ totalCalls: 10, failedCalls: 8, consecutiveFailures: 1, p95LatencyMs: 9000 }),
+        ),
+      ).toBe("DOWN");
+    });
+
     it("accepts overridden thresholds", () => {
       const window = w({ totalCalls: 10, failedCalls: 1, consecutiveFailures: 2 });
-      expect(computeStatus(window, {}, { ...RULES_OVERRIDE, downConsecutiveFailures: 2 })).toBe("DOWN");
+      expect(computeStatus(window, {}, { ...RULES_OVERRIDE, downConsecutiveFailures: 2 })).toBe(
+        "DOWN",
+      );
     });
   });
 });
@@ -127,7 +151,10 @@ describe("buildWindow", () => {
   });
 
   it("excludes calls in the future", () => {
-    const window = buildWindow([{ at: new Date(now.getTime() + 1000), failed: true, durationMs: 5 }], now);
+    const window = buildWindow(
+      [{ at: new Date(now.getTime() + 1000), failed: true, durationMs: 5 }],
+      now,
+    );
     expect(window.totalCalls).toBe(0);
   });
 

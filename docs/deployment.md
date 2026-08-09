@@ -2,12 +2,12 @@
 
 Pulse deploys as two services against two managed data stores:
 
-| Piece | Where | Why there |
-|---|---|---|
-| `apps/web` (dashboard, API, webhook receiver) | **Vercel** | Next.js App Router; zero-config, free tier |
-| `apps/worker` (queues, health engine, simulator) | **Railway** | Needs a long-running process; Vercel functions cannot host BullMQ workers |
-| Postgres | **Railway plugin** | Same network as the worker; public endpoint for Vercel |
-| Redis | **Railway plugin** | BullMQ's backing store |
+| Piece                                            | Where              | Why there                                                                 |
+| ------------------------------------------------ | ------------------ | ------------------------------------------------------------------------- |
+| `apps/web` (dashboard, API, webhook receiver)    | **Vercel**         | Next.js App Router; zero-config, free tier                                |
+| `apps/worker` (queues, health engine, simulator) | **Railway**        | Needs a long-running process; Vercel functions cannot host BullMQ workers |
+| Postgres                                         | **Railway plugin** | Same network as the worker; public endpoint for Vercel                    |
+| Redis                                            | **Railway plugin** | BullMQ's backing store                                                    |
 
 Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#costs).
 
@@ -15,7 +15,7 @@ Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#
 > account access, so it is the reader's step. Everything in this document is written to be
 > executed top to bottom without improvisation.
 >
-> The worker image, however, is no longer merely *written* — it is **built and booted** on every
+> The worker image, however, is no longer merely _written_ — it is **built and booted** on every
 > CI run (the `Worker image` job), against real Postgres and Redis containers, asserting that it
 > migrates from an empty database, starts all six queues, and answers `/healthz`.
 >
@@ -32,7 +32,7 @@ Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#
 >    files, so `node dist/index.js` died with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`.
 >    They now compile to `dist/` and expose it under the `default` export condition.
 > 4. **Prisma client lost in the prune** — `pnpm deploy` rebuilds `node_modules` from the store,
->    so the generated client did not come along: *"@prisma/client did not initialize yet"*.
+>    so the generated client did not come along: _"@prisma/client did not initialize yet"_.
 >    Generation now runs inside the pruned tree, from a schema copied in beside it.
 >
 > The lesson generalises past this repo: a Dockerfile that has never been built is not
@@ -88,20 +88,20 @@ workspace packages, so building from `apps/worker` alone cannot resolve `workspa
 Set these under the worker service → **Variables**. The two `${{...}}` values are Railway
 plugin references — type them exactly; Railway resolves them at deploy time.
 
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-| `REDIS_URL` | `${{Redis.REDIS_URL}}` |
-| `WEBHOOK_SIGNING_SECRET` | the `openssl rand -hex 32` value from step 0 |
-| `WEBHOOK_TARGET_URL` | `https://placeholder.invalid` — **corrected in step 3** |
-| `SIMULATOR_PORT` | `4001` |
-| `SIMULATOR_BASE_URL` | `http://localhost:4001` |
-| `ANTHROPIC_API_KEY` | your key, or leave unset for the graceful-degradation path |
-| `ANTHROPIC_MODEL` | `claude-opus-4-8` (or `claude-haiku-4-5` to cut cost) |
-| `HEALTH_TICK_SEC` | `30` |
-| `HEALTH_WINDOW_MIN` | `15` |
-| `INCIDENT_STABILITY_MIN` | `10` |
-| `NODE_ENV` | `production` |
+| Variable                 | Value                                                      |
+| ------------------------ | ---------------------------------------------------------- |
+| `DATABASE_URL`           | `${{Postgres.DATABASE_URL}}`                               |
+| `REDIS_URL`              | `${{Redis.REDIS_URL}}`                                     |
+| `WEBHOOK_SIGNING_SECRET` | the `openssl rand -hex 32` value from step 0               |
+| `WEBHOOK_TARGET_URL`     | `https://placeholder.invalid` — **corrected in step 3**    |
+| `SIMULATOR_PORT`         | `4001`                                                     |
+| `SIMULATOR_BASE_URL`     | `http://localhost:4001`                                    |
+| `ANTHROPIC_API_KEY`      | your key, or leave unset for the graceful-degradation path |
+| `ANTHROPIC_MODEL`        | `claude-opus-4-8` (or `claude-haiku-4-5` to cut cost)      |
+| `HEALTH_TICK_SEC`        | `30`                                                       |
+| `HEALTH_WINDOW_MIN`      | `15`                                                       |
+| `INCIDENT_STABILITY_MIN` | `10`                                                       |
+| `NODE_ENV`               | `production`                                               |
 
 `WEBHOOK_TARGET_URL` is a placeholder because of a genuine circular dependency: the worker needs
 the Vercel URL, and Vercel needs the Railway database. Deploy the worker first with the
@@ -136,16 +136,16 @@ the screenshots and tests depend on it.
 ### Vercel environment variables
 
 Vercel reaches Railway over the **public** endpoints. In the Railway Postgres/Redis plugin,
-open **Connect** and copy the *public* connection string (the one with a `*.proxy.rlwy.net`
+open **Connect** and copy the _public_ connection string (the one with a `*.proxy.rlwy.net`
 host), not the internal `*.railway.internal` one — Vercel cannot resolve internal hosts.
 
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | Railway Postgres **public** connection string |
-| `REDIS_URL` | Railway Redis **public** connection string |
-| `AUTH_SECRET` | the `openssl rand -base64 32` value from step 0 |
-| `AUTH_URL` | `https://<your-project>.vercel.app` |
-| `WEBHOOK_SIGNING_SECRET` | **the same value as the worker** |
+| Variable                    | Value                                                            |
+| --------------------------- | ---------------------------------------------------------------- |
+| `DATABASE_URL`              | Railway Postgres **public** connection string                    |
+| `REDIS_URL`                 | Railway Redis **public** connection string                       |
+| `AUTH_SECRET`               | the `openssl rand -base64 32` value from step 0                  |
+| `AUTH_URL`                  | `https://<your-project>.vercel.app`                              |
+| `WEBHOOK_SIGNING_SECRET`    | **the same value as the worker**                                 |
 | `NEXT_PUBLIC_DEMO_PASSWORD` | `pulse-demo-2026` (must match `SEED_DEMO_PASSWORD` used at seed) |
 
 Deploy. Note the resulting URL.
@@ -218,10 +218,10 @@ That route is deliberately outside the auth middleware (`PUBLIC_API_PREFIXES` in
 
 ### Costs
 
-| Item | Plan | Expected |
-|---|---|---|
-| Railway | Hobby | $5/mo credit; worker + Postgres + Redis at this size sits within it |
-| Vercel | Hobby | $0 |
+| Item      | Plan          | Expected                                                                                                                                                                           |
+| --------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Railway   | Hobby         | $5/mo credit; worker + Postgres + Redis at this size sits within it                                                                                                                |
+| Vercel    | Hobby         | $0                                                                                                                                                                                 |
 | Anthropic | pay-as-you-go | Summaries only fire on incident open/resolve. Each call sends ≤8K characters of context and caps at 1500 output tokens — pennies per incident. `claude-haiku-4-5` cuts it further. |
 
 The AI spend is bounded by design: the context builder caps at 8,000 characters, collapses
@@ -231,12 +231,12 @@ repeated log lines, and summaries are generated per incident rather than per tic
 
 ## Troubleshooting
 
-| Symptom | Cause |
-|---|---|
-| `Couldn't find any 'pages' or 'app' directory` on Vercel | Root Directory is not `apps/web` |
-| Every inbound webhook is `INVALID` | `WEBHOOK_SIGNING_SECRET` differs between Vercel and Railway |
-| Web loads but all data is empty | `DATABASE_URL` on Vercel points at the internal Railway host; use the public one |
-| Worker boot-loops on Railway | Migrations failed — check `prisma migrate deploy` output in the deploy log |
-| Two health snapshots per tick | Two worker replicas. Keep `numReplicas: 1`; the health tick is a singleton |
-| AI card stuck on `queued` | The worker is down or cannot reach Redis — the summary job never got picked up |
-| Incident never resolves | `INCIDENT_STABILITY_MIN` is the wait in minutes; `0` means "resolve on the next healthy tick" |
+| Symptom                                                  | Cause                                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `Couldn't find any 'pages' or 'app' directory` on Vercel | Root Directory is not `apps/web`                                                              |
+| Every inbound webhook is `INVALID`                       | `WEBHOOK_SIGNING_SECRET` differs between Vercel and Railway                                   |
+| Web loads but all data is empty                          | `DATABASE_URL` on Vercel points at the internal Railway host; use the public one              |
+| Worker boot-loops on Railway                             | Migrations failed — check `prisma migrate deploy` output in the deploy log                    |
+| Two health snapshots per tick                            | Two worker replicas. Keep `numReplicas: 1`; the health tick is a singleton                    |
+| AI card stuck on `queued`                                | The worker is down or cannot reach Redis — the summary job never got picked up                |
+| Incident never resolves                                  | `INCIDENT_STABILITY_MIN` is the wait in minutes; `0` means "resolve on the next healthy tick" |

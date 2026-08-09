@@ -40,13 +40,16 @@ function appointmentBundle(page: number, count: number) {
       id: `APT-${faker.number.int({ min: 100000, max: 999999 })}`,
       status: faker.helpers.arrayElement(["booked", "fulfilled", "cancelled"]),
       start: faker.date.soon({ days: 14 }).toISOString(),
-      participant: [{ actor: { reference: `Patient/PAT-${faker.number.int({ min: 1000, max: 9999 })}` } }],
+      participant: [
+        { actor: { reference: `Patient/PAT-${faker.number.int({ min: 1000, max: 9999 })}` } },
+      ],
     },
   }));
   return {
     resourceType: "Bundle" as const,
     entry,
-    link: page < TOTAL_PAGES ? { next: `/ehr/fhir/Appointment?_page=${page + 1}&_count=${count}` } : {},
+    link:
+      page < TOTAL_PAGES ? { next: `/ehr/fhir/Appointment?_page=${page + 1}&_count=${count}` } : {},
   };
 }
 

@@ -12,7 +12,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 3010;
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
-const E2E_DATABASE_URL = process.env.E2E_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_e2e";
+const E2E_DATABASE_URL =
+  process.env.E2E_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_e2e";
 
 const SHARED_ENV = {
   DATABASE_URL: E2E_DATABASE_URL,

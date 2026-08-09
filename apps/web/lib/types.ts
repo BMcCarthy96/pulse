@@ -150,7 +150,13 @@ export interface IncidentRow {
 
 export interface IncidentDetailResponse {
   incident: IncidentRow & {
-    connector: { key: string; displayName: string; kind: string; status: string; chaosMode: string };
+    connector: {
+      key: string;
+      displayName: string;
+      kind: string;
+      status: string;
+      chaosMode: string;
+    };
     timeline: IncidentTimelineRow[];
   };
   context: { failedJobs: number; errorLogs: number; windowEnd: string };

@@ -29,9 +29,13 @@ function envInt(name: string, fallback: number, opts: { allowZero?: boolean } = 
  * 10-minute stability window into seconds without touching the rules themselves.
  */
 export function getHealthConfig() {
-  const stabilityMinutes = envInt("INCIDENT_STABILITY_MIN", HEALTH_RULES.monitoringStabilityMinutes, {
-    allowZero: true,
-  });
+  const stabilityMinutes = envInt(
+    "INCIDENT_STABILITY_MIN",
+    HEALTH_RULES.monitoringStabilityMinutes,
+    {
+      allowZero: true,
+    },
+  );
   return {
     ...HEALTH_RULES,
     tickIntervalSec: envInt("HEALTH_TICK_SEC", HEALTH_RULES.tickIntervalSec),

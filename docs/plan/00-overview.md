@@ -30,24 +30,24 @@ and differentiates against generic CRM-sync demos.
 
 ## Personas (seeded users)
 
-| Persona | Role | What they see/do |
-|---|---|---|
-| Dana Alvarez | `ADMIN` | Everything: connector config, chaos panel, user list, audit log |
-| Marcus Webb | `OPS` | Dashboard, retry failed jobs, acknowledge/resolve incidents, regenerate AI summaries |
-| Priya Nair | `VIEWER` | Read-only dashboards and incident history (a compliance/leadership view) |
+| Persona      | Role     | What they see/do                                                                     |
+| ------------ | -------- | ------------------------------------------------------------------------------------ |
+| Dana Alvarez | `ADMIN`  | Everything: connector config, chaos panel, user list, audit log                      |
+| Marcus Webb  | `OPS`    | Dashboard, retry failed jobs, acknowledge/resolve incidents, regenerate AI summaries |
+| Priya Nair   | `VIEWER` | Read-only dashboards and incident history (a compliance/leadership view)             |
 
 Login screen has one-click "demo as…" buttons for each persona (credentials are still real
 email/password under the hood — the buttons just prefill and submit).
 
 ## The five simulated connectors
 
-| Key | Display name | Pattern it demonstrates |
-|---|---|---|
-| `ehr-fhir` | Mercy General EHR (FHIR R4) | Scheduled polling sync (repeatable jobs, pagination, checkpointing) |
-| `lab-results` | Northside Labs (HL7v2 ORU) | Inbound webhooks (signature verification, dedupe, async processing) |
-| `claims` | ClearPath Clearinghouse (X12 837) | Outbound jobs + async acknowledgment webhooks (two-phase workflow) |
-| `eligibility` | VerifyMed Eligibility (270/271) | On-demand request/response, upstream rate limiting (429 + backoff) |
-| `erx` | ScriptLine e-Prescribing (NCPDP) | **Stretch only** — build if time allows, phase 11 |
+| Key           | Display name                      | Pattern it demonstrates                                             |
+| ------------- | --------------------------------- | ------------------------------------------------------------------- |
+| `ehr-fhir`    | Mercy General EHR (FHIR R4)       | Scheduled polling sync (repeatable jobs, pagination, checkpointing) |
+| `lab-results` | Northside Labs (HL7v2 ORU)        | Inbound webhooks (signature verification, dedupe, async processing) |
+| `claims`      | ClearPath Clearinghouse (X12 837) | Outbound jobs + async acknowledgment webhooks (two-phase workflow)  |
+| `eligibility` | VerifyMed Eligibility (270/271)   | On-demand request/response, upstream rate limiting (429 + backoff)  |
+| `erx`         | ScriptLine e-Prescribing (NCPDP)  | **Stretch only** — build if time allows, phase 11                   |
 
 Every connector's upstream is a simulated HTTP service (see [01-architecture.md](01-architecture.md))
 with per-connector chaos config: `healthy`, `degraded`, `outage`, `timeout`, `rate_limit`,

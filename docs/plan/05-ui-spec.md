@@ -25,10 +25,12 @@ role badge + sign out). Sidebar shows a red count bubble on Jobs (DEAD count) an
 ## Pages
 
 ### `/login`
+
 Email/password form + three "Demo as Admin / Ops / Viewer" buttons (prefill + submit).
 Small print: "All data is synthetic. Upstream systems are simulated."
 
 ### `/` — Overview
+
 - Row of connector health tiles: name, StatusBadge, error rate (15m), last activity, sparkline
   (24h snapshots), open-incident link if any. Click → connector detail.
 - KPI strip: Dead jobs / Open incidents / Events (1h) / Jobs (1h).
@@ -36,6 +38,7 @@ Small print: "All data is synthetic. Upstream systems are simulated."
 - "Recent incidents" table (last 5).
 
 ### `/connectors/[key]` — Connector detail (the demo centerpiece)
+
 - Header: name, kind, StatusBadge, paused toggle (admin), "Run sync now" (OPS, poll connectors),
   "Simulate incoming results" (OPS, lab connector), "Submit test claims" (OPS, claims connector),
   "Run eligibility check" (OPS, eligibility connector — small modal form).
@@ -48,16 +51,19 @@ Small print: "All data is synthetic. Upstream systems are simulated."
   (recent, filter by status) · **Events** (recent) · **Logs** (recent, level filter).
 
 ### `/jobs` — Failed job queue
+
 - Filters: status (default DEAD), connector, queue, time range. Cursor pagination ("Load more").
 - Table: job type, connector, attempts `3/5`, last error (truncated), created, finished.
 - Row expand or side sheet: payload JSON viewer, full errorHistory as a mini-timeline.
 - Row action "Retry" (OPS) + header "Retry all matching" with confirm dialog showing count.
 
 ### `/events`
+
 Filters (connector, direction, status) + table (type, direction, StatusBadge for EventStatus,
 dedupe key, received/processed). Detail sheet: payload + headers JSON, signature status.
 
 ### `/incidents` and `/incidents/[id]`
+
 - List: severity icon, title, connector, status, opened, duration (live for open ones).
 - Detail:
   - Header: severity, StatusBadge-like incident status, Acknowledge / Resolve buttons (OPS),
@@ -71,11 +77,13 @@ dedupe key, received/processed). Detail sheet: payload + headers JSON, signature
     links pre-filtered to `/jobs` and `/logs`.
 
 ### `/logs`
+
 Filter bar (level multi-select, connector, free-text `q`, time range) + virtualized-ish table
 (level chip, source, connector, message, time). Row expand shows `context` JSON. Live tail =
 polling; a "Live" toggle just enables/disables the poll.
 
 ### `/settings` (admin)
+
 - **Users**: read-only table (name, email, role).
 - **Audit log**: table (time, user, action, target, metadata popover), filter by action.
 

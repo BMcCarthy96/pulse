@@ -10,13 +10,20 @@
  */
 import { prisma } from "@pulse/db";
 import { QUEUE_NAMES, ELIGIBILITY_JOB_OPTS } from "@pulse/shared";
-import { claimsSubmitQueue, eligibilityQueue, createTrackedJob, retryTrackedJob } from "../src/queues.js";
+import {
+  claimsSubmitQueue,
+  eligibilityQueue,
+  createTrackedJob,
+  retryTrackedJob,
+} from "../src/queues.js";
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
   const org = await prisma.organization.findFirstOrThrow();
   const claimsConnector = await prisma.connector.findUniqueOrThrow({ where: { key: "claims" } });
-  const eligibilityConnector = await prisma.connector.findUniqueOrThrow({ where: { key: "eligibility" } });
+  const eligibilityConnector = await prisma.connector.findUniqueOrThrow({
+    where: { key: "eligibility" },
+  });
 
   if (command === "claims") {
     const count = Number(args[0] ?? 5);
@@ -51,7 +58,10 @@ async function main() {
   }
 
   if (command === "retry-dead") {
-    const dead = await prisma.job.findFirst({ where: { status: "DEAD" }, orderBy: { createdAt: "desc" } });
+    const dead = await prisma.job.findFirst({
+      where: { status: "DEAD" },
+      orderBy: { createdAt: "desc" },
+    });
     if (!dead) {
       console.log("no DEAD jobs found");
       return;
@@ -61,7 +71,9 @@ async function main() {
     return;
   }
 
-  console.log("usage: enqueue-test-jobs.ts <claims <count>|eligibility <memberId> <payerId>|retry-dead>");
+  console.log(
+    "usage: enqueue-test-jobs.ts <claims <count>|eligibility <memberId> <payerId>|retry-dead>",
+  );
 }
 
 main()

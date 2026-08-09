@@ -10,7 +10,15 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiPost } from "@/lib/api-client";
 import { toast } from "sonner";
 
-const CHAOS_MODES = ["HEALTHY", "DEGRADED", "OUTAGE", "TIMEOUT", "RATE_LIMIT", "BAD_PAYLOAD", "AUTH_FAILURE"] as const;
+const CHAOS_MODES = [
+  "HEALTHY",
+  "DEGRADED",
+  "OUTAGE",
+  "TIMEOUT",
+  "RATE_LIMIT",
+  "BAD_PAYLOAD",
+  "AUTH_FAILURE",
+] as const;
 
 export function ChaosPanel({
   connectorKey,
@@ -42,7 +50,7 @@ export function ChaosPanel({
             {CHAOS_MODES.map((mode) => (
               <label
                 key={mode}
-                className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                className="has-[:checked]:border-primary has-[:checked]:bg-primary/5 flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
               >
                 <input
                   type="radio"
@@ -82,8 +90,8 @@ export function ChaosPanel({
           description={
             <>
               <p>
-                This changes the simulated upstream&apos;s behavior for every request until you change it
-                back. An audit entry will be recorded:{" "}
+                This changes the simulated upstream&apos;s behavior for every request until you
+                change it back. An audit entry will be recorded:{" "}
                 <code className="text-xs">
                   connector.chaos_change {"{"}from: {currentMode}, to: {selected}
                   {"}"}

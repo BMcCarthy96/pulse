@@ -28,7 +28,11 @@ check("ssn", redact("ssn 123-45-6789"), "ssn [REDACTED:ssn]");
 check("email", redact("contact dana.alvarez@example.com now"), "contact [REDACTED:email] now");
 
 // ── Dates: DOB redacted, operational timestamps preserved ────────────────────
-check("bare ISO date is treated as a DOB", redact("birthDate 1974-03-02"), "birthDate [REDACTED:dob]");
+check(
+  "bare ISO date is treated as a DOB",
+  redact("birthDate 1974-03-02"),
+  "birthDate [REDACTED:dob]",
+);
 check(
   "ISO timestamps survive (the summary needs them)",
   redact("failed at 2026-07-27T14:39:15.310Z"),
@@ -50,7 +54,8 @@ check(
 );
 
 // ── Mixed text ───────────────────────────────────────────────────────────────
-const mixed = "2026-07-27T14:39:15Z ERROR sync.page failed: patient PAT-4821 (Dana Kessler, dob 1974-03-02) claim CLM-483920";
+const mixed =
+  "2026-07-27T14:39:15Z ERROR sync.page failed: patient PAT-4821 (Dana Kessler, dob 1974-03-02) claim CLM-483920";
 const mixedOut = redact(mixed);
 check(
   "mixed line",
@@ -72,28 +77,31 @@ const nested = {
   "PAT-9999": { seenAt: "2026-07-27T14:39:15Z" },
 };
 const nestedOut = redactDeep(nested);
-check(
-  "nested JSON values and keys",
-  nestedOut,
-  {
-    syncRunId: "cms3bt5j20004qah8t0fdjmz4",
-    entries: [
-      { resource: { id: "[REDACTED:patient-ref]", birthDate: "[REDACTED:dob]" } },
-      {
-        resource: {
-          id: "[REDACTED:appointment-ref]",
-          note: "claim [REDACTED:claim-ref] for [REDACTED:patient-ref]",
-        },
+check("nested JSON values and keys", nestedOut, {
+  syncRunId: "cms3bt5j20004qah8t0fdjmz4",
+  entries: [
+    { resource: { id: "[REDACTED:patient-ref]", birthDate: "[REDACTED:dob]" } },
+    {
+      resource: {
+        id: "[REDACTED:appointment-ref]",
+        note: "claim [REDACTED:claim-ref] for [REDACTED:patient-ref]",
       },
-    ],
-    "[REDACTED:patient-ref]": { seenAt: "2026-07-27T14:39:15Z" },
-  },
-);
+    },
+  ],
+  "[REDACTED:patient-ref]": { seenAt: "2026-07-27T14:39:15Z" },
+});
 check("redactDeep is idempotent", redactDeep(nestedOut), nestedOut);
-check("numbers and nulls survive redactDeep", redactDeep({ a: 1, b: null, c: true }), { a: 1, b: null, c: true });
+check("numbers and nulls survive redactDeep", redactDeep({ a: 1, b: null, c: true }), {
+  a: 1,
+  b: null,
+  c: true,
+});
 
 // ── Leak detector ────────────────────────────────────────────────────────────
-check("leak detector finds raw identifiers", findLeakedIdentifiers("PAT-1 and CLM-2"), ["PAT-1", "CLM-2"]);
+check("leak detector finds raw identifiers", findLeakedIdentifiers("PAT-1 and CLM-2"), [
+  "PAT-1",
+  "CLM-2",
+]);
 check("leak detector is clean on redacted text", findLeakedIdentifiers(mixedOut), []);
 
 // ── Known-names list ─────────────────────────────────────────────────────────
@@ -103,13 +111,23 @@ check(
   redact("acknowledged by Marcus Webb", known),
   "acknowledged by [REDACTED:name]",
 );
-check("known name is case-insensitive", redact("dana alvarez applied chaos", known), "[REDACTED:name] applied chaos");
+check(
+  "known name is case-insensitive",
+  redact("dana alvarez applied chaos", known),
+  "[REDACTED:name] applied chaos",
+);
 check(
   "known names apply inside nested JSON",
   redactDeep({ actor: "Priya Nair", note: "reviewed" }, known),
   { actor: "[REDACTED:name]", note: "reviewed" },
 );
-check("known-name redaction is idempotent", redact(redact("Marcus Webb", known), known), "[REDACTED:name]");
+check(
+  "known-name redaction is idempotent",
+  redact(redact("Marcus Webb", known), known),
+  "[REDACTED:name]",
+);
 
-console.log(failures === 0 ? "\nAll redaction spot-checks passed." : `\n${failures} check(s) FAILED.`);
+console.log(
+  failures === 0 ? "\nAll redaction spot-checks passed." : `\n${failures} check(s) FAILED.`,
+);
 process.exit(failures === 0 ? 0 : 1);

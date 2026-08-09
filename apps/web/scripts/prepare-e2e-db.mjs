@@ -17,7 +17,8 @@ import { dirname, resolve } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const dbPackage = resolve(here, "../../../packages/db");
 
-const DATABASE_URL = process.env.E2E_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_e2e";
+const DATABASE_URL =
+  process.env.E2E_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_e2e";
 
 const TRUNCATE_SQL = `TRUNCATE TABLE
   "AuditEntry", "IncidentTimelineEntry", "Incident", "HealthSnapshot", "LogEntry",
@@ -43,7 +44,11 @@ if (!databaseName.endsWith("_e2e")) {
 url.pathname = "/postgres";
 
 try {
-  run(["prisma", "db", "execute", "--url", url.toString(), "--stdin"], {}, `CREATE DATABASE "${databaseName}";`);
+  run(
+    ["prisma", "db", "execute", "--url", url.toString(), "--stdin"],
+    {},
+    `CREATE DATABASE "${databaseName}";`,
+  );
   console.log(`[e2e] created database ${databaseName}`);
 } catch (err) {
   const message = `${err?.message ?? ""}${err?.stderr ?? ""}`;

@@ -19,22 +19,31 @@ describe("redact — identifiers", () => {
   });
 
   it("redacts every occurrence, not just the first", () => {
-    expect(redact("PAT-1 talked to PAT-2")).toBe("[REDACTED:patient-ref] talked to [REDACTED:patient-ref]");
+    expect(redact("PAT-1 talked to PAT-2")).toBe(
+      "[REDACTED:patient-ref] talked to [REDACTED:patient-ref]",
+    );
   });
 
   it("leaves lookalikes that are not identifiers alone", () => {
-    expect(redact("PATIENT-CARE and CLMX-1 and PAT_4821")).toBe("PATIENT-CARE and CLMX-1 and PAT_4821");
+    expect(redact("PATIENT-CARE and CLMX-1 and PAT_4821")).toBe(
+      "PATIENT-CARE and CLMX-1 and PAT_4821",
+    );
   });
 });
 
 describe("redact — contact details", () => {
   it("redacts emails", () => {
-    expect(redact("write to ops.team@lakeviewhealth.example today")).toBe("write to [REDACTED:email] today");
+    expect(redact("write to ops.team@lakeviewhealth.example today")).toBe(
+      "write to [REDACTED:email] today",
+    );
   });
 
-  it.each(["555-867-5309", "(555) 867-5309", "+1 555 867 5309"])("redacts the phone number %s", (phone) => {
-    expect(redact(`call ${phone}`)).toBe("call [REDACTED:phone]");
-  });
+  it.each(["555-867-5309", "(555) 867-5309", "+1 555 867 5309"])(
+    "redacts the phone number %s",
+    (phone) => {
+      expect(redact(`call ${phone}`)).toBe("call [REDACTED:phone]");
+    },
+  );
 });
 
 describe("redact — dates", () => {
@@ -62,7 +71,9 @@ describe("redact — names", () => {
   });
 
   it("redacts a name separated by an already-redacted identifier", () => {
-    expect(redact("patient PAT-4821 (Dana Kessler)")).toBe("patient [REDACTED:patient-ref] ([REDACTED:name])");
+    expect(redact("patient PAT-4821 (Dana Kessler)")).toBe(
+      "patient [REDACTED:patient-ref] ([REDACTED:name])",
+    );
   });
 
   it("redacts FHIR name fields", () => {
@@ -77,11 +88,15 @@ describe("redact — names", () => {
   });
 
   it("redacts known names with no adjacent context word", () => {
-    expect(redact("acknowledged by Marcus Webb", ["Marcus Webb"])).toBe("acknowledged by [REDACTED:name]");
+    expect(redact("acknowledged by Marcus Webb", ["Marcus Webb"])).toBe(
+      "acknowledged by [REDACTED:name]",
+    );
   });
 
   it("matches known names case-insensitively", () => {
-    expect(redact("dana alvarez applied chaos", ["Dana Alvarez"])).toBe("[REDACTED:name] applied chaos");
+    expect(redact("dana alvarez applied chaos", ["Dana Alvarez"])).toBe(
+      "[REDACTED:name] applied chaos",
+    );
   });
 
   it("ignores empty entries in the known-names list", () => {
@@ -139,11 +154,18 @@ describe("redactDeep", () => {
   });
 
   it("redacts keys as well as values", () => {
-    expect(redactDeep({ "PAT-9999": { seen: true } })).toEqual({ "[REDACTED:patient-ref]": { seen: true } });
+    expect(redactDeep({ "PAT-9999": { seen: true } })).toEqual({
+      "[REDACTED:patient-ref]": { seen: true },
+    });
   });
 
   it("passes primitives through untouched", () => {
-    expect(redactDeep({ a: 1, b: null, c: true, d: undefined })).toEqual({ a: 1, b: null, c: true, d: undefined });
+    expect(redactDeep({ a: 1, b: null, c: true, d: undefined })).toEqual({
+      a: 1,
+      b: null,
+      c: true,
+      d: undefined,
+    });
   });
 
   it("passes Dates through untouched", () => {
@@ -159,7 +181,9 @@ describe("redactDeep", () => {
   });
 
   it("applies known names inside nested structures", () => {
-    expect(redactDeep({ actor: "Priya Nair" }, ["Priya Nair"])).toEqual({ actor: "[REDACTED:name]" });
+    expect(redactDeep({ actor: "Priya Nair" }, ["Priya Nair"])).toEqual({
+      actor: "[REDACTED:name]",
+    });
   });
 
   it("is idempotent", () => {

@@ -45,11 +45,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+    <div className="bg-muted/30 flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
-          <p className="text-muted-foreground text-sm">Integration health for Lakeview Health Partners</p>
+          <p className="text-muted-foreground text-sm">
+            Integration health for Lakeview Health Partners
+          </p>
         </div>
 
         <Card>

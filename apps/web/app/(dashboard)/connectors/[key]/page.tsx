@@ -24,7 +24,9 @@ import { EligibilityDialog } from "./eligibility-dialog";
 export default function ConnectorDetailPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = use(params);
   const router = useRouter();
-  const { data, error, isLoading, mutate } = usePolling<ConnectorDetailResponse>(`/api/v1/connectors/${key}`);
+  const { data, error, isLoading, mutate } = usePolling<ConnectorDetailResponse>(
+    `/api/v1/connectors/${key}`,
+  );
 
   if (error) {
     return (
@@ -79,7 +81,11 @@ export default function ConnectorDetailPage({ params }: { params: Promise<{ key:
               </Button>
             </RoleGate>
             <RoleGate minRole="OPS">
-              <ConnectorActions connectorKey={key} kind={connector.kind} onDone={() => void mutate()} />
+              <ConnectorActions
+                connectorKey={key}
+                kind={connector.kind}
+                onDone={() => void mutate()}
+              />
             </RoleGate>
           </div>
         }
@@ -100,7 +106,11 @@ export default function ConnectorDetailPage({ params }: { params: Promise<{ key:
 
       <RoleGate minRole="ADMIN">
         <div className="mb-6">
-          <ChaosPanel connectorKey={key} currentMode={connector.chaosMode} onChanged={() => void mutate()} />
+          <ChaosPanel
+            connectorKey={key}
+            currentMode={connector.chaosMode}
+            onChanged={() => void mutate()}
+          />
         </div>
       </RoleGate>
 
@@ -213,9 +223,17 @@ function SyncHistoryTable({ runs }: { runs: ConnectorDetailResponse["recentRuns"
           ? `${Math.round((new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime()) / 1000)}s`
           : "running...",
     },
-    { key: "records", header: "Records", render: (r) => `${r.recordsFetched} fetched, ${r.recordsFailed} failed` },
+    {
+      key: "records",
+      header: "Records",
+      render: (r) => `${r.recordsFetched} fetched, ${r.recordsFailed} failed`,
+    },
     { key: "started", header: "Started", render: (r) => <Timestamp date={r.startedAt} /> },
-    { key: "error", header: "Error", render: (r) => (r.error ? <span className="text-red-600">{r.error}</span> : "—") },
+    {
+      key: "error",
+      header: "Error",
+      render: (r) => (r.error ? <span className="text-red-600">{r.error}</span> : "—"),
+    },
   ];
   return (
     <DataTable

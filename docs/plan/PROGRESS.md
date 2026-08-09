@@ -17,6 +17,11 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 09 testing + CI | done | 2026-07-28 | See the phase-9 section below |
 | 10 deployment | **code done; live deploy is the user's step** | 2026-07-28 | Prod-readiness pass + runbook complete; the five acceptance criteria all require account access (Railway/Vercel) and cannot be met from the repo |
 | 11 docs + polish | done except screenshots + Loom | 2026-07-28 | README case study, OpenAPI + `/docs/api`, metrics script, positioning, Loom script. Screenshots and the recording are user tasks |
+| 12 credibility + baseline | code complete; deploy pending | 2026-08-09 | pnpm pin/lockfile, lint alignment, format gate, Prisma silent logging, license, README quickstart, and all local gates pass; Railway/Vercel account smoke remains user-authenticated |
+| 13 AI foundation | planned | — | Phase specification added; implementation pending |
+| 14 evals | planned | — | Phase specification added; implementation pending |
+| 15 copilot | planned | — | Phase specification added; implementation pending |
+| 16 hardening | planned | — | Phase specification added; implementation pending |
 
 ## Phase 9 — acceptance criteria
 

@@ -7,8 +7,20 @@ import { Timestamp } from "@/components/timestamp";
 import { JsonViewer } from "@/components/json-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { usePolling } from "@/lib/hooks";
 import { usePaginatedList } from "@/lib/use-paginated";
 import type { UserRow, AuditRow } from "@/lib/types";
@@ -44,7 +56,11 @@ function UsersTable() {
 
   const columns: Column<UserRow>[] = [
     { key: "name", header: "Name", render: (r) => r.name ?? "—" },
-    { key: "email", header: "Email", render: (r) => <span className="font-mono text-xs">{r.email}</span> },
+    {
+      key: "email",
+      header: "Email",
+      render: (r) => <span className="font-mono text-xs">{r.email}</span>,
+    },
     {
       key: "role",
       header: "Role",
@@ -84,9 +100,8 @@ function AuditLogTable() {
   const params = new URLSearchParams({ limit: "25" });
   if (action !== "ALL") params.set("action", action);
 
-  const { items, error, isLoading, mutate, nextCursor, loadMore, loadingMore } = usePaginatedList<AuditRow>(
-    `/api/v1/audit?${params.toString()}`,
-  );
+  const { items, error, isLoading, mutate, nextCursor, loadMore, loadingMore } =
+    usePaginatedList<AuditRow>(`/api/v1/audit?${params.toString()}`);
   // The action list comes from the same endpoint; read it off an unfiltered request so the
   // dropdown does not shrink to one option as soon as you pick a filter.
   const { data: unfiltered } = usePolling<{ actions: string[] }>("/api/v1/audit?limit=1");
@@ -94,14 +109,26 @@ function AuditLogTable() {
   const columns: Column<AuditRow>[] = [
     { key: "createdAt", header: "Time", render: (r) => <Timestamp date={r.createdAt} /> },
     { key: "user", header: "Actor", render: (r) => r.user?.name ?? r.user?.email ?? "system" },
-    { key: "action", header: "Action", render: (r) => <span className="font-mono text-xs">{r.action}</span> },
-    { key: "target", header: "Target", render: (r) => `${r.targetType} · ${r.targetId.slice(0, 12)}` },
+    {
+      key: "action",
+      header: "Action",
+      render: (r) => <span className="font-mono text-xs">{r.action}</span>,
+    },
+    {
+      key: "target",
+      header: "Target",
+      render: (r) => `${r.targetType} · ${r.targetId.slice(0, 12)}`,
+    },
     {
       key: "metadata",
       header: "Details",
       render: (r) => {
         const keys = Object.keys((r.metadata ?? {}) as Record<string, unknown>);
-        return keys.length === 0 ? "—" : <span className="text-muted-foreground text-xs">{keys.join(", ")}</span>;
+        return keys.length === 0 ? (
+          "—"
+        ) : (
+          <span className="text-muted-foreground text-xs">{keys.join(", ")}</span>
+        );
       },
     },
   ];
@@ -145,12 +172,15 @@ function AuditLogTable() {
               <SheetHeader>
                 <SheetTitle className="font-mono text-sm">{selected.action}</SheetTitle>
                 <SheetDescription>
-                  {selected.user?.name ?? "system"} · {selected.targetType} · <Timestamp date={selected.createdAt} />
+                  {selected.user?.name ?? "system"} · {selected.targetType} ·{" "}
+                  <Timestamp date={selected.createdAt} />
                 </SheetDescription>
               </SheetHeader>
               <div className="space-y-4 px-4 pb-4">
                 <div>
-                  <p className="text-muted-foreground mb-1 text-xs font-medium uppercase">Target id</p>
+                  <p className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                    Target id
+                  </p>
                   <p className="font-mono text-xs break-all">{selected.targetId}</p>
                 </div>
                 <JsonViewer data={selected.metadata} label="Metadata" />

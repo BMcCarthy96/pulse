@@ -155,7 +155,10 @@ export async function runIncidentLifecycle(args: {
       await openIncident({ ...args, severity: "CRITICAL" });
       return;
     }
-    if (args.status === "DEGRADED" && (await degradedIsSustained(args.connectorId, args.now, cfg.degradedSustainedMinutes))) {
+    if (
+      args.status === "DEGRADED" &&
+      (await degradedIsSustained(args.connectorId, args.now, cfg.degradedSustainedMinutes))
+    ) {
       await openIncident({ ...args, severity: "WARNING" });
     }
     return;
@@ -208,7 +211,11 @@ export async function runIncidentLifecycle(args: {
  * doc 03 §5: "two+ consecutive degraded snapshots >= 10 min apart". Walks back through the
  * contiguous run of DEGRADED snapshots and asks whether the run is old enough.
  */
-async function degradedIsSustained(connectorId: string, now: Date, sustainedMinutes: number): Promise<boolean> {
+async function degradedIsSustained(
+  connectorId: string,
+  now: Date,
+  sustainedMinutes: number,
+): Promise<boolean> {
   const recent = await prisma.healthSnapshot.findMany({
     where: { connectorId },
     orderBy: { createdAt: "desc" },

@@ -51,7 +51,9 @@ const [attemptRow] = await prisma.$queryRaw<{ failed_attempts: bigint; total_att
 `;
 const failedAttempts = Number(attemptRow.failed_attempts ?? 0);
 const totalAttempts = Number(attemptRow.total_attempts ?? 0);
-console.log(`failed attempts: ${failedAttempts} / ${totalAttempts} = ${pct(failedAttempts / (totalAttempts || 1))}`);
+console.log(
+  `failed attempts: ${failedAttempts} / ${totalAttempts} = ${pct(failedAttempts / (totalAttempts || 1))}`,
+);
 
 // ── Retry success rate ───────────────────────────────────────────────────────
 section(
@@ -72,7 +74,9 @@ const [retryRow] = await prisma.$queryRaw<{ recovered: bigint; ever_retried: big
 `;
 const recovered = Number(retryRow.recovered ?? 0);
 const everRetried = Number(retryRow.ever_retried ?? 0);
-console.log(`recovered by retry: ${recovered} / ${everRetried} = ${pct(recovered / (everRetried || 1))}`);
+console.log(
+  `recovered by retry: ${recovered} / ${everRetried} = ${pct(recovered / (everRetried || 1))}`,
+);
 
 // ── MTTD ─────────────────────────────────────────────────────────────────────
 // Time from the first failing snapshot of an unhealthy run to the incident opening. This is
@@ -124,7 +128,12 @@ WHERE "resolvedAt" IS NOT NULL;
 );
 
 const [mttrRow] = await prisma.$queryRaw<
-  { resolved_incidents: bigint; mttr_ms: number | null; fastest_ms: number | null; slowest_ms: number | null }[]
+  {
+    resolved_incidents: bigint;
+    mttr_ms: number | null;
+    fastest_ms: number | null;
+    slowest_ms: number | null;
+  }[]
 >`
   SELECT
     COUNT(*)                                                    AS resolved_incidents,
@@ -158,7 +167,9 @@ const [throughputRow] = await prisma.$queryRaw<{ jobs: bigint; span_hours: numbe
 `;
 const jobs = Number(throughputRow.jobs);
 const spanHours = Number(throughputRow.span_hours ?? 0);
-console.log(`${jobs} jobs over ${spanHours.toFixed(1)}h = ${(jobs / (spanHours || 1)).toFixed(1)} jobs/hour`);
+console.log(
+  `${jobs} jobs over ${spanHours.toFixed(1)}h = ${(jobs / (spanHours || 1)).toFixed(1)} jobs/hour`,
+);
 
 // ── Row counts ───────────────────────────────────────────────────────────────
 console.log("\n## Corpus");
