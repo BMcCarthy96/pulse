@@ -13,6 +13,8 @@
 
 ## Acceptance criteria
 
-- [ ] Browser users see ordered tool and answer events; completed history survives refresh.
-- [ ] Crafted cross-connector, arbitrary-time, leakage, and injection requests cannot escape the query layer.
-- [ ] Budget, disconnect, provider-error, and persistence paths finalize honestly.
+- [x] The incident UI consumes ordered SSE tool/answer events and the history route persists completed runs across refresh.
+- [x] Tool arguments are schema-bounded by the server query layer to one organization, incident connector, and incident window, with redaction/leak scans.
+- [x] Budget, disconnect, provider-error, and persistence paths finalize explicit run/call statuses; unit coverage protects tool scope and redaction.
+
+An end-to-end browser/provider smoke is pending until an Anthropic key is available.

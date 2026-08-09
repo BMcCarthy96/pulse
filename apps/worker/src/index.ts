@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { Redis } from "ioredis";
-import { APP_NAME, QUEUE_NAMES, getHealthConfig } from "@pulse/shared";
+import { APP_NAME, QUEUE_NAMES, getHealthConfig, injectTrace } from "@pulse/shared";
 import { prisma } from "@pulse/db";
 
 import { log, flushLogs } from "./log.js";
@@ -16,8 +16,11 @@ import {
   eligibilityQueue,
   incidentSummaryQueue,
   healthTickQueue,
+  retentionQueue,
+  demoResetQueue,
   createTrackedWorker,
   eligibilityBackoffStrategy,
+  incidentSummaryBackoffStrategy,
 } from "./queues.js";
 import { processSyncJob } from "./processors/sync.js";
 import { processClaimJob } from "./processors/claim.js";
@@ -25,6 +28,9 @@ import { processEligibilityJob } from "./processors/eligibility.js";
 import { processWebhookJob } from "./processors/webhook.js";
 import { processIncidentSummaryJob } from "./processors/incident-summary.js";
 import { runHealthTick } from "./health/engine.js";
+import { runRetentionPrune } from "./processors/retention.js";
+import { runDemoReset } from "./processors/demo-reset.js";
+import { startTelemetry, stopTelemetry } from "./telemetry.js";
 
 const SIMULATOR_PORT = Number(process.env.SIMULATOR_PORT ?? 4001);
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
@@ -61,7 +67,7 @@ async function registerRepeatables() {
 
     await syncQueue.add(
       "sync.start",
-      { connectorId: connector.id, orgId: connector.orgId, trigger: "schedule" },
+      { connectorId: connector.id, orgId: connector.orgId, trigger: "schedule", ...injectTrace() },
       { repeat: { every: connector.syncIntervalSec * 1000 }, jobId: repeatKey },
     );
     log.info(
@@ -74,10 +80,17 @@ async function registerRepeatables() {
   await clearRepeatables(healthTickQueue);
   await healthTickQueue.add(
     "health.tick",
-    {},
+    { ...injectTrace() },
     { repeat: { every: tickSec * 1000 }, jobId: "health-tick" },
   );
   log.info(`health engine: tick registered every ${tickSec}s`);
+
+  await clearRepeatables(retentionQueue);
+  await retentionQueue.add(
+    "retention.prune",
+    { ...injectTrace() },
+    { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: "retention-prune" },
+  );
 }
 
 async function main() {
@@ -118,9 +131,16 @@ async function main() {
     processIncidentSummaryJob,
     {
       concurrency: 1,
+      backoffStrategy: incidentSummaryBackoffStrategy,
     },
   );
   const healthTickWorker = createTrackedWorker(QUEUE_NAMES.healthTick, () => runHealthTick(), {
+    concurrency: 1,
+  });
+  const retentionWorker = createTrackedWorker(QUEUE_NAMES.retention, () => runRetentionPrune(), {
+    concurrency: 1,
+  });
+  const demoResetWorker = createTrackedWorker(QUEUE_NAMES.demoReset, runDemoReset, {
     concurrency: 1,
   });
   log.info(
@@ -148,6 +168,8 @@ async function main() {
       webhookWorker.close(),
       incidentSummaryWorker.close(),
       healthTickWorker.close(),
+      retentionWorker.close(),
+      demoResetWorker.close(),
     ]);
     await Promise.all([
       syncQueue.close(),
@@ -156,8 +178,11 @@ async function main() {
       eligibilityQueue.close(),
       incidentSummaryQueue.close(),
       healthTickQueue.close(),
+      retentionQueue.close(),
+      demoResetQueue.close(),
     ]);
     await flushLogs();
+    await stopTelemetry();
     await prisma.$disconnect();
     process.exit(0);
   };
@@ -166,6 +191,7 @@ async function main() {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
+startTelemetry();
 main().catch((err) => {
   log.error({ err }, "worker failed to boot");
   process.exit(1);

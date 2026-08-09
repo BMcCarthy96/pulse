@@ -20,7 +20,6 @@ export function Timestamp({ date }: { date: string | Date | null | undefined }) 
   useEffect(() => {
     // Client-only mount flag so the first render matches SSR output (avoids hydration
     // mismatch between the server's absolute timestamp and the client's relative one).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

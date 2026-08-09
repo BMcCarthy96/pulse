@@ -3,14 +3,19 @@ import { prisma, type Prisma } from "@pulse/db";
 import {
   QUEUE_NAMES,
   INCIDENT_SUMMARY_JOB_OPTS,
+  INCIDENT_SUMMARY_PROMPT_VERSION,
   exponentialBackoffMs,
   getRedisConnectionOptions,
   createTrackedJob as sharedCreateTrackedJob,
   retryTrackedJob as sharedRetryTrackedJob,
+  extractTrace,
+  injectTrace,
+  withSpan,
+  currentTraceId,
   type TrackedJobParams,
 } from "@pulse/shared";
 import { log } from "./log.js";
-import { RetryAfterError } from "./processors/eligibility.js";
+import { AiRetryableError, RetryAfterError } from "./queue-errors.js";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 export const connectionOptions = getRedisConnectionOptions(REDIS_URL);
@@ -29,20 +34,69 @@ export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, {
   connection: connectionOptions,
 });
 export const healthTickQueue = new Queue(QUEUE_NAMES.healthTick, { connection: connectionOptions });
+export const retentionQueue = new Queue(QUEUE_NAMES.retention, { connection: connectionOptions });
+export const demoResetQueue = new Queue(QUEUE_NAMES.demoReset, { connection: connectionOptions });
 
 /**
  * Not a tracked job: incident summaries are internal work, not a connector call, so they stay
  * out of the failed-job queue the ops team triages.
  */
-export function enqueueIncidentSummary(
+export async function enqueueIncidentSummary(
   incidentId: string,
   opts: { reason?: "opened" | "resolution" } = {},
 ) {
-  return incidentSummaryQueue.add(
-    "incident.summary",
-    { incidentId, reason: opts.reason ?? "opened" },
-    INCIDENT_SUMMARY_JOB_OPTS,
-  );
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    select: { orgId: true },
+  });
+  if (!incident) throw new Error(`incident "${incidentId}" not found`);
+
+  const run = await prisma.aiRun.create({
+    data: {
+      orgId: incident.orgId,
+      incidentId,
+      kind: "SUMMARY",
+      status: "QUEUED",
+      model:
+        process.env.ANTHROPIC_SUMMARY_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8",
+      promptVersion: INCIDENT_SUMMARY_PROMPT_VERSION,
+      traceId: currentTraceId(),
+    },
+  });
+
+  try {
+    const job = await incidentSummaryQueue.add(
+      "incident.summary",
+      { incidentId, runId: run.id, reason: opts.reason ?? "opened", ...injectTrace() },
+      INCIDENT_SUMMARY_JOB_OPTS,
+    );
+    return { runId: run.id, bullJobId: job.id };
+  } catch (error) {
+    await prisma.aiRun.update({
+      where: { id: run.id },
+      data: {
+        status: "FAILED",
+        errorCode: "QUEUE_ENQUEUE_FAILED",
+        errorMessage: "summary queue unavailable",
+        completedAt: new Date(),
+      },
+    });
+    await prisma.incident
+      .update({
+        where: { id: incidentId },
+        data: {
+          aiSummaryStatus: "failed",
+          aiSummary: {
+            error: "summary queue unavailable",
+            errorCode: "QUEUE_ENQUEUE_FAILED",
+            failedAt: new Date().toISOString(),
+            aiRunId: run.id,
+          },
+        },
+      })
+      .catch(() => undefined);
+    throw error;
+  }
 }
 
 const queueByName: Record<string, Queue> = {
@@ -85,23 +139,19 @@ async function markSyncRunOutcome(syncRunId: string, opts: { failed: boolean; er
 async function handleActive(job: BullJob) {
   const dbJobId = job.data.dbJobId as string | undefined;
   if (!dbJobId) return;
-  await prisma.job
-    .update({
-      where: { id: dbJobId },
-      data: { status: "ACTIVE", startedAt: new Date(), attempts: job.attemptsMade + 1 },
-    })
-    .catch(() => {});
+  await prisma.job.updateMany({
+    where: { id: dbJobId },
+    data: { status: "ACTIVE", startedAt: new Date(), attempts: job.attemptsMade + 1 },
+  });
 }
 
 async function handleCompleted(job: BullJob) {
   const dbJobId = job.data.dbJobId as string | undefined;
   if (!dbJobId) return;
-  await prisma.job
-    .update({
-      where: { id: dbJobId },
-      data: { status: "SUCCEEDED", finishedAt: new Date(), attempts: job.attemptsMade },
-    })
-    .catch(() => {});
+  await prisma.job.updateMany({
+    where: { id: dbJobId },
+    data: { status: "SUCCEEDED", finishedAt: new Date(), attempts: job.attemptsMade },
+  });
 }
 
 async function handleFailed(job: BullJob | undefined, err: Error) {
@@ -166,7 +216,17 @@ export function createTrackedWorker(
     backoffStrategy?: (attemptsMade: number, type?: string, err?: Error) => number;
   },
 ): Worker {
-  const worker = new Worker(queueName, processor, {
+  const tracedProcessor = (job: BullJob) =>
+    withSpan(
+      `queue:${queueName}`,
+      { "messaging.system": "bullmq", "messaging.destination": queueName },
+      () => processor(job),
+      extractTrace({
+        traceparent: typeof job.data?.traceparent === "string" ? job.data.traceparent : undefined,
+        tracestate: typeof job.data?.tracestate === "string" ? job.data.tracestate : undefined,
+      }),
+    );
+  const worker = new Worker(queueName, tracedProcessor, {
     connection: connectionOptions,
     concurrency: opts.concurrency,
     settings: opts.backoffStrategy ? { backoffStrategy: opts.backoffStrategy } : undefined,
@@ -185,5 +245,15 @@ export const eligibilityBackoffStrategy = (
   err?: Error,
 ): number => {
   if (err instanceof RetryAfterError) return err.retryAfterMs;
+  return exponentialBackoffMs(attemptsMade);
+};
+
+export const incidentSummaryBackoffStrategy = (
+  attemptsMade: number,
+  _type?: string,
+  err?: Error,
+): number => {
+  if (err instanceof RetryAfterError) return err.retryAfterMs;
+  if (err instanceof AiRetryableError && err.retryAfterMs !== undefined) return err.retryAfterMs;
   return exponentialBackoffMs(attemptsMade);
 };

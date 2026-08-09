@@ -13,6 +13,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { Redis } from "ioredis";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dbPackage = resolve(here, "../../../packages/db");
@@ -21,7 +22,7 @@ const DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_e2e";
 
 const TRUNCATE_SQL = `TRUNCATE TABLE
-  "AuditEntry", "IncidentTimelineEntry", "Incident", "HealthSnapshot", "LogEntry",
+  "AiCall", "AiRun", "AuditEntry", "IncidentTimelineEntry", "Incident", "HealthSnapshot", "LogEntry",
   "IntegrationEvent", "Job", "SyncRun", "Connector", "User", "Organization"
 RESTART IDENTITY CASCADE;`;
 
@@ -65,6 +66,12 @@ run(["prisma", "migrate", "deploy"], { DATABASE_URL });
 // still carrying the previous run's OUTAGE would make the first assertion pass for the wrong
 // reason.
 run(["prisma", "db", "execute", "--url", DATABASE_URL, "--stdin"], {}, TRUNCATE_SQL);
+
+// BullMQ jobs live outside Postgres. Flush only the explicitly dedicated E2E Redis database so
+// stale jobs from a previous run cannot reference rows that the reset above deliberately removed.
+const e2eRedis = new Redis(process.env.E2E_REDIS_URL ?? "redis://localhost:6379/2");
+await e2eRedis.flushdb();
+await e2eRedis.quit();
 run(["tsx", "prisma/seed.ts"], { DATABASE_URL });
 
 console.log(`[e2e] ${databaseName} migrated and seeded`);

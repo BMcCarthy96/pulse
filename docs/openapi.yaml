@@ -33,6 +33,7 @@ tags:
   - name: Events
   - name: Logs
   - name: Incidents
+  - name: AI
   - name: Admin
   - name: Simulation
   - name: System
@@ -540,6 +541,76 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /incidents/{id}/ask:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [AI]
+      summary: Ask the incident copilot
+      description: |
+        Role: OPS. Accepts a question up to 2,000 characters and returns a fetch-compatible SSE
+        stream. The copilot has six bounded, read-only tools scoped to this incident's connector
+        and window. Authentication and validation failures use the normal JSON error envelope;
+        post-header failures are sent as `run.error`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200":
+          description: Server-sent events (`run.started`, tool activity, answer deltas, and completion)
+          content:
+            text/event-stream: {}
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /incidents/{id}/copilot:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [AI]
+      summary: Read redacted copilot history
+      description: "Authenticated and organization-scoped. Supports the standard cursor and limit pagination parameters."
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Redacted copilot runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/CopilotRun" } }
+                  nextCursor: { type: string, nullable: true }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /ai/usage:
+    get:
+      tags: [AI]
+      summary: Read durable AI run and provider usage
+      description: |
+        Role: ADMIN. Organization-scoped operational telemetry for the selected window. Costs are
+        persisted at call time with a pricing version; no provider key or prompt content is returned.
+      parameters:
+        - name: window
+          in: query
+          schema: { type: string, enum: [24h, 7d, 30d, all], default: 30d }
+      responses:
+        "200":
+          description: AI usage summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiUsage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /simulate/lab-results:
     post:
       tags: [Simulation]
@@ -709,6 +780,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Conflict:
+      description: Request conflicts with the current resource state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   schemas:
     ErrorEnvelope:
@@ -721,8 +797,9 @@ components:
           properties:
             code:
               type: string
-              enum: [UNAUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION, CONFLICT, INTERNAL]
+              enum: [UNAUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION, CONFLICT, RATE_LIMITED, INTERNAL]
             message: { type: string }
+            traceId: { type: string, nullable: true }
 
     Page:
       type: object
@@ -854,6 +931,7 @@ components:
         source: { type: string, enum: [worker, web, simulator] }
         message: { type: string }
         context: { type: object, additionalProperties: true }
+        traceId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
 
     IncidentSummary:
@@ -869,6 +947,42 @@ components:
           maxItems: 5
           items: { type: string }
         confidence: { type: string, enum: [low, medium, high] }
+
+    AiUsage:
+      type: object
+      required: [window, totalRuns, successfulRuns, failedRuns, successRate, failureRate, pendingRuns, totalCostUsd]
+      properties:
+        window: { type: string, enum: [24h, 7d, 30d, all] }
+        since: { type: string, format: date-time, nullable: true }
+        totalRuns: { type: integer }
+        successfulRuns: { type: integer }
+        failedRuns: { type: integer }
+        successRate: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        failureRate: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        pendingRuns: { type: integer }
+        totalCostUsd: { type: string }
+        meanCostPerSuccessfulRun: { type: string }
+        p50LatencyMs: { type: integer, nullable: true }
+        p95LatencyMs: { type: integer, nullable: true }
+        calls: { type: integer }
+        byKind: { type: array, items: { type: object, additionalProperties: true } }
+        byModel: { type: array, items: { type: object, additionalProperties: true } }
+
+    CopilotRun:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, BUDGET_EXCEEDED, REFUSED] }
+        question: { type: string, nullable: true }
+        answer: { type: string, nullable: true }
+        model: { type: string }
+        promptVersion: { type: string }
+        toolEvents: { type: array, nullable: true, items: { type: object, additionalProperties: true } }
+        totalInputTokens: { type: integer }
+        totalOutputTokens: { type: integer }
+        totalCostUsd: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
 
     Incident:
       type: object

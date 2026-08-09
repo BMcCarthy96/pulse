@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const CLAIMS = ["apps/worker/src/health/rules.ts", "apps/worker/src/ai/redact.ts"];
+const CLAIMS = ["apps/worker/src/health/rules.ts", "packages/shared/src/redact.ts"];
 const SUMMARY = resolve(process.cwd(), "coverage/coverage-summary.json");
 
 let summary;

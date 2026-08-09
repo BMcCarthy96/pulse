@@ -18,6 +18,18 @@ export const incidentStatusSchema = z.enum(["OPEN", "ACKNOWLEDGED", "MONITORING"
 export const incidentSeveritySchema = z.enum(["CRITICAL", "WARNING"]);
 export const logLevelSchema = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]);
 export const roleSchema = z.enum(["ADMIN", "OPS", "VIEWER"]);
+export const aiRunKindSchema = z.enum(["SUMMARY", "COPILOT"]);
+export const aiRunStatusSchema = z.enum([
+  "QUEUED",
+  "RUNNING",
+  "SUCCEEDED",
+  "FAILED",
+  "REFUSED",
+  "CANCELLED",
+  "BUDGET_EXCEEDED",
+]);
+export const aiCallStatusSchema = z.enum(["OK", "FAILED", "REFUSED"]);
+export const aiUsageWindowSchema = z.enum(["24h", "7d", "30d", "all"]);
 
 export const chaosModeSchema = z.enum([
   "HEALTHY",

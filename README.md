@@ -174,7 +174,7 @@ sequenceDiagram
   Q->>W: summarize
   W->>W: build context, redact PHI
   W->>W: assert no identifiers survived
-  W->>C: system prompt v1 + redacted context
+  W->>C: system prompt v2 + redacted context
   C-->>W: structured summary (zod-validated)
   W->>W: store + timeline entry
 
@@ -189,13 +189,13 @@ sequenceDiagram
 
 Implemented in [`packages/shared/src/queue-config.ts`](packages/shared/src/queue-config.ts).
 
-| Queue                | Attempts | Backoff                       | Why                                                                                                |
-| -------------------- | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| `sync`               | 5        | exponential 2s → 32s (capped) | Transient upstream errors usually clear inside a minute                                            |
-| `webhook-processing` | 5        | exponential 2s → 32s          | Same, and the dedupe key makes replays safe                                                        |
-| `claims-submit`      | 5        | exponential 2s → 32s          | Acks arrive later as a separate webhook                                                            |
-| `eligibility`        | 3        | **honours `Retry-After`**     | A 429 tells us exactly how long to wait; guessing over the top of an authoritative answer is wrong |
-| `incident-summary`   | 2        | exponential 2s                | An LLM failure should surface fast, not thrash                                                     |
+| Queue                | Attempts | Backoff                                  | Why                                                                                                |
+| -------------------- | -------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `sync`               | 5        | exponential 2s → 32s (capped)            | Transient upstream errors usually clear inside a minute                                            |
+| `webhook-processing` | 5        | exponential 2s → 32s                     | Same, and the dedupe key makes replays safe                                                        |
+| `claims-submit`      | 5        | exponential 2s → 32s                     | Acks arrive later as a separate webhook                                                            |
+| `eligibility`        | 3        | **honours `Retry-After`**                | A 429 tells us exactly how long to wait; guessing over the top of an authoritative answer is wrong |
+| `incident-summary`   | 4        | provider `Retry-After` or exponential 2s | Transient provider failures retry exactly four total attempts; terminal errors stop immediately    |
 
 Details that turned out to matter:
 
@@ -278,8 +278,9 @@ attribute to a specific prompt is a summary you cannot debug.
 
 ### The redaction boundary
 
-Everything outbound passes through [`apps/worker/src/ai/redact.ts`](apps/worker/src/ai/redact.ts)
-first. Two properties it must keep, both enforced by tests:
+Everything outbound passes through the shared redactor
+([`packages/shared/src/redact.ts`](packages/shared/src/redact.ts); the worker path is a compatibility
+re-export) first. Two properties it must keep, both enforced by tests:
 
 - **Ordered most-specific-first** — `Patient/PAT-4821` has to match before the bare `PAT-4821`
   rule, or the prefix is left dangling.
@@ -318,9 +319,38 @@ The response is constrained to a zod schema via the Anthropic SDK's structured o
 probable cause, impact, up to five suggested steps, and a confidence level. Nothing is parsed out
 of prose.
 
-The prompt is versioned (`v1`), stored with every generated summary, and **snapshot-tested** —
+The production prompt is versioned (`v2`), stored with every generated summary, and
+**snapshot-tested**. Prompt v1 remains a comparison artifact in the eval report —
 editing the prompt text without bumping the version fails CI on purpose, because every stored
 summary claims a version and those claims should be true.
+
+### From a model call to an AI system
+
+Every summary or Ask Pulse request creates one durable `AiRun`; each provider turn is an `AiCall`
+with token usage, pricing version, latency, request id, and outcome. BullMQ owns summary retries
+(`maxRetries: 0` in the SDK), while Redis atomically reserves the daily organization budget before
+each paid call. The admin Settings page aggregates those records, and the incident card exposes
+the latest generation's tokens, cost, and latency.
+
+The offline gate is deterministic and network-free:
+
+```bash
+pnpm eval          # regenerate the 14-case report
+pnpm eval:check    # fail if fixtures or reports are stale
+pnpm eval --live --model claude-sonnet-4-6   # explicit, credentialed recording
+```
+
+The design details and reviewable methodology live in
+[docs/ai-architecture.md](docs/ai-architecture.md) and [docs/evals.md](docs/evals.md).
+
+Ask Pulse is OPS-only and scoped to one incident connector and its bounded evidence window. Its
+six read-only tools return redacted, capped results and stream only safe summaries/tool activity;
+completed questions and answers survive a refresh. `OTEL_EXPORTER_OTLP_ENDPOINT` enables worker
+OTLP spans and W3C trace propagation without exporting prompt or tool-result content.
+
+Prompt caching is intentionally **off**. Summary requests are single-turn and the stable system
+prefix is below the provider's useful cache threshold; copilot cache fields are recorded on every
+turn so a credentialed multi-turn smoke can prove real cache reads before caching is enabled.
 
 ### Degrading without a key
 
@@ -332,9 +362,10 @@ commit rather than assumed.
 ### Cost
 
 Bounded by construction: context is capped at 8,000 characters with repeated log lines collapsed
-into `(×34)` counts, output caps at 1,500 tokens, and generation fires per incident rather than
-per tick. Collapsing repeats alone took one real incident's context from 6,327 to 2,770
-characters with no information lost.
+into `(×34)` counts, output caps at 1,500 tokens, copilot runs cap at six turns / 4,000 output
+tokens / 90 seconds / $0.50, and generation fires per incident rather than per tick. The default
+organization AI budget is $5/day. Collapsing repeats alone took one real incident's context from
+6,327 to 2,770 characters with no information lost.
 
 ---
 
@@ -368,11 +399,11 @@ no failures in it would demonstrate nothing.
 
 ## Testing strategy
 
-| Layer                                     | Runs against            | Covers                                                                                                                                                  | Count |
-| ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly, prompt snapshot, health-strip bucketing, OpenAPI drift | 178   |
-| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                          | 51    |
-| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, plus auth and role gates                                                                                                            | 7     |
+| Layer                                     | Runs against            | Covers                                                                                                                                                                               | Count |
+| ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 195   |
+| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                                                       | 51    |
+| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, plus auth and role gates                                                                                                                                         | 7     |
 
 The split follows one rule: **if it can be a pure function, test it as one.** The health rules and
 the redactor are pure by design precisely so they can be tested exhaustively — table-driven across
@@ -477,21 +508,26 @@ it, the tests and screenshots depend on it.
 Copy `.env.example` to `.env` (and `apps/worker/.env`, `apps/web/.env.local`). Names and local
 defaults only — no secrets are committed.
 
-| Variable                                | Purpose                                                                  |
-| --------------------------------------- | ------------------------------------------------------------------------ |
-| `DATABASE_URL`                          | Postgres connection string                                               |
-| `REDIS_URL`                             | Redis connection string (BullMQ)                                         |
-| `AUTH_SECRET`                           | Auth.js JWT signing secret                                               |
-| `AUTH_URL`                              | Base URL for auth callbacks                                              |
-| `ANTHROPIC_API_KEY`                     | Optional — omit to exercise the graceful-degradation path                |
-| `ANTHROPIC_MODEL`                       | Defaults to `claude-opus-4-8`                                            |
-| `WEBHOOK_SIGNING_SECRET`                | Shared HMAC secret; **must match** between worker and web                |
-| `SIMULATOR_PORT` / `SIMULATOR_BASE_URL` | Simulated upstreams                                                      |
-| `WEBHOOK_TARGET_URL`                    | Where the simulator POSTs inbound webhooks                               |
-| `SEED_DEMO_PASSWORD`                    | Password for the three demo users                                        |
-| `HEALTH_TICK_SEC`                       | Health engine interval (default 60)                                      |
-| `HEALTH_WINDOW_MIN`                     | Rolling window length (default 15)                                       |
-| `INCIDENT_STABILITY_MIN`                | Minutes stable before auto-resolve (default 10; `0` = next healthy tick) |
+| Variable                                              | Purpose                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `DATABASE_URL`                                        | Postgres connection string                                               |
+| `REDIS_URL`                                           | Redis connection string (BullMQ)                                         |
+| `AUTH_SECRET`                                         | Auth.js JWT signing secret                                               |
+| `AUTH_URL`                                            | Base URL for auth callbacks                                              |
+| `ANTHROPIC_API_KEY`                                   | Optional — omit to exercise the graceful-degradation path                |
+| `ANTHROPIC_MODEL`                                     | Defaults to `claude-opus-4-8`                                            |
+| `ANTHROPIC_SUMMARY_MODEL` / `ANTHROPIC_COPILOT_MODEL` | Independent summary and copilot models                                   |
+| `AI_ENABLED` / `AI_DAILY_BUDGET_USD`                  | AI switch and organization daily spend cap                               |
+| `AI_RUN_MAX_COST_USD` / `AI_ALLOW_UNPRICED`           | Per-run cap and explicit unknown-pricing override                        |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                         | Optional OTLP HTTP endpoint (Jaeger locally)                             |
+| `DEMO_MODE` / `WEBHOOK_REQUIRE_TIMESTAMP`             | Auto-reset chaos and timestamped signature rollout controls              |
+| `WEBHOOK_SIGNING_SECRET`                              | Shared HMAC secret; **must match** between worker and web                |
+| `SIMULATOR_PORT` / `SIMULATOR_BASE_URL`               | Simulated upstreams                                                      |
+| `WEBHOOK_TARGET_URL`                                  | Where the simulator POSTs inbound webhooks                               |
+| `SEED_DEMO_PASSWORD`                                  | Password for the three demo users                                        |
+| `HEALTH_TICK_SEC`                                     | Health engine interval (default 60)                                      |
+| `HEALTH_WINDOW_MIN`                                   | Rolling window length (default 15)                                       |
+| `INCIDENT_STABILITY_MIN`                              | Minutes stable before auto-resolve (default 10; `0` = next healthy tick) |
 
 ---
 

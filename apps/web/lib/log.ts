@@ -1,5 +1,6 @@
 import pino from "pino";
 import { prisma, type LogLevel, type Prisma } from "@pulse/db";
+import { currentTraceId } from "@pulse/shared";
 
 // No pino-pretty transport here (unlike apps/worker): its worker-thread transport conflicts
 // with Next.js's own dev-server compilation workers under Fast Refresh, throwing spurious
@@ -24,13 +25,14 @@ export async function logToDb(
     connectorId?: string;
     jobId?: string;
     incidentId?: string;
+    traceId?: string;
     [key: string]: unknown;
   } = {},
 ) {
   try {
     const orgId = await getOrgId();
     if (!orgId) return;
-    const { connectorId, jobId, incidentId, ...rest } = context;
+    const { connectorId, jobId, incidentId, traceId, ...rest } = context;
     await prisma.logEntry.create({
       data: {
         orgId,
@@ -39,6 +41,7 @@ export async function logToDb(
         connectorId,
         jobId,
         incidentId,
+        traceId: traceId ?? currentTraceId(),
         message,
         context: rest as Prisma.InputJsonValue,
       },

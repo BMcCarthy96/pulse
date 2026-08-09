@@ -60,6 +60,12 @@ export default function LogsPage() {
       header: "Message",
       render: (r) => <span className="line-clamp-1">{r.message}</span>,
     },
+    {
+      key: "traceId",
+      header: "Trace",
+      render: (r) =>
+        r.traceId ? <span className="font-mono text-xs">{r.traceId.slice(0, 12)}…</span> : "—",
+    },
     { key: "createdAt", header: "Time", render: (r) => <Timestamp date={r.createdAt} /> },
   ];
 
@@ -144,6 +150,12 @@ export default function LogsPage() {
                 </SheetDescription>
               </SheetHeader>
               <div className="px-4 pb-4">
+                {selected.traceId && (
+                  <p className="mb-4 text-xs">
+                    <span className="text-muted-foreground mr-2">Trace id</span>
+                    <span className="font-mono break-all">{selected.traceId}</span>
+                  </p>
+                )}
                 <JsonViewer data={selected.context} label="Context" />
               </div>
             </>

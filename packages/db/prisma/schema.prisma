@@ -16,6 +16,7 @@ model Organization {
   createdAt  DateTime    @default(now())
   users      User[]
   connectors Connector[]
+  aiRuns     AiRun[]
 }
 
 enum Role {
@@ -34,6 +35,7 @@ model User {
   role         Role         @default(VIEWER)
   createdAt    DateTime     @default(now())
   auditEntries AuditEntry[]
+  aiRuns       AiRun[]
 }
 
 // ── Connectors & health ─────────────────────────────────────
@@ -209,12 +211,14 @@ model LogEntry {
   jobId       String?
   syncRunId   String?
   incidentId  String?
+  traceId      String?
   message     String
   context     Json       @default("{}")
   createdAt   DateTime   @default(now())
 
   @@index([connectorId, createdAt])
   @@index([level, createdAt])
+  @@index([traceId, createdAt])
 }
 
 // ── Incidents ───────────────────────────────────────────────
@@ -232,20 +236,21 @@ enum IncidentSeverity {
 }
 
 model Incident {
-  id              String                   @id @default(cuid())
+  id              String                  @id @default(cuid())
   orgId           String
   connectorId     String
-  connector       Connector                @relation(fields: [connectorId], references: [id])
-  status          IncidentStatus           @default(OPEN)
+  connector       Connector               @relation(fields: [connectorId], references: [id])
+  status          IncidentStatus          @default(OPEN)
   severity        IncidentSeverity
   title           String
-  openedAt        DateTime                 @default(now())
+  openedAt        DateTime                @default(now())
   acknowledgedAt  DateTime?
   resolvedAt      DateTime?
-  detectionSource String                   @default("health-engine")
+  detectionSource String                  @default("health-engine")
   aiSummary       Json?
-  aiSummaryStatus String                   @default("none")
+  aiSummaryStatus String                  @default("none")
   timeline        IncidentTimelineEntry[]
+  aiRuns          AiRun[]
 
   @@index([connectorId, status])
 }
@@ -263,6 +268,88 @@ model IncidentTimelineEntry {
 }
 
 // ── Audit ───────────────────────────────────────────────────
+
+enum AiRunKind {
+  SUMMARY
+  COPILOT
+}
+
+enum AiRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  REFUSED
+  CANCELLED
+  BUDGET_EXCEEDED
+}
+
+enum AiCallStatus {
+  OK
+  FAILED
+  REFUSED
+}
+
+// One logical AI operation. A retry reuses this row and adds another AiCall, so dashboards can
+// distinguish user-visible generations from provider attempts and their accumulated cost.
+model AiRun {
+  id                            String       @id @default(cuid())
+  orgId                         String
+  org                           Organization @relation(fields: [orgId], references: [id])
+  incidentId                    String?
+  incident                      Incident?    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  userId                        String?
+  user                          User?        @relation(fields: [userId], references: [id])
+  kind                          AiRunKind
+  status                        AiRunStatus  @default(QUEUED)
+  model                         String
+  promptVersion                 String
+  question                      String?
+  answer                        String?
+  toolEvents                    Json?
+  contextChars                  Int?
+  contextTruncated              Boolean      @default(false)
+  totalInputTokens              Int          @default(0)
+  totalOutputTokens             Int          @default(0)
+  totalCacheCreationInputTokens Int          @default(0)
+  totalCacheReadInputTokens     Int          @default(0)
+  totalCostUsd                  Decimal?     @db.Decimal(12, 6)
+  errorCode                     String?
+  errorMessage                  String?
+  traceId                       String?
+  startedAt                     DateTime?
+  completedAt                   DateTime?
+  createdAt                     DateTime     @default(now())
+  calls                         AiCall[]
+
+  @@index([orgId, createdAt])
+  @@index([incidentId, createdAt])
+  @@index([kind, status, createdAt])
+}
+
+model AiCall {
+  id                       String       @id @default(cuid())
+  runId                    String
+  run                      AiRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  sequence                 Int
+  attempt                  Int          @default(1)
+  providerRequestId        String?
+  model                    String
+  inputTokens              Int          @default(0)
+  outputTokens             Int          @default(0)
+  cacheCreationInputTokens Int          @default(0)
+  cacheReadInputTokens     Int          @default(0)
+  pricingVersion           String?
+  costUsd                  Decimal?     @db.Decimal(12, 6)
+  latencyMs                Int
+  status                   AiCallStatus
+  errorCode                String?
+  errorMessage             String?
+  createdAt                DateTime     @default(now())
+
+  @@unique([runId, sequence])
+  @@index([runId, createdAt])
+}
 
 model AuditEntry {
   id         String   @id @default(cuid())

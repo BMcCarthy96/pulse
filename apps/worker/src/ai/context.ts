@@ -1,4 +1,5 @@
 import { prisma } from "@pulse/db";
+import { withSpan } from "@pulse/shared";
 import { redact, redactDeep } from "./redact.js";
 
 /** doc 03 §6.1 caps. Oldest lines are dropped first when the budget is exceeded. */
@@ -66,44 +67,49 @@ export async function buildIncidentContext(
   const windowEnd = incident.resolvedAt ?? new Date();
   const connectorId = incident.connectorId;
 
-  const [logs, failedJobs, events, claimRejections] = await Promise.all([
-    prisma.logEntry.findMany({
-      where: {
-        connectorId,
-        level: { in: ["WARN", "ERROR"] },
-        createdAt: { gte: incident.openedAt, lte: windowEnd },
-      },
-      orderBy: { createdAt: "desc" },
-      take: MAX_LOGS,
-    }),
-    prisma.job.findMany({
-      where: {
-        connectorId,
-        status: { in: ["FAILED", "DEAD"] },
-        createdAt: { gte: incident.openedAt, lte: windowEnd },
-      },
-      orderBy: { createdAt: "desc" },
-      take: MAX_FAILED_JOBS,
-    }),
-    prisma.integrationEvent.findMany({
-      where: { connectorId, receivedAt: { gte: incident.openedAt, lte: windowEnd } },
-      orderBy: { receivedAt: "desc" },
-      take: MAX_EVENTS,
-    }),
-    // Phase 8 task 7: claim-ack rejections are the most informative signal on this connector,
-    // and they are invisible in the job/log tables because a rejection is not a failure.
-    incident.connector.key === "claims"
-      ? prisma.integrationEvent.findMany({
+  const [logs, failedJobs, events, claimRejections] = await withSpan(
+    "db:incident-context",
+    { "db.operation": "load_incident_context" },
+    () =>
+      Promise.all([
+        prisma.logEntry.findMany({
           where: {
             connectorId,
-            eventType: "claim.ack",
-            receivedAt: { gte: incident.openedAt, lte: windowEnd },
+            level: { in: ["WARN", "ERROR"] },
+            createdAt: { gte: incident.openedAt, lte: windowEnd },
           },
+          orderBy: { createdAt: "desc" },
+          take: MAX_LOGS,
+        }),
+        prisma.job.findMany({
+          where: {
+            connectorId,
+            status: { in: ["FAILED", "DEAD"] },
+            createdAt: { gte: incident.openedAt, lte: windowEnd },
+          },
+          orderBy: { createdAt: "desc" },
+          take: MAX_FAILED_JOBS,
+        }),
+        prisma.integrationEvent.findMany({
+          where: { connectorId, receivedAt: { gte: incident.openedAt, lte: windowEnd } },
           orderBy: { receivedAt: "desc" },
-          take: MAX_CLAIM_REJECTIONS,
-        })
-      : Promise.resolve([]),
-  ]);
+          take: MAX_EVENTS,
+        }),
+        // Phase 8 task 7: claim-ack rejections are the most informative signal on this connector,
+        // and they are invisible in the job/log tables because a rejection is not a failure.
+        incident.connector.key === "claims"
+          ? prisma.integrationEvent.findMany({
+              where: {
+                connectorId,
+                eventType: "claim.ack",
+                receivedAt: { gte: incident.openedAt, lte: windowEnd },
+              },
+              orderBy: { receivedAt: "desc" },
+              take: MAX_CLAIM_REJECTIONS,
+            })
+          : Promise.resolve([]),
+      ]),
+  );
 
   const sections: string[] = [];
 

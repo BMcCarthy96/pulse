@@ -18,6 +18,7 @@ export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, {
 export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, {
   connection: connectionOptions,
 });
+export const demoResetQueue = new Queue(QUEUE_NAMES.demoReset, { connection: connectionOptions });
 
 export const queueByName: Record<string, Queue> = {
   [QUEUE_NAMES.sync]: syncQueue,

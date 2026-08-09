@@ -9,11 +9,21 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  */
 
 export const WEBHOOK_SIGNATURE_HEADER = "x-pulse-signature";
+export const WEBHOOK_SIGNATURE_V2_HEADER = "x-pulse-signature-v2";
+export const WEBHOOK_TIMESTAMP_HEADER = "x-pulse-timestamp";
 export const WEBHOOK_DELIVERY_HEADER = "x-pulse-delivery";
 export const WEBHOOK_EVENT_HEADER = "x-pulse-event";
 
 export function signWebhookBody(rawBody: string, secret: string): string {
   return createHmac("sha256", secret).update(rawBody).digest("hex");
+}
+
+export function signWebhookBodyV2(
+  rawBody: string,
+  secret: string,
+  timestampSeconds: number,
+): string {
+  return createHmac("sha256", secret).update(`${timestampSeconds}.${rawBody}`).digest("hex");
 }
 
 /**
@@ -34,6 +44,28 @@ export function verifyWebhookSignature(
   const expected = Buffer.from(signWebhookBody(rawBody, secret), "hex");
   const provided = Buffer.from(signature, "hex");
 
+  if (expected.length !== provided.length) return false;
+  return timingSafeEqual(expected, provided);
+}
+
+export function verifyWebhookSignatureV2(
+  rawBody: string,
+  signature: string | null | undefined,
+  timestamp: string | null | undefined,
+  secret: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  skewSeconds = 300,
+): boolean {
+  if (!signature || !timestamp || !/^\d+$/.test(timestamp)) return false;
+  const timestampSeconds = Number(timestamp);
+  if (
+    !Number.isSafeInteger(timestampSeconds) ||
+    Math.abs(nowSeconds - timestampSeconds) > skewSeconds
+  ) {
+    return false;
+  }
+  const expected = Buffer.from(signWebhookBodyV2(rawBody, secret, timestampSeconds), "hex");
+  const provided = Buffer.from(signature.replace(/^v2=/, ""), "hex");
   if (expected.length !== provided.length) return false;
   return timingSafeEqual(expected, provided);
 }

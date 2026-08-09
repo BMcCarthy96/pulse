@@ -18,6 +18,8 @@
     "test:coverage": "vitest run --coverage && node scripts/check-coverage-claims.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "pnpm --filter @pulse/web test:e2e",
+    "eval": "node --no-warnings --experimental-strip-types scripts/eval.ts",
+    "eval:check": "node --no-warnings --experimental-strip-types scripts/eval.ts --check",
     "db:push": "pnpm --filter @pulse/db db:push",
     "db:migrate": "pnpm --filter @pulse/db db:migrate",
     "db:seed": "pnpm --filter @pulse/db db:seed"

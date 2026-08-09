@@ -2,16 +2,9 @@ import type { Job } from "bullmq";
 import { prisma, type Prisma } from "@pulse/db";
 import { parseRetryAfterMs, SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
 import { log } from "../log.js";
+import { RetryAfterError } from "../queue-errors.js";
 
 const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? "http://localhost:4001";
-
-export class RetryAfterError extends Error {
-  retryAfterMs: number;
-  constructor(message: string, retryAfterMs: number) {
-    super(message);
-    this.retryAfterMs = retryAfterMs;
-  }
-}
 
 interface EligibilityPayload {
   connectorId: string;

@@ -100,6 +100,7 @@ describe("openapi.yaml — structure", () => {
       "NOT_FOUND",
       "VALIDATION",
       "CONFLICT",
+      "RATE_LIMITED",
       "INTERNAL",
     ]);
   });

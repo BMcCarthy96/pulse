@@ -1,6 +1,7 @@
 import type { PrismaClient, Prisma } from "@prisma/client";
 import type { Queue, JobsOptions } from "bullmq";
 import { DEFAULT_JOB_OPTS } from "./queue-config.js";
+import { injectTrace } from "./telemetry.js";
 
 export interface TrackedJobParams {
   queue: Queue;
@@ -35,7 +36,7 @@ export async function createTrackedJob(prisma: PrismaClient, params: TrackedJobP
 
   const bullJob = await params.queue.add(
     params.type,
-    { ...params.payload, dbJobId: dbJob.id },
+    { ...params.payload, dbJobId: dbJob.id, ...injectTrace() },
     params.opts ?? DEFAULT_JOB_OPTS,
   );
 
@@ -59,7 +60,7 @@ export async function retryTrackedJob(
 
   const bullJob = await queue.add(
     dbJob.type,
-    { ...(dbJob.payload as object), dbJobId: dbJob.id },
+    { ...(dbJob.payload as object), dbJobId: dbJob.id, ...injectTrace() },
     DEFAULT_JOB_OPTS,
   );
 

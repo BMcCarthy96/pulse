@@ -14,7 +14,10 @@
 
 ## Acceptance criteria
 
-- [ ] `pnpm install --frozen-lockfile` uses the pinned package manager and CI has no floating pnpm version.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`, and `pnpm build` pass.
-- [ ] README, license, dependency, and test-script hygiene changes are reviewed separately from formatting churn.
+- [x] `pnpm install --frozen-lockfile` uses the pinned package manager and CI consumes the repository `packageManager` pin.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, unit/integration tests, and `pnpm build` pass locally (Docker Postgres/Redis only).
+- [x] README, license, dependency, and test-script hygiene changes are committed separately from the later AI/runtime changes.
 - [ ] Production dashboard and webhook smoke tests pass with AI degrading honestly and no paid model calls.
+
+The remaining criterion requires the user's Railway/Vercel accounts and deployment credentials; no
+production URL or secret is inferred locally.

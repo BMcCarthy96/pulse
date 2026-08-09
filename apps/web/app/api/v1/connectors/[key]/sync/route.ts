@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@pulse/db";
-import { ApiError } from "@pulse/shared";
+import { ApiError, injectTrace } from "@pulse/shared";
 import { handleApiError, requireRole } from "@/lib/authz";
 import { writeAudit } from "@/lib/audit";
 import { syncQueue } from "@/lib/queue";
@@ -23,6 +23,7 @@ export const POST = handleApiError("connectors.sync", async (_req, ctx) => {
     connectorId: connector.id,
     orgId: connector.orgId,
     trigger: "manual",
+    ...injectTrace(),
   });
 
   await writeAudit({

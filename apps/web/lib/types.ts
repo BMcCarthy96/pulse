@@ -105,6 +105,7 @@ export interface LogRow {
   source: string;
   message: string;
   context: unknown;
+  traceId: string | null;
   createdAt: string;
   connector: { key: string; displayName: string } | null;
 }
@@ -126,12 +127,37 @@ export interface AiSummary {
   model?: string;
   promptVersion?: string;
   generatedAt?: string;
+  aiRunId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  costUsd?: number;
+  latencyMs?: number;
   editedBy?: string;
   editedAt?: string;
   /** Present once edited: the machine-generated version, kept per doc 03 §6.6. */
   original?: Omit<AiSummary, "original">;
   /** Only set on the `failed` status. */
   error?: string;
+}
+
+export interface AiUsageResponse {
+  window: "24h" | "7d" | "30d" | "all";
+  since: string | null;
+  totalRuns: number;
+  successfulRuns: number;
+  failedRuns: number;
+  successRate: number | null;
+  failureRate: number | null;
+  pendingRuns: number;
+  totalCostUsd: string;
+  meanCostPerSuccessfulRun: string;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  calls: number;
+  byKind: { kind: string; runs: number; costUsd: string }[];
+  byModel: { model: string; runs: number; costUsd: string }[];
 }
 
 export interface IncidentRow {

@@ -18,14 +18,14 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 10 deployment | **code done; live deploy is the user's step** | 2026-07-28 | Prod-readiness pass + runbook complete; the five acceptance criteria all require account access (Railway/Vercel) and cannot be met from the repo |
 | 11 docs + polish | done except screenshots + Loom | 2026-07-28 | README case study, OpenAPI + `/docs/api`, metrics script, positioning, Loom script. Screenshots and the recording are user tasks |
 | 12 credibility + baseline | code complete; deploy pending | 2026-08-09 | pnpm pin/lockfile, lint alignment, format gate, Prisma silent logging, license, README quickstart, and all local gates pass; Railway/Vercel account smoke remains user-authenticated |
-| 13 AI foundation | planned | — | Phase specification added; implementation pending |
-| 14 evals | planned | — | Phase specification added; implementation pending |
-| 15 copilot | planned | — | Phase specification added; implementation pending |
-| 16 hardening | planned | — | Phase specification added; implementation pending |
+| 13 AI foundation | code complete; provider smoke pending | 2026-08-09 | Durable AiRun/AiCall records, versioned pricing, provider seam, retry classification/backoff, usage API/UI, budgets, trace propagation, and summary telemetry implemented; unit/integration/build gates pass |
+| 14 evals | code complete; reviewed live run pending | 2026-08-09 | 14-case network-free corpus, deterministic graders, model/prompt/context/settings-keyed fixtures, baseline regression scores, prompt v1/v2 comparison metadata, offline report, stale-report CI gate, and optional live/judge CLI modes implemented; `pnpm eval:check` passes |
+| 15 copilot | code complete; provider/browser smoke pending | 2026-08-09 | OPS-only persistent SSE Ask Pulse route, six scoped read-only tools, redaction/leak scans, durable turns/history, budgets/cancellation, audit, UI, OpenAPI, and unit coverage implemented |
+| 16 hardening | code complete; observability/deploy smoke pending | 2026-08-09 | OTLP Next/worker tracing, W3C queue propagation, Redis rate limits/budgets, timestamped webhook signatures, headers/boundaries, retention, demo reset, and CI eval gate implemented; production credentials and Jaeger/provider trace remain account/config checks |
 
 ## Phase 9 — acceptance criteria
 
-- [x] **`pnpm test` green locally with only Docker services running** — 178 unit tests (9 files,
+- [x] **`pnpm test` green locally with only Docker services running** — 195 unit tests (12 files,
       no services) + 51 integration tests (3 files, real Postgres + Redis) all pass.
       `test:unit` needs nothing but Node; `test:integration` creates and migrates a dedicated
       `pulse_test` database via its own global setup and truncates every table between tests.
@@ -173,20 +173,10 @@ Outstanding, and genuinely a user task:
 
 ## Known issues
 
-- **`pnpm format:check` fails on 117 files** (105 code, 12 markdown) and always has — Prettier is
-  configured and the script is advertised in the README, but the codebase was never run through
-  it. CI does not run it, which is why it went unnoticed.
-
-  Deliberately **not** fixed in a bulk pass, for two reasons found by actually running it:
-  Prettier pads markdown tables to the width of the widest cell, which turns the phase table at
-  the top of this file into 400-character lines; and `prettier-plugin-tailwindcss` reorders
-  `className` strings across every component, which is a change to rendered CSS ordering, however
-  low-risk, and not something to land unreviewed on the same day as the `v1.0.0` tag.
-
-  The fix is a decision, not a task: either add `**/*.md` to `.prettierignore`, run
-  `pnpm format` over the code, and add `format:check` to CI so it stays true — or drop the script
-  and the Prettier config. Leaving an advertised command that fails is the one option worse than
-  both.
+- **Production smoke remains account- and credential-owned.** Local CI-style gates pass with AI
+  disabled, but a Railway/Vercel deployment, a live Anthropic generation, and a Jaeger trace still
+  require the user's provider credentials and cloud accounts. The implementation deliberately
+  keeps those steps explicit rather than fabricating a URL or secret.
 
 ## Post-v1.0.0 fixes
 
@@ -225,7 +215,7 @@ Outstanding, and genuinely a user task:
 
   A **`Worker image` CI job** now builds the image and asserts it boots and goes healthy on every
   push. `pnpm build` proved nothing about the deployable artifact; three of these four defects
-  would have been caught by that job on day one. 178 unit / 51 integration / 7 e2e all still
+  would have been caught by that job on day one. 195 unit / 51 integration / 7 e2e all still
   green after the restructure.
 
   Still outstanding and genuinely the user's: the deploy itself needs Railway and Vercel account
@@ -252,6 +242,11 @@ Outstanding, and genuinely a user task:
   7 unit tests, verified failing (4 of 7) with the bucketing disabled.
 
 ## Deviation log
+
+- **Phase 16**: The worker and Next server initialize separate OTLP providers with the HTTP
+  exporter only. Next uses `sdk-trace-node` rather than the higher-level `sdk-node`, whose optional
+  gRPC/logging transports pull Node built-ins into webpack; both providers remain opt-in through
+  `OTEL_EXPORTER_OTLP_ENDPOINT` and the production build stays clean.
 
 - **Phase 9**: Added `@playwright/test` (already in doc 01's stack table) and **`yaml`**
   (not in the stack table). The parser is needed for phase 11's two OpenAPI deliverables — the

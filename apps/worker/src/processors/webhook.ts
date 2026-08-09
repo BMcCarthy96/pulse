@@ -75,9 +75,19 @@ async function processClaimAck(event: IntegrationEvent) {
 }
 
 export async function processWebhookJob(job: Job<WebhookProcessPayload>) {
-  const { eventId, eventType } = job.data;
+  const { eventId, eventType } = job.data ?? {};
+  if (typeof eventId !== "string" || eventId.length === 0) {
+    log.error({ bullJobId: job.id }, "webhook job missing eventId; refusing malformed payload");
+    return;
+  }
 
-  const event = await prisma.integrationEvent.findUniqueOrThrow({ where: { id: eventId } });
+  const event = await prisma.integrationEvent.findUnique({ where: { id: eventId } });
+  if (!event) {
+    // Queue payloads can outlive a reset or retention operation. Treat a reference to a
+    // deleted event as already handled rather than retrying forever and flooding the logs.
+    log.warn({ bullJobId: job.id, eventId }, "webhook job references a missing event; skipping");
+    return;
+  }
   await prisma.integrationEvent.update({ where: { id: eventId }, data: { status: "PROCESSING" } });
 
   try {

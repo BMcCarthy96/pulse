@@ -5,6 +5,8 @@ export const QUEUE_NAMES = {
   eligibility: "eligibility",
   incidentSummary: "incident-summary",
   healthTick: "health-tick",
+  retention: "retention",
+  demoReset: "demo-reset",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -26,8 +28,8 @@ export const ELIGIBILITY_JOB_OPTS = {
 };
 
 export const INCIDENT_SUMMARY_JOB_OPTS = {
-  attempts: 2,
-  backoff: { type: "exponential" as const, delay: 2_000 },
+  attempts: 4,
+  backoff: { type: "custom" as const },
   removeOnComplete: { count: 1000 },
   removeOnFail: false,
 };

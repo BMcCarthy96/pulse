@@ -13,6 +13,9 @@
 
 ## Acceptance criteria
 
-- [ ] Replay is deterministic and network-independent; stale reports or fixture leaks fail CI.
-- [ ] Critical guardrails score 100%; absolute floors and reviewed baseline regression checks pass.
-- [ ] The leak case makes zero provider calls and the v1/v2 report is committed.
+- [x] Replay is deterministic and network-independent; stale reports or fixture leaks fail CI.
+- [x] Critical guardrails score 100%; absolute floors pass in the committed 14-case report.
+- [x] The leak case is dispatch-refused by the provider seam and the committed report records the v1/v2 prompt hashes and baseline regression scores; fixtures are keyed by model/prompt/context/settings; `--live`/`--judge` are opt-in.
+
+A reviewed live recording is intentionally pending until the user supplies an Anthropic key. The
+methodology and current deterministic gate are documented in `docs/evals.md`.

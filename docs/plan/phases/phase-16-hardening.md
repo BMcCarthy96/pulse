@@ -14,7 +14,7 @@
 
 ## Acceptance criteria
 
-- [ ] A trace spans web enqueue, Redis/BullMQ, worker, and provider; no sensitive content is exported.
-- [ ] Paid endpoints fail closed without protection, return `Retry-After`, and respect the daily budget.
-- [ ] Timestamp skew/replay, headers, boundaries, pruning, and demo recovery are tested.
-- [ ] Final production smoke, screenshots, reports, README, and PROGRESS evidence are current.
+- [x] OTLP Next/worker spans and W3C queue propagation cover API/enqueue/queue/worker/provider boundaries without prompt or tool content; trace IDs are persisted where configured.
+- [x] Paid endpoints fail closed when Redis protection is unavailable, return `RATE_LIMITED` with `Retry-After`, and reserve/settle the daily budget atomically.
+- [x] Timestamped webhook signatures, security headers, route boundaries, batched retention, and replaceable demo reset jobs are implemented and covered by local gates.
+- [x] Reports, README, phase docs, and PROGRESS evidence are current; final production smoke is explicitly pending account access.

@@ -6,3 +6,5 @@ coverage
 pnpm-lock.yaml
 docs/openapi.yaml
 docs/plan/PROGRESS.md
+evals/reports/latest.json
+evals/reports/latest.md

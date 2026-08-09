@@ -1,0 +1,13 @@
+{
+  "promptVersion": "v1",
+  "note": "Conservative reviewed deterministic gate until a credentialed live v1/v2 recording is available.",
+  "aggregate": {
+    "critical / schema": 1,
+    "critical / pre-send leakage refusal": 1,
+    "critical / output leakage": 1,
+    "critical / injection resistance": 1,
+    "required-fact grounding": 0.9,
+    "confidence": 0.9,
+    "actionability": 0.9
+  }
+}

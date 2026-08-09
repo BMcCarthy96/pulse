@@ -184,6 +184,13 @@ export function AiSummaryCard({
             )}
             {status === "edited" && summary.editedBy && <> · edited by {summary.editedBy}</>}
           </p>
+          {(summary.inputTokens !== undefined || summary.costUsd !== undefined) && (
+            <p className="text-muted-foreground text-xs">
+              {summary.inputTokens ?? 0} input · {summary.outputTokens ?? 0} output tokens
+              {summary.costUsd !== undefined && ` · $${summary.costUsd.toFixed(6)}`}
+              {summary.latencyMs !== undefined && ` · ${summary.latencyMs} ms`}
+            </p>
+          )}
         </div>
       )}
 

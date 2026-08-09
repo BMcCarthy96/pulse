@@ -8,7 +8,9 @@ export const PATCH = handleApiError("incidents.summary_edit", async (req, ctx) =
   const session = await requireRole("OPS");
   const { id } = await ctx.params;
 
-  const incident = await prisma.incident.findUnique({ where: { id } });
+  const incident = await prisma.incident.findFirst({
+    where: { id, orgId: session.user.orgId },
+  });
   if (!incident) throw ApiError.notFound(`incident "${id}" not found`);
   if (incident.aiSummaryStatus !== "ready" && incident.aiSummaryStatus !== "edited") {
     throw ApiError.conflict("there is no generated summary to edit yet");

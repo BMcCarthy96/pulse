@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { signWebhookBody, verifyWebhookSignature } from "../src/webhook-signature.js";
+import {
+  signWebhookBody,
+  signWebhookBodyV2,
+  verifyWebhookSignature,
+  verifyWebhookSignatureV2,
+} from "../src/webhook-signature.js";
 
 const SECRET = "test-signing-secret";
 const BODY = JSON.stringify({ eventType: "lab.result", patientRef: "PAT-4821", value: 12.4 });
@@ -64,5 +69,33 @@ describe("signWebhookBody", () => {
   it("differs per secret and per body", () => {
     expect(signWebhookBody(BODY, SECRET)).not.toBe(signWebhookBody(BODY, "other"));
     expect(signWebhookBody(BODY, SECRET)).not.toBe(signWebhookBody(`${BODY} `, SECRET));
+  });
+});
+
+describe("timestamped webhook signatures", () => {
+  const timestamp = 1_760_000_000;
+
+  it("binds the timestamp and body", () => {
+    const signature = signWebhookBodyV2(BODY, SECRET, timestamp);
+    expect(verifyWebhookSignatureV2(BODY, signature, String(timestamp), SECRET, timestamp)).toBe(
+      true,
+    );
+    expect(
+      verifyWebhookSignatureV2(`${BODY} `, signature, String(timestamp), SECRET, timestamp),
+    ).toBe(false);
+  });
+
+  it("rejects old, future, missing, and malformed timestamps", () => {
+    const signature = signWebhookBodyV2(BODY, SECRET, timestamp);
+    expect(
+      verifyWebhookSignatureV2(BODY, signature, String(timestamp), SECRET, timestamp + 301),
+    ).toBe(false);
+    expect(
+      verifyWebhookSignatureV2(BODY, signature, String(timestamp), SECRET, timestamp - 301),
+    ).toBe(false);
+    expect(verifyWebhookSignatureV2(BODY, signature, null, SECRET, timestamp)).toBe(false);
+    expect(
+      verifyWebhookSignatureV2(BODY, `v2=${signature}`, String(timestamp), SECRET, timestamp),
+    ).toBe(true);
   });
 });

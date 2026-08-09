@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   INCIDENT_SUMMARY_PROMPT_V1,
+  INCIDENT_SUMMARY_PROMPT_V2,
   INCIDENT_SUMMARY_PROMPT_VERSION,
   IncidentSummaryAiSchema,
   IncidentSummarySchema,
@@ -18,9 +19,13 @@ import {
 describe("incident summary prompt", () => {
   it("matches the committed snapshot for its version", () => {
     expect({
-      version: INCIDENT_SUMMARY_PROMPT_VERSION,
+      version: "v1",
       prompt: INCIDENT_SUMMARY_PROMPT_V1,
     }).toMatchSnapshot();
+  });
+
+  it("uses v2 for new generations", () => {
+    expect(INCIDENT_SUMMARY_PROMPT_VERSION).toBe("v2");
   });
 
   it("still carries the instructions the design depends on", () => {
@@ -78,5 +83,14 @@ describe("incident summary schema", () => {
         `v4 accepted missing ${field}`,
       ).toBe(false);
     }
+  });
+});
+
+describe("incident summary prompt v2", () => {
+  it("keeps evidence untrusted and conclusions bounded", () => {
+    expect(INCIDENT_SUMMARY_PROMPT_V2).toMatch(/untrusted data/i);
+    expect(INCIDENT_SUMMARY_PROMPT_V2).toMatch(/do not claim a fact/i);
+    expect(INCIDENT_SUMMARY_PROMPT_V2).toMatch(/calibrat/i);
+    expect(INCIDENT_SUMMARY_PROMPT_V2).toMatch(/patient|identifier/i);
   });
 });

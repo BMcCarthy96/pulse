@@ -53,6 +53,27 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  evals:
+    name: Offline AI evals
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval:check
+      - name: Upload deterministic eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-eval-report
+          path: evals/reports/latest.*
+          retention-days: 7
+
   integration:
     name: Integration tests
     runs-on: ubuntu-latest

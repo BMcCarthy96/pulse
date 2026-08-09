@@ -17,6 +17,7 @@ import { apiPost } from "@/lib/api-client";
 import { formatDuration } from "@/lib/format";
 import type { IncidentDetailResponse } from "@/lib/types";
 import { AiSummaryCard } from "./ai-summary-card";
+import { CopilotPanel } from "./copilot-panel";
 import { toast } from "sonner";
 
 const TIMELINE_ICONS: Record<string, string> = {
@@ -130,6 +131,8 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
             summary={incident.aiSummary}
             onChanged={() => void mutate()}
           />
+
+          <CopilotPanel incidentId={id} />
 
           <section className="rounded-lg border p-4">
             <h2 className="mb-3 text-sm font-semibold">Timeline</h2>

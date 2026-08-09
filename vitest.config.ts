@@ -33,7 +33,7 @@ export default defineConfig({
           lines: 100,
           statements: 100,
         },
-        "apps/worker/src/ai/redact.ts": {
+        "packages/shared/src/redact.ts": {
           branches: 100,
           functions: 100,
           lines: 100,

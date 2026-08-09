@@ -2,6 +2,9 @@ import { prisma } from "@pulse/db";
 import { createTrackedJob, getConnectorDef, QUEUE_NAMES } from "@pulse/shared";
 import {
   verifyWebhookSignature,
+  verifyWebhookSignatureV2,
+  WEBHOOK_SIGNATURE_V2_HEADER,
+  WEBHOOK_TIMESTAMP_HEADER,
   WEBHOOK_DELIVERY_HEADER,
   WEBHOOK_EVENT_HEADER,
   WEBHOOK_SIGNATURE_HEADER,
@@ -31,6 +34,8 @@ export interface IngestInput {
   connectorKey: string;
   rawBody: string;
   signature: string | null;
+  signatureV2?: string | null;
+  timestamp?: string | null;
   deliveryId: string | null;
   eventType: string | null;
 }
@@ -59,13 +64,15 @@ export function readWebhookHeaders(
 ): Omit<IngestInput, "connectorKey" | "rawBody"> {
   return {
     signature: headers.get(WEBHOOK_SIGNATURE_HEADER),
+    signatureV2: headers.get(WEBHOOK_SIGNATURE_V2_HEADER),
+    timestamp: headers.get(WEBHOOK_TIMESTAMP_HEADER),
     deliveryId: headers.get(WEBHOOK_DELIVERY_HEADER),
     eventType: headers.get(WEBHOOK_EVENT_HEADER),
   };
 }
 
 export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> {
-  const { connectorKey, rawBody, signature, deliveryId } = input;
+  const { connectorKey, rawBody, signature, signatureV2, timestamp, deliveryId } = input;
   const eventType = input.eventType ?? "unknown";
 
   const def = getConnectorDef(connectorKey);
@@ -76,11 +83,22 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
 
   const headersCapture = {
     [WEBHOOK_SIGNATURE_HEADER]: signature,
+    [WEBHOOK_SIGNATURE_V2_HEADER]: signatureV2,
+    [WEBHOOK_TIMESTAMP_HEADER]: timestamp,
     [WEBHOOK_DELIVERY_HEADER]: deliveryId,
     [WEBHOOK_EVENT_HEADER]: eventType,
   };
 
-  if (!verifyWebhookSignature(rawBody, signature, WEBHOOK_SIGNING_SECRET)) {
+  const v2Present = !!signatureV2 || !!timestamp;
+  const v2Valid =
+    v2Present && verifyWebhookSignatureV2(rawBody, signatureV2, timestamp, WEBHOOK_SIGNING_SECRET);
+  const legacyAllowed = process.env.WEBHOOK_REQUIRE_TIMESTAMP !== "true";
+  const signatureValid =
+    v2Valid ||
+    (!v2Present &&
+      legacyAllowed &&
+      verifyWebhookSignature(rawBody, signature, WEBHOOK_SIGNING_SECRET));
+  if (!signatureValid) {
     // Recorded, not dropped. A rejected delivery is the single most useful row on the events
     // page when an upstream's secret has drifted.
     const invalid = await prisma.integrationEvent.create({

@@ -13,6 +13,10 @@
     "./webhook-signature": {
       "types": "./src/webhook-signature.ts",
       "default": "./dist/webhook-signature.js"
+    },
+    "./ai-budget": {
+      "types": "./src/ai-budget.ts",
+      "default": "./dist/ai-budget.js"
     }
   },
   "scripts": {
@@ -21,8 +25,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@opentelemetry/api": "1.9.0",
     "@prisma/client": "^6",
     "bullmq": "^5",
+    "ioredis": "5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -1,5 +1,6 @@
 import pino from "pino";
 import { prisma, type LogLevel, type Prisma } from "@pulse/db";
+import { currentTraceId } from "@pulse/shared";
 
 const pinoLogger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -14,15 +15,13 @@ export interface LogContext {
   jobId?: string;
   syncRunId?: string;
   incidentId?: string;
+  traceId?: string;
   [key: string]: unknown;
 }
 
-let cachedOrgId: string | undefined;
 async function getOrgId(): Promise<string | null> {
-  if (cachedOrgId) return cachedOrgId;
   const org = await prisma.organization.findFirst();
-  cachedOrgId = org?.id;
-  return cachedOrgId ?? null;
+  return org?.id ?? null;
 }
 
 const pendingEntries: Prisma.LogEntryCreateManyInput[] = [];
@@ -47,7 +46,7 @@ async function flush() {
 }
 
 function queueDbInsert(level: LogLevel, message: string, context: LogContext) {
-  const { connectorId, jobId, syncRunId, incidentId, ...rest } = context;
+  const { connectorId, jobId, syncRunId, incidentId, traceId, ...rest } = context;
   pendingEntries.push({
     orgId: "", // filled in at flush time
     level,
@@ -56,6 +55,7 @@ function queueDbInsert(level: LogLevel, message: string, context: LogContext) {
     jobId,
     syncRunId,
     incidentId,
+    traceId: traceId ?? currentTraceId(),
     message,
     context: rest as object,
   });

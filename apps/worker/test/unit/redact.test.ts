@@ -216,6 +216,11 @@ describe("findLeakedIdentifiers", () => {
     ]);
   });
 
+  it("detects identifier casing variants", () => {
+    expect(redact("pat-1 and clm-2")).toBe("[REDACTED:patient-ref] and [REDACTED:claim-ref]");
+    expect(findLeakedIdentifiers("conn-42", ["CONN-42"])).toEqual(["CONN-42"]);
+  });
+
   it("deduplicates repeats", () => {
     expect(findLeakedIdentifiers("PAT-1 PAT-1")).toEqual(["PAT-1"]);
   });
@@ -226,5 +231,11 @@ describe("findLeakedIdentifiers", () => {
 
   it("is empty for text that never had identifiers", () => {
     expect(findLeakedIdentifiers("all systems healthy")).toEqual([]);
+  });
+
+  it("also detects identifiers supplied by the incident scope", () => {
+    expect(findLeakedIdentifiers("connector-42 is healthy", ["connector-42"])).toEqual([
+      "connector-42",
+    ]);
   });
 });

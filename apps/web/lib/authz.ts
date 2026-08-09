@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { ApiError, roleAtLeast, type RoleName } from "@pulse/shared";
 import { log } from "./log";
+import { currentTraceId, withSpan } from "@pulse/shared";
+import {
+  enforceAuthenticatedRateLimit,
+  enforceCopilotQuotas,
+  enforceSummaryQuotas,
+  RateLimitExceededError,
+  RateLimitUnavailableError,
+} from "./rate-limit";
 
 export async function requireSession() {
   const session = await auth();
@@ -26,10 +34,38 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
   return async (req, ctx) => {
     const start = Date.now();
     let userId: string | undefined;
+    let routeTraceId: string | undefined;
     try {
       const session = await auth();
       userId = session?.user?.id;
-      const res = await fn(req, ctx);
+      if (session?.user?.id) {
+        const paid = routeName.includes("copilot_ask") || routeName.includes("summary_regenerate");
+        try {
+          await enforceAuthenticatedRateLimit(session.user.id, paid);
+          if (routeName.includes("copilot_ask")) {
+            await enforceCopilotQuotas(session.user.id, session.user.orgId);
+          } else if (routeName.includes("summary_regenerate")) {
+            await enforceSummaryQuotas(session.user.id, session.user.orgId);
+          }
+        } catch (error) {
+          if (error instanceof RateLimitExceededError) {
+            throw ApiError.rateLimited(error.retryAfterSeconds);
+          }
+          if (error instanceof RateLimitUnavailableError) {
+            throw ApiError.rateLimited(60, "AI protection is temporarily unavailable");
+          }
+          throw error;
+        }
+      }
+      const res = await withSpan(
+        `api:${routeName}`,
+        { "http.method": req.method, "http.route": routeName },
+        (span) => {
+          const traceId = span.spanContext().traceId;
+          if (traceId !== "00000000000000000000000000000000") routeTraceId = traceId;
+          return fn(req, ctx);
+        },
+      );
       log.info(
         {
           route: routeName,
@@ -37,6 +73,7 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
           userId,
           status: res.status,
           durationMs: Date.now() - start,
+          traceId: routeTraceId,
         },
         "api request",
       );
@@ -44,7 +81,10 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
     } catch (err) {
       const apiError = err instanceof ApiError ? err : ApiError.internal();
       if (!(err instanceof ApiError)) {
-        log.error({ route: routeName, method: req.method, userId, err }, "unhandled api error");
+        log.error(
+          { route: routeName, method: req.method, userId, traceId: routeTraceId, err },
+          "unhandled api error",
+        );
       }
       log.info(
         {
@@ -54,10 +94,17 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
           status: apiError.status,
           durationMs: Date.now() - start,
           outcome: apiError.code,
+          traceId: routeTraceId,
         },
         "api request",
       );
-      return NextResponse.json(apiError.toBody(), { status: apiError.status });
+      const headers = apiError.retryAfterSeconds
+        ? { "Retry-After": String(apiError.retryAfterSeconds) }
+        : undefined;
+      return NextResponse.json(apiError.toBody(routeTraceId ?? currentTraceId()), {
+        status: apiError.status,
+        headers,
+      });
     }
   };
 }
