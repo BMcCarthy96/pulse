@@ -80,3 +80,36 @@ export async function settleAiSpend(orgId: string, reservedUsd: number, actualUs
     // reservation remains conservative if a refund cannot be written.
   }
 }
+
+const INVESTIGATION_BUDGET_SCOPE = "deployment:investigation";
+const DEFAULT_INVESTIGATION_RUN_BUDGET_USD = 0.2;
+
+function configuredInvestigationDailyBudget() {
+  const configured = Number(process.env.AI_INVESTIGATION_DAILY_BUDGET_USD ?? "5");
+  return Number.isFinite(configured) && configured > 0 ? configured : 5;
+}
+
+export function investigationRunBudgetUsd() {
+  const configured = Number(
+    process.env.AI_INVESTIGATION_MAX_COST_USD ?? String(DEFAULT_INVESTIGATION_RUN_BUDGET_USD),
+  );
+  return Number.isFinite(configured) && configured > 0
+    ? Math.min(configured, DEFAULT_INVESTIGATION_RUN_BUDGET_USD)
+    : DEFAULT_INVESTIGATION_RUN_BUDGET_USD;
+}
+
+/**
+ * Reserve the deployment-wide investigation spend before dispatching a live provider call.
+ * The reservation is intentionally separate from per-organization AI budgets so demo tenants
+ * cannot multiply the global recruiter-safe cap.
+ */
+export function reserveInvestigationSpend(
+  amountUsd = investigationRunBudgetUsd(),
+  dailyBudgetUsd = configuredInvestigationDailyBudget(),
+) {
+  return reserveAiSpend(INVESTIGATION_BUDGET_SCOPE, amountUsd, dailyBudgetUsd);
+}
+
+export function settleInvestigationSpend(reservedUsd: number, actualUsd: number) {
+  return settleAiSpend(INVESTIGATION_BUDGET_SCOPE, reservedUsd, actualUsd);
+}

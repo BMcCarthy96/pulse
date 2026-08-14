@@ -60,7 +60,7 @@ test("the full demo flow: healthy → outage → incident → recovery → audit
 
   await page.goto("/incidents");
   await expect(page.getByText(/Mercy General EHR \(FHIR R4\) is DOWN/).first()).toBeVisible();
-  await expect(page.getByText("OPEN").first()).toBeVisible();
+  await expect(page.getByText("OPEN", { exact: true }).first()).toBeVisible();
 
   // ── 5. The incident's AI card degrades gracefully with no API key ────────
   const incidentId = await firstOpenIncidentId(page);
@@ -115,7 +115,7 @@ test("the full demo flow: healthy → outage → incident → recovery → audit
   );
 
   await page.goto(`/incidents/${incidentId}`);
-  await expect(page.getByText("RESOLVED").first()).toBeVisible();
+  await expect(page.getByText("RESOLVED", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/auto-resolved/i)).toBeVisible();
 
   // ── 8. The audit log accounts for everything an operator did ─────────────

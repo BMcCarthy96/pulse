@@ -4,16 +4,16 @@ import { ApiError, updateConnectorSchema } from "@pulse/shared";
 import { handleApiError, requireSession, requireRole } from "@/lib/authz";
 import { writeAudit } from "@/lib/audit";
 
-async function getConnectorOrThrow(key: string) {
-  const connector = await prisma.connector.findUnique({ where: { key } });
+async function getConnectorOrThrow(key: string, orgId: string) {
+  const connector = await prisma.connector.findFirst({ where: { key, orgId } });
   if (!connector) throw ApiError.notFound(`connector "${key}" not found`);
   return connector;
 }
 
 export const GET = handleApiError("connectors.detail", async (_req, ctx) => {
-  await requireSession();
+  const session = await requireSession();
   const { key } = await ctx.params;
-  const connector = await getConnectorOrThrow(key);
+  const connector = await getConnectorOrThrow(key, session.user.orgId);
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [runs, snapshots, openIncident] = await Promise.all([
@@ -37,7 +37,7 @@ export const GET = handleApiError("connectors.detail", async (_req, ctx) => {
 export const PATCH = handleApiError("connectors.update", async (req, ctx) => {
   const session = await requireRole("ADMIN");
   const { key } = await ctx.params;
-  const connector = await getConnectorOrThrow(key);
+  const connector = await getConnectorOrThrow(key, session.user.orgId);
 
   const body = updateConnectorSchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) throw ApiError.validation(body.error.message);

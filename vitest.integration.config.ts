@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { loadEnvFile } from "node:process";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -8,12 +9,31 @@ import { defineConfig } from "vitest/config";
  * a unit suite that quietly needs Docker is a unit suite people stop running.
  */
 
-const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_test";
+try {
+  // Keep local verification aligned with the Compose ports in the repository root. CI provides
+  // explicit TEST_* values, which Node's env loader intentionally does not overwrite.
+  loadEnvFile();
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
+
+function databaseUrl(name: string) {
+  const url = new URL(process.env.DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse");
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+
+function redisUrl(database: number) {
+  const url = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
+  url.pathname = `/${database}`;
+  return url.toString();
+}
+
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? databaseUrl("pulse_test");
 
 // Redis logical database 1, so a test run cannot drain or corrupt the queues a dev server is
 // working against on database 0.
-const TEST_REDIS_URL = process.env.TEST_REDIS_URL ?? "redis://localhost:6379/1";
+const TEST_REDIS_URL = process.env.TEST_REDIS_URL ?? redisUrl(1);
 
 const TEST_ENV = {
   DATABASE_URL: TEST_DATABASE_URL,
@@ -37,7 +57,8 @@ export default defineConfig({
   test: {
     include: ["apps/**/test/integration/**/*.test.ts", "packages/**/test/integration/**/*.test.ts"],
     environment: "node",
-    globalSetup: ["./test/integration/global-setup.ts"],
+    // Proof generation only collects test metadata; it must stay non-mutating and work offline.
+    globalSetup: process.env.PULSE_PROOF_LIST ? [] : ["./test/integration/global-setup.ts"],
     setupFiles: ["./test/integration/setup.ts"],
     // One database, shared. Running files in parallel against it would make truncation between
     // suites race with whatever another file is mid-insert on.

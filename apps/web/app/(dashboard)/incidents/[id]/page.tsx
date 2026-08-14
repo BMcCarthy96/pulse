@@ -18,6 +18,7 @@ import { formatDuration } from "@/lib/format";
 import type { IncidentDetailResponse } from "@/lib/types";
 import { AiSummaryCard } from "./ai-summary-card";
 import { CopilotPanel } from "./copilot-panel";
+import { InvestigationWorkspace } from "./investigation-workspace";
 import { toast } from "sonner";
 
 const TIMELINE_ICONS: Record<string, string> = {
@@ -131,6 +132,10 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
             summary={incident.aiSummary}
             onChanged={() => void mutate()}
           />
+
+          <RoleGate minRole="OPS">
+            <InvestigationWorkspace incidentId={id} />
+          </RoleGate>
 
           <CopilotPanel incidentId={id} />
 

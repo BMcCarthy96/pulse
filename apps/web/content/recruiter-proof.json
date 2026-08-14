@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "3.0.0",
+  "apiVersion": "1.1.0",
+  "verifiedAt": "2026-08-10",
+  "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml",
+  "tests": {
+    "unit": 198,
+    "integration": 51,
+    "e2e": 12
+  },
+  "evals": {
+    "summaryCases": 14,
+    "investigationFixtures": 5,
+    "safetyCategories": 5
+  },
+  "quality": {
+    "coverageClaims": [
+      "Health rules: 100% branch coverage",
+      "Redaction boundary: 100% branch coverage"
+    ],
+    "lighthouseBudgets": {
+      "performance": 85,
+      "accessibility": 95,
+      "bestPractices": 95,
+      "seo": 90
+    }
+  }
+}

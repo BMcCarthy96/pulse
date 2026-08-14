@@ -24,7 +24,7 @@ export const GET = handleApiError("audit.list", async (req) => {
   });
 
   const withUser = await prisma.auditEntry.findMany({
-    where: { id: { in: data.map((a) => a.id) } },
+    where: { orgId: session.user.orgId, id: { in: data.map((a) => a.id) } },
     include: { user: { select: { name: true, email: true, role: true } } },
     orderBy: { createdAt: "desc" },
   });

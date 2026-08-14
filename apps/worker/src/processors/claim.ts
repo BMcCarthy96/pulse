@@ -27,7 +27,7 @@ export async function processClaimJob(job: Job<ClaimSubmitPayload>) {
   try {
     const res = await fetch(`${SIMULATOR_BASE_URL}/clearinghouse/claims`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-pulse-org-id": job.data.orgId },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

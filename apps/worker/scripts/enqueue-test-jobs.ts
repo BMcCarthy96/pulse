@@ -20,8 +20,8 @@ import {
 async function main() {
   const [command, ...args] = process.argv.slice(2);
   const org = await prisma.organization.findFirstOrThrow();
-  const claimsConnector = await prisma.connector.findUniqueOrThrow({ where: { key: "claims" } });
-  const eligibilityConnector = await prisma.connector.findUniqueOrThrow({
+  const claimsConnector = await prisma.connector.findFirstOrThrow({ where: { key: "claims" } });
+  const eligibilityConnector = await prisma.connector.findFirstOrThrow({
     where: { key: "eligibility" },
   });
 

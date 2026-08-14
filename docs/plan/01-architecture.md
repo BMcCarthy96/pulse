@@ -117,6 +117,8 @@ Single `.env.example` at root; each app documents which it reads.
 
 | Var                      | Used by            | Notes                                                                                                                                                        |
 | ------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POSTGRES_HOST_PORT`     | Docker Compose     | Host port for Postgres; defaults to `5432` and can be overridden when a native service already uses it                                                       |
+| `REDIS_HOST_PORT`        | Docker Compose     | Host port for Redis; defaults to `6379` and can be overridden when a native service already uses it                                                          |
 | `DATABASE_URL`           | web, worker, db    | `postgresql://pulse:pulse@localhost:5432/pulse` locally                                                                                                      |
 | `REDIS_URL`              | web, worker        | `redis://localhost:6379` locally                                                                                                                             |
 | `AUTH_SECRET`            | web                | `openssl rand -base64 32`                                                                                                                                    |

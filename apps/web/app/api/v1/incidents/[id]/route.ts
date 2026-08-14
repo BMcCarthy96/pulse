@@ -4,11 +4,11 @@ import { ApiError } from "@pulse/shared";
 import { handleApiError, requireSession } from "@/lib/authz";
 
 export const GET = handleApiError("incidents.detail", async (_req, ctx) => {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await ctx.params;
 
-  const incident = await prisma.incident.findUnique({
-    where: { id },
+  const incident = await prisma.incident.findFirst({
+    where: { id, orgId: session.user.orgId },
     include: {
       connector: {
         select: { key: true, displayName: true, kind: true, status: true, chaosMode: true },
@@ -24,6 +24,7 @@ export const GET = handleApiError("incidents.detail", async (_req, ctx) => {
     prisma.job.count({
       where: {
         connectorId: incident.connectorId,
+        orgId: session.user.orgId,
         status: { in: ["FAILED", "DEAD"] },
         createdAt: { gte: incident.openedAt, lte: windowEnd },
       },
@@ -31,6 +32,7 @@ export const GET = handleApiError("incidents.detail", async (_req, ctx) => {
     prisma.logEntry.count({
       where: {
         connectorId: incident.connectorId,
+        orgId: session.user.orgId,
         level: "ERROR",
         createdAt: { gte: incident.openedAt, lte: windowEnd },
       },

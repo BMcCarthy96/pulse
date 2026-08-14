@@ -36,6 +36,9 @@ export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, {
 export const healthTickQueue = new Queue(QUEUE_NAMES.healthTick, { connection: connectionOptions });
 export const retentionQueue = new Queue(QUEUE_NAMES.retention, { connection: connectionOptions });
 export const demoResetQueue = new Queue(QUEUE_NAMES.demoReset, { connection: connectionOptions });
+export const demoCleanupQueue = new Queue(QUEUE_NAMES.demoCleanup, {
+  connection: connectionOptions,
+});
 
 /**
  * Not a tracked job: incident summaries are internal work, not a connector call, so they stay

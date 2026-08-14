@@ -18,6 +18,7 @@ import {
   healthTickQueue,
   retentionQueue,
   demoResetQueue,
+  demoCleanupQueue,
   createTrackedWorker,
   eligibilityBackoffStrategy,
   incidentSummaryBackoffStrategy,
@@ -30,6 +31,7 @@ import { processIncidentSummaryJob } from "./processors/incident-summary.js";
 import { runHealthTick } from "./health/engine.js";
 import { runRetentionPrune } from "./processors/retention.js";
 import { runDemoReset } from "./processors/demo-reset.js";
+import { runDemoCleanup } from "./processors/demo-cleanup.js";
 import { startTelemetry, stopTelemetry } from "./telemetry.js";
 
 const SIMULATOR_PORT = Number(process.env.SIMULATOR_PORT ?? 4001);
@@ -55,7 +57,7 @@ async function registerRepeatables() {
   await clearRepeatables(syncQueue);
 
   for (const connector of pollConnectors) {
-    const repeatKey = `sync-start-${connector.key}`;
+    const repeatKey = `sync-start-${connector.orgId}-${connector.key}`;
 
     if (connector.paused || !connector.syncIntervalSec) {
       log.info(
@@ -90,6 +92,13 @@ async function registerRepeatables() {
     "retention.prune",
     { ...injectTrace() },
     { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: "retention-prune" },
+  );
+
+  await clearRepeatables(demoCleanupQueue);
+  await demoCleanupQueue.add(
+    "demo.cleanup",
+    { ...injectTrace() },
+    { repeat: { every: 5 * 60 * 1000 }, jobId: "demo-cleanup" },
   );
 }
 
@@ -143,8 +152,11 @@ async function main() {
   const demoResetWorker = createTrackedWorker(QUEUE_NAMES.demoReset, runDemoReset, {
     concurrency: 1,
   });
+  const demoCleanupWorker = createTrackedWorker(QUEUE_NAMES.demoCleanup, runDemoCleanup, {
+    concurrency: 1,
+  });
   log.info(
-    "queue workers started: sync, claims-submit, eligibility, webhook-processing, incident-summary, health-tick",
+    "queue workers started: sync, claims-submit, eligibility, webhook-processing, incident-summary, health-tick, demo-cleanup",
   );
 
   await registerRepeatables();
@@ -170,6 +182,7 @@ async function main() {
       healthTickWorker.close(),
       retentionWorker.close(),
       demoResetWorker.close(),
+      demoCleanupWorker.close(),
     ]);
     await Promise.all([
       syncQueue.close(),
@@ -180,6 +193,7 @@ async function main() {
       healthTickQueue.close(),
       retentionQueue.close(),
       demoResetQueue.close(),
+      demoCleanupQueue.close(),
     ]);
     await flushLogs();
     await stopTelemetry();

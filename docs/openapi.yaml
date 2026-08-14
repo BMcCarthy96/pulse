@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Pulse API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Integration health monitoring for Lakeview Health Partners (a fictional healthcare
     organisation). All data is synthetic; upstream vendor systems are simulated.
@@ -34,6 +34,7 @@ tags:
   - name: Logs
   - name: Incidents
   - name: AI
+  - name: Investigations
   - name: Admin
   - name: Simulation
   - name: System
@@ -592,6 +593,106 @@ paths:
                   nextCursor: { type: string, nullable: true }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /incidents/{id}/investigations:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Investigations]
+      summary: Create or resume an incident investigation
+      description: |
+        Role: OPS. Creates a durable, organization-scoped investigation and persists only
+        redacted evidence excerpts. Repeating the request resumes the active workspace.
+      responses:
+        "201":
+          description: Investigation workspace
+          content:
+            application/json:
+              schema: { type: object, properties: { investigation: { $ref: "#/components/schemas/Investigation" } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /investigations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Investigations]
+      summary: Read an investigation workspace
+      description: Organization-scoped evidence, hypotheses, proposed actions, and AI telemetry.
+      responses:
+        "200":
+          description: Investigation workspace
+          content:
+            application/json:
+              schema: { type: object, properties: { investigation: { $ref: "#/components/schemas/Investigation" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /investigations/{id}/ask:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Investigations]
+      summary: Run a live or recorded investigation question
+      description: |
+        Role: OPS. Returns SSE events for `run.started`, evidence, hypotheses, proposed actions,
+        answer deltas, and completion. Without a provider key, only the three exact guided
+        questions use deterministic recorded fixtures.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200":
+          description: Investigation SSE stream
+          content: { text/event-stream: {} }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /investigations/{id}/actions/{actionId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - name: actionId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Investigations]
+      summary: Approve and execute a proposed action
+      description: |
+        Role: OPS. Revalidates tenant scope and target state, atomically claims the proposal, then
+        calls the existing domain operation. Duplicate approval of a successful action is idempotent;
+        stale targets return 409 and are marked STALE.
+      responses:
+        "200": { description: Action result }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /investigations/{id}/actions/{actionId}/dismiss:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - name: actionId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Investigations]
+      summary: Dismiss a proposed action
+      description: "Role: OPS. Writes an audit record and leaves the underlying incident or job unchanged."
+      responses:
+        "200": { description: Action dismissed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /ai/usage:
     get:
       tags: [AI]
@@ -983,6 +1084,40 @@ components:
         totalCostUsd: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         completedAt: { type: string, format: date-time, nullable: true }
+
+    Investigation:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [ACTIVE, COMPLETED, EXPIRED] }
+        title: { type: string }
+        report: { type: object, nullable: true, additionalProperties: true }
+        evidence: { type: array, items: { $ref: "#/components/schemas/InvestigationEvidence" } }
+        actions: { type: array, items: { $ref: "#/components/schemas/InvestigationAction" } }
+        aiRuns: { type: array, items: { type: object, additionalProperties: true } }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    InvestigationEvidence:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [LOG, JOB, EVENT, HEALTH_SNAPSHOT, TIMELINE] }
+        sourceId: { type: string }
+        label: { type: string }
+        excerpt: { type: string, maxLength: 1200 }
+        href: { type: string, nullable: true }
+        observedAt: { type: string, format: date-time, nullable: true }
+
+    InvestigationAction:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [RETRY_JOB, ACKNOWLEDGE_INCIDENT, RESOLVE_INCIDENT, REGENERATE_SUMMARY] }
+        targetId: { type: string }
+        rationale: { type: string }
+        evidenceIds: { type: array, items: { type: string } }
+        status: { type: string, enum: [PROPOSED, EXECUTING, SUCCEEDED, FAILED, DISMISSED, STALE] }
 
     Incident:
       type: object

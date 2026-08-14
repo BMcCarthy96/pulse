@@ -3,24 +3,30 @@ import { prisma } from "@pulse/db";
 import { handleApiError, requireSession } from "@/lib/authz";
 
 export const GET = handleApiError("overview", async () => {
-  await requireSession();
+  const session = await requireSession();
+  const orgId = session.user.orgId;
 
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-  const connectors = await prisma.connector.findMany({ orderBy: { key: "asc" } });
+  const connectors = await prisma.connector.findMany({ where: { orgId }, orderBy: { key: "asc" } });
 
   const perConnector = await Promise.all(
     connectors.map(async (c) => {
       const [snapshot, openIncident, lastJob, lastEvent] = await Promise.all([
         prisma.healthSnapshot.findFirst({
-          where: { connectorId: c.id },
+          where: { connectorId: c.id, connector: { orgId } },
           orderBy: { createdAt: "desc" },
         }),
-        prisma.incident.findFirst({ where: { connectorId: c.id, status: { not: "RESOLVED" } } }),
-        prisma.job.findFirst({ where: { connectorId: c.id }, orderBy: { createdAt: "desc" } }),
+        prisma.incident.findFirst({
+          where: { orgId, connectorId: c.id, status: { not: "RESOLVED" } },
+        }),
+        prisma.job.findFirst({
+          where: { orgId, connectorId: c.id },
+          orderBy: { createdAt: "desc" },
+        }),
         prisma.integrationEvent.findFirst({
-          where: { connectorId: c.id },
+          where: { orgId, connectorId: c.id },
           orderBy: { receivedAt: "desc" },
         }),
       ]);
@@ -43,11 +49,12 @@ export const GET = handleApiError("overview", async () => {
 
   const [deadJobs, openIncidents, eventsLastHour, jobsLastHour, recentIncidents] =
     await Promise.all([
-      prisma.job.count({ where: { status: "DEAD" } }),
-      prisma.incident.count({ where: { status: { not: "RESOLVED" } } }),
-      prisma.integrationEvent.count({ where: { receivedAt: { gte: oneHourAgo } } }),
-      prisma.job.count({ where: { createdAt: { gte: oneHourAgo } } }),
+      prisma.job.count({ where: { orgId, status: "DEAD" } }),
+      prisma.incident.count({ where: { orgId, status: { not: "RESOLVED" } } }),
+      prisma.integrationEvent.count({ where: { orgId, receivedAt: { gte: oneHourAgo } } }),
+      prisma.job.count({ where: { orgId, createdAt: { gte: oneHourAgo } } }),
       prisma.incident.findMany({
+        where: { orgId },
         orderBy: { openedAt: "desc" },
         take: 5,
         include: { connector: { select: { key: true, displayName: true } } },

@@ -41,8 +41,8 @@ export function verifyWebhookSignature(
 ): boolean {
   if (!signature) return false;
 
-  const expected = Buffer.from(signWebhookBody(rawBody, secret), "hex");
-  const provided = Buffer.from(signature, "hex");
+  const expected = Uint8Array.from(Buffer.from(signWebhookBody(rawBody, secret), "hex"));
+  const provided = Uint8Array.from(Buffer.from(signature, "hex"));
 
   if (expected.length !== provided.length) return false;
   return timingSafeEqual(expected, provided);
@@ -64,8 +64,10 @@ export function verifyWebhookSignatureV2(
   ) {
     return false;
   }
-  const expected = Buffer.from(signWebhookBodyV2(rawBody, secret, timestampSeconds), "hex");
-  const provided = Buffer.from(signature.replace(/^v2=/, ""), "hex");
+  const expected = Uint8Array.from(
+    Buffer.from(signWebhookBodyV2(rawBody, secret, timestampSeconds), "hex"),
+  );
+  const provided = Uint8Array.from(Buffer.from(signature.replace(/^v2=/, ""), "hex"));
   if (expected.length !== provided.length) return false;
   return timingSafeEqual(expected, provided);
 }

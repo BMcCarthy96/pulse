@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { href: "/logs", label: "Logs" },
 ] as const;
 
-export function SidebarNav() {
+export function SidebarNav({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const { data } = usePolling<OverviewResponse>("/api/v1/overview");
   const deadJobs = data?.totals.deadJobs ?? 0;
@@ -32,6 +32,7 @@ export function SidebarNav() {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             className={cn(
               "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
               active
@@ -53,6 +54,7 @@ export function SidebarNav() {
       <div className="my-1 border-t" />
       <Link
         href="/docs/api"
+        onClick={onNavigate}
         className={cn(
           "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
           pathname.startsWith("/docs")
@@ -65,6 +67,7 @@ export function SidebarNav() {
       <RoleGate minRole="ADMIN">
         <Link
           href="/settings"
+          onClick={onNavigate}
           className={cn(
             "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors",
             pathname.startsWith("/settings")

@@ -77,6 +77,7 @@ async function processSyncPage(job: Job<SyncPagePayload>) {
       `${SIMULATOR_BASE_URL}/ehr/fhir/${resource}?_page=${page}&_count=${PAGE_COUNT}`,
       {
         signal: controller.signal,
+        headers: { "x-pulse-org-id": orgId },
       },
     );
     if (!res.ok) throw new Error(`simulator returned ${res.status}`);

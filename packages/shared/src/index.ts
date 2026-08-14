@@ -16,6 +16,7 @@ export * from "./tracked-jobs.js";
 export * from "./redact.js";
 export * from "./telemetry.js";
 export * from "./model-pricing.js";
+export * from "./investigations.js";
 
 // NOTE: `./webhook-signature` is deliberately NOT re-exported here. It imports `node:crypto`,
 // and this barrel is reachable from client components (the login page pulls in APP_NAME), so

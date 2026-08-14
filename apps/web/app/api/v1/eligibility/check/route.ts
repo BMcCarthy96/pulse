@@ -17,7 +17,9 @@ export const POST = handleApiError("eligibility.check", async (req) => {
   const body = eligibilityCheckSchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) throw ApiError.validation(body.error.message);
 
-  const connector = await prisma.connector.findUnique({ where: { key: "eligibility" } });
+  const connector = await prisma.connector.findFirst({
+    where: { key: "eligibility", orgId: session.user.orgId },
+  });
   if (!connector) throw ApiError.notFound('connector "eligibility" not found');
 
   const { dbJobId } = await createTrackedJob(prisma, {

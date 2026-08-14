@@ -32,6 +32,7 @@ export type IngestOutcome =
 
 export interface IngestInput {
   connectorKey: string;
+  orgSlug?: string;
   rawBody: string;
   signature: string | null;
   signatureV2?: string | null;
@@ -77,7 +78,9 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
 
   const def = getConnectorDef(connectorKey);
   const connector = def
-    ? await prisma.connector.findUnique({ where: { key: connectorKey } })
+    ? await prisma.connector.findFirst({
+        where: { key: connectorKey, ...(input.orgSlug ? { org: { slug: input.orgSlug } } : {}) },
+      })
     : null;
   if (!def || !connector) return { outcome: "unknown-connector", status: 404 };
 

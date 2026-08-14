@@ -84,7 +84,7 @@ async function main() {
   for (const p of DEMO_PERSONAS) {
     const role = Role[p.role];
     const user = await prisma.user.upsert({
-      where: { email: p.email },
+      where: { orgId_email: { orgId: org.id, email: p.email } },
       update: { name: p.name, role, passwordHash },
       create: { orgId: org.id, email: p.email, name: p.name, role, passwordHash },
     });
@@ -97,7 +97,7 @@ async function main() {
   const connectors = [];
   for (const def of CONNECTOR_DEFS) {
     const connector = await prisma.connector.upsert({
-      where: { key: def.key },
+      where: { orgId_key: { orgId: org.id, key: def.key } },
       update: {
         displayName: def.displayName,
         description: def.description,

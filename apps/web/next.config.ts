@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
+import { join } from "node:path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@pulse/shared", "@pulse/db"],
+  outputFileTracingRoot: join(process.cwd(), "../.."),
   serverExternalPackages: [
     "@opentelemetry/exporter-trace-otlp-http",
     "@opentelemetry/resources",

@@ -5,7 +5,7 @@ import { handleApiError, requireSession } from "@/lib/authz";
 import { paginate } from "@/lib/pagination";
 
 export const GET = handleApiError("logs.list", async (req) => {
-  await requireSession();
+  const session = await requireSession();
   const url = new URL(req.url);
   const { cursor, limit } = paginationSchema.parse(Object.fromEntries(url.searchParams));
 
@@ -23,6 +23,7 @@ export const GET = handleApiError("logs.list", async (req) => {
     : [];
 
   const where: Prisma.LogEntryWhereInput = {
+    orgId: session.user.orgId,
     ...(levels.length > 0 ? { level: { in: levels } } : {}),
     ...(connectorKey ? { connector: { key: connectorKey } } : {}),
     ...(jobId ? { jobId } : {}),
@@ -38,7 +39,7 @@ export const GET = handleApiError("logs.list", async (req) => {
   });
 
   const withConnector = await prisma.logEntry.findMany({
-    where: { id: { in: data.map((l) => l.id) } },
+    where: { orgId: session.user.orgId, id: { in: data.map((l) => l.id) } },
     include: { connector: { select: { key: true, displayName: true } } },
     orderBy: { createdAt: "desc" },
   });

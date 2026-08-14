@@ -11,18 +11,39 @@
  * dashboard in a state nobody wants to screenshot.
  */
 import { execFileSync } from "node:child_process";
+import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { Redis } from "ioredis";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dbPackage = resolve(here, "../../../packages/db");
+const root = resolve(here, "../../..");
 
-const DATABASE_URL =
-  process.env.E2E_DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse_e2e";
+try {
+  loadEnvFile(resolve(root, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
+
+function databaseUrl(name) {
+  const configured = new URL(
+    process.env.DATABASE_URL ?? "postgresql://pulse:pulse@localhost:5432/pulse",
+  );
+  configured.pathname = `/${name}`;
+  return configured.toString();
+}
+
+function redisUrl(database) {
+  const configured = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
+  configured.pathname = `/${database}`;
+  return configured.toString();
+}
+
+const DATABASE_URL = process.env.E2E_DATABASE_URL ?? databaseUrl("pulse_e2e");
 
 const TRUNCATE_SQL = `TRUNCATE TABLE
-  "AiCall", "AiRun", "AuditEntry", "IncidentTimelineEntry", "Incident", "HealthSnapshot", "LogEntry",
+  "InvestigationAction", "InvestigationEvidence", "Investigation", "DemoSession", "AiCall", "AiRun", "AuditEntry", "IncidentTimelineEntry", "Incident", "HealthSnapshot", "LogEntry",
   "IntegrationEvent", "Job", "SyncRun", "Connector", "User", "Organization"
 RESTART IDENTITY CASCADE;`;
 
@@ -69,7 +90,7 @@ run(["prisma", "db", "execute", "--url", DATABASE_URL, "--stdin"], {}, TRUNCATE_
 
 // BullMQ jobs live outside Postgres. Flush only the explicitly dedicated E2E Redis database so
 // stale jobs from a previous run cannot reference rows that the reset above deliberately removed.
-const e2eRedis = new Redis(process.env.E2E_REDIS_URL ?? "redis://localhost:6379/2");
+const e2eRedis = new Redis(process.env.E2E_REDIS_URL ?? redisUrl(2));
 await e2eRedis.flushdb();
 await e2eRedis.quit();
 run(["tsx", "prisma/seed.ts"], { DATABASE_URL });

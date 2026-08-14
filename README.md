@@ -1,5 +1,13 @@
 # Pulse — Integration Health Dashboard
 
+[![CI](https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml)
+[![Security](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml)
+[![Worker image](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml)
+
+**Recruiter path:** [Review and test Pulse](docs/recruiter-testing.md) ·
+[90-second walkthrough](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
+[How it works](#architecture)
+
 When a hospital's integrations break, nobody finds out from a dashboard — they find out when a
 clinician can't see yesterday's lab results, or when a month of claims turns out to have been
 silently rejected. The systems in between (EHR syncs, lab feeds, clearinghouse submissions,
@@ -22,7 +30,13 @@ drafts a first-pass incident summary with Claude — from PHI-redacted context.
 > anywhere; the redaction boundary described below exists as a design discipline, not because
 > real patient data ever touches it.
 
-**Live demo:** not yet deployed — the runbook is in [docs/deployment.md](docs/deployment.md).
+**Guarded recruiter demo:** enable `DEMO_MODE=true` and open `/recruiter`. **Try the live demo**
+provisions an isolated synthetic tenant (one open incident, bounded evidence, and a
+DEAD job ready for an approval-safe retry), expires it after one hour, and cleans it up every five
+minutes. When no Anthropic key is configured, the three guided investigation questions run from
+versioned recorded fixtures; arbitrary questions clearly ask the operator to choose a recorded
+flow. The persistent walkthrough makes the intended path visible on every page. Deployment notes
+are in [docs/deployment.md](docs/deployment.md).
 **Demo logins** (password `pulse-demo-2026`):
 
 | Persona      | Email                           | Role   | Can do                                                          |
@@ -39,6 +53,8 @@ drafts a first-pass incident summary with Claude — from PHI-redacted context.
 - **Production-minded AI:** PHI redaction, structured output, prompt versioning, measured cost/latency, and graceful degradation.
 - **AI engineering:** deterministic evals, prompt regression gates, evidence-bounded tool use, and persisted run telemetry.
 - **Operational safety:** RBAC, audit entries, replay protection, rate limits, budgets, and distributed traces.
+- **Investigation workspace (v3):** durable redacted evidence, cited hypotheses, streamed live/recorded runs, and explicit OPS approval for `RETRY_JOB`, `ACKNOWLEDGE_INCIDENT`, `RESOLVE_INCIDENT`, and `REGENERATE_SUMMARY`.
+- **Recruiter-ready proof:** tenant-isolated demo sessions, cleanup/reset controls, OpenAPI contracts, Playwright accessibility hooks, deterministic evals, and a deployable Railway worker image.
 
 ## Stack at a glance
 
@@ -49,13 +65,16 @@ Next.js 15 dashboard and API · Railway worker with BullMQ · PostgreSQL/Prisma 
 ```bash
 docker compose up -d
 corepack pnpm install
+corepack pnpm --filter @pulse/db generate
 corepack pnpm db:push
 corepack pnpm db:seed
+corepack pnpm run doctor
 corepack pnpm dev
 ```
 
-Open http://localhost:3010 and choose a demo persona. The detailed local-development notes and
-environment table are below.
+Open http://localhost:3010; anonymous visitors are sent to the recruiter overview. Run
+`pnpm verify:fast` during development and `pnpm verify:full` before sharing. The exact evidence and
+release checklist are in [docs/recruiter-testing.md](docs/recruiter-testing.md).
 
 ---
 
@@ -401,9 +420,9 @@ no failures in it would demonstrate nothing.
 
 | Layer                                     | Runs against            | Covers                                                                                                                                                                               | Count |
 | ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 195   |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 198   |
 | **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                                                       | 51    |
-| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, plus auth and role gates                                                                                                                                         | 7     |
+| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public recruiter entry, guided demo, responsive navigation, accessibility, auth, and role gates                                                                  | 12    |
 
 The split follows one rule: **if it can be a pure function, test it as one.** The health rules and
 the redactor are pure by design precisely so they can be tested exhaustively — table-driven across
@@ -481,9 +500,9 @@ Open http://localhost:3010 and sign in with one of the demo persona buttons.
 
 ```bash
 pnpm lint | typecheck | build
-pnpm test                     # unit + integration (needs Docker)
-pnpm test:coverage            # + the 100%-branch claims check
-pnpm build && pnpm test:e2e   # seeds pulse_e2e, runs Playwright — see below
+pnpm verify:fast              # format, lint, types, coverage, evals, proof drift
+pnpm verify:full              # + services, integration, build, Playwright
+pnpm proof:refresh            # regenerate recruiter counts after adding tests
 ```
 
 `test:e2e` does **not** build. Its Playwright config starts the web app with `next start`, which
@@ -505,11 +524,12 @@ it, the tests and screenshots depend on it.
 
 ### Environment
 
-Copy `.env.example` to `.env` (and `apps/worker/.env`, `apps/web/.env.local`). Names and local
-defaults only — no secrets are committed.
+Copy `.env.example` to `.env`, `packages/db/.env`, `apps/worker/.env`, and
+`apps/web/.env.local`. Names and local defaults only — no secrets are committed.
 
 | Variable                                              | Purpose                                                                  |
 | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT`              | Docker host ports; override if native services occupy `5432` / `6379`    |
 | `DATABASE_URL`                                        | Postgres connection string                                               |
 | `REDIS_URL`                                           | Redis connection string (BullMQ)                                         |
 | `AUTH_SECRET`                                         | Auth.js JWT signing secret                                               |

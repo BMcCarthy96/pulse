@@ -17,18 +17,25 @@ export async function loginAs(page: Page, persona: keyof typeof PERSONAS) {
   await page.goto("/login");
 
   const signOut = page.getByRole("button", { name: "Sign out" });
-  if (await signOut.isVisible().catch(() => false)) {
+  const personaButton = page.getByRole("button", { name: new RegExp(PERSONAS[persona]) });
+  // Authenticated visits to /login redirect to the dashboard. Wait until either side of that
+  // redirect has rendered before deciding whether a persona switch is required; a one-shot
+  // visibility check can race the session redirect and then wait for a login button on the app.
+  await expect(signOut.or(personaButton).first()).toBeVisible();
+  if (await signOut.isVisible()) {
     await signOut.click();
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL(/\/recruiter/);
+    await page.goto("/login");
   }
 
-  await page.getByRole("button", { name: new RegExp(PERSONAS[persona]) }).click();
+  await expect(personaButton).toBeVisible();
+  await personaButton.click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 }
 
 export async function logout(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/recruiter/);
 }
 
 /**

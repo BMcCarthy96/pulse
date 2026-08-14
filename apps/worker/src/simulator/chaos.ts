@@ -12,21 +12,24 @@ interface ChaosState {
 const cache = new Map<string, { state: ChaosState; expiresAt: number }>();
 const CACHE_TTL_MS = 5000;
 
-export async function getChaosState(connectorKey: string): Promise<ChaosState> {
-  const cached = cache.get(connectorKey);
+export async function getChaosState(connectorKey: string, orgId?: string): Promise<ChaosState> {
+  const cacheKey = `${orgId ?? "canonical"}:${connectorKey}`;
+  const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.state;
 
-  const connector = await prisma.connector.findUnique({ where: { key: connectorKey } });
+  const connector = await prisma.connector.findFirst({
+    where: { key: connectorKey, ...(orgId ? { orgId } : {}) },
+  });
   const state: ChaosState = connector
     ? { mode: connector.chaosMode, config: (connector.chaosConfig as ChaosState["config"]) ?? {} }
     : { mode: "HEALTHY", config: {} };
 
-  cache.set(connectorKey, { state, expiresAt: Date.now() + CACHE_TTL_MS });
+  cache.set(cacheKey, { state, expiresAt: Date.now() + CACHE_TTL_MS });
   return state;
 }
 
-export function invalidateChaosCache(connectorKey?: string) {
-  if (connectorKey) cache.delete(connectorKey);
+export function invalidateChaosCache(connectorKey?: string, orgId?: string) {
+  if (connectorKey) cache.delete(`${orgId ?? "canonical"}:${connectorKey}`);
   else cache.clear();
 }
 
@@ -52,10 +55,13 @@ export interface ChaosResult {
 export async function applyChaos(
   connectorKey: string,
   c: Context,
-  opts: { rng?: RNG } = {},
+  opts: { rng?: RNG; orgId?: string } = {},
 ): Promise<ChaosResult> {
   const rng = opts.rng ?? Math.random;
-  const { mode, config } = await getChaosState(connectorKey);
+  const { mode, config } = await getChaosState(
+    connectorKey,
+    opts.orgId ?? c.req.header("x-pulse-org-id"),
+  );
 
   switch (mode) {
     case "OUTAGE":

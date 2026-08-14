@@ -4,11 +4,11 @@ import { ApiError } from "@pulse/shared";
 import { handleApiError, requireSession } from "@/lib/authz";
 
 export const GET = handleApiError("events.detail", async (_req, ctx) => {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await ctx.params;
 
-  const event = await prisma.integrationEvent.findUnique({
-    where: { id },
+  const event = await prisma.integrationEvent.findFirst({
+    where: { id, orgId: session.user.orgId },
     include: { connector: { select: { key: true, displayName: true } } },
   });
   if (!event) throw ApiError.notFound(`event "${id}" not found`);

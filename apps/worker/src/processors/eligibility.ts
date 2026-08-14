@@ -22,7 +22,7 @@ export async function processEligibilityJob(job: Job<EligibilityPayload>) {
   try {
     const res = await fetch(`${SIMULATOR_BASE_URL}/eligibility/check`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-pulse-org-id": job.data.orgId },
       body: JSON.stringify({ memberId, payerId }),
       signal: controller.signal,
     });

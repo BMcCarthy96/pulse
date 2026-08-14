@@ -5,7 +5,7 @@ import { handleApiError, requireSession } from "@/lib/authz";
 import { paginate } from "@/lib/pagination";
 
 export const GET = handleApiError("events.list", async (req) => {
-  await requireSession();
+  const session = await requireSession();
   const url = new URL(req.url);
   const { cursor, limit } = paginationSchema.parse(Object.fromEntries(url.searchParams));
 
@@ -14,6 +14,7 @@ export const GET = handleApiError("events.list", async (req) => {
   const directionParsed = eventDirectionSchema.safeParse(url.searchParams.get("direction"));
 
   const where: Prisma.IntegrationEventWhereInput = {
+    orgId: session.user.orgId,
     ...(statusParsed.success ? { status: statusParsed.data } : {}),
     ...(directionParsed.success ? { direction: directionParsed.data } : {}),
     ...(connectorKey ? { connector: { key: connectorKey } } : {}),
@@ -27,7 +28,7 @@ export const GET = handleApiError("events.list", async (req) => {
   });
 
   const withConnector = await prisma.integrationEvent.findMany({
-    where: { id: { in: data.map((e) => e.id) } },
+    where: { orgId: session.user.orgId, id: { in: data.map((e) => e.id) } },
     include: { connector: { select: { key: true, displayName: true } } },
     orderBy: { receivedAt: "desc" },
   });

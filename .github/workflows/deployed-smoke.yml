@@ -1,0 +1,38 @@
+name: Deployed demo smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 12 * * *"
+
+jobs:
+  smoke:
+    if: ${{ vars.DEMO_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEMO_BASE_URL: ${{ vars.DEMO_BASE_URL }}
+      LIGHTHOUSE_URL: ${{ vars.DEMO_BASE_URL }}/recruiter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install browser
+        run: pnpm --filter @pulse/web exec playwright install --with-deps chromium
+      - name: Verify deployed recruiter journey
+        run: pnpm smoke:remote
+      - name: Enforce recruiter-page Lighthouse budgets
+        run: pnpm --filter @pulse/web audit:lighthouse
+      - name: Upload browser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-smoke-evidence
+          path: |
+            apps/web/test-results/
+            apps/web/artifacts/
+          retention-days: 14

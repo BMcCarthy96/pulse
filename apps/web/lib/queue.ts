@@ -4,21 +4,28 @@ import { QUEUE_NAMES, getRedisConnectionOptions } from "@pulse/shared";
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const connectionOptions = getRedisConnectionOptions(REDIS_URL);
 
-// Web only ever produces jobs — BullMQ Workers run exclusively in apps/worker.
-export const syncQueue = new Queue(QUEUE_NAMES.sync, { connection: connectionOptions });
-export const webhookProcessingQueue = new Queue(QUEUE_NAMES.webhookProcessing, {
-  connection: connectionOptions,
-});
-export const claimsSubmitQueue = new Queue(QUEUE_NAMES.claimsSubmit, {
-  connection: connectionOptions,
-});
-export const eligibilityQueue = new Queue(QUEUE_NAMES.eligibility, {
-  connection: connectionOptions,
-});
-export const incidentSummaryQueue = new Queue(QUEUE_NAMES.incidentSummary, {
-  connection: connectionOptions,
-});
-export const demoResetQueue = new Queue(QUEUE_NAMES.demoReset, { connection: connectionOptions });
+/**
+ * Web only produces jobs; workers live in apps/worker. Next evaluates route modules while
+ * collecting build metadata, so constructing queues at module load makes a production build
+ * depend on Redis. This proxy creates and connects each producer on its first real operation.
+ */
+function lazyQueue(name: string) {
+  let queue: Queue | undefined;
+  return new Proxy({} as Queue, {
+    get(_target, property) {
+      queue ??= new Queue(name, { connection: connectionOptions });
+      const value = Reflect.get(queue, property, queue) as unknown;
+      return typeof value === "function" ? value.bind(queue) : value;
+    },
+  });
+}
+
+export const syncQueue = lazyQueue(QUEUE_NAMES.sync);
+export const webhookProcessingQueue = lazyQueue(QUEUE_NAMES.webhookProcessing);
+export const claimsSubmitQueue = lazyQueue(QUEUE_NAMES.claimsSubmit);
+export const eligibilityQueue = lazyQueue(QUEUE_NAMES.eligibility);
+export const incidentSummaryQueue = lazyQueue(QUEUE_NAMES.incidentSummary);
+export const demoResetQueue = lazyQueue(QUEUE_NAMES.demoReset);
 
 export const queueByName: Record<string, Queue> = {
   [QUEUE_NAMES.sync]: syncQueue,

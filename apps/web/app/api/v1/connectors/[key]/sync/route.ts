@@ -9,7 +9,7 @@ export const POST = handleApiError("connectors.sync", async (_req, ctx) => {
   const session = await requireRole("OPS");
   const { key } = await ctx.params;
 
-  const connector = await prisma.connector.findUnique({ where: { key } });
+  const connector = await prisma.connector.findFirst({ where: { key, orgId: session.user.orgId } });
   if (!connector) throw ApiError.notFound(`connector "${key}" not found`);
   if (connector.kind !== "poll_sync")
     throw ApiError.validation(`connector "${key}" is not a poll_sync connector`);

@@ -21,7 +21,7 @@ export const POST = handleApiError("jobs.retry", async (_req, ctx) => {
   const session = await requireRole("OPS");
   const { id } = await ctx.params;
 
-  const job = await prisma.job.findUnique({ where: { id } });
+  const job = await prisma.job.findFirst({ where: { id, orgId: session.user.orgId } });
   if (!job) throw ApiError.notFound(`job "${id}" not found`);
   if (job.status !== "DEAD" && job.status !== "FAILED") {
     throw ApiError.conflict(`job status is ${job.status}; only DEAD or FAILED jobs can be retried`);

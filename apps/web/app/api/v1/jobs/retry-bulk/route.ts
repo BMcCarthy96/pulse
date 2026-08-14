@@ -26,8 +26,11 @@ export const POST = handleApiError("jobs.retry_bulk", async (req) => {
 
   const dead = await prisma.job.findMany({
     where: {
+      orgId: session.user.orgId,
       status: "DEAD",
-      ...(body.data.connectorKey ? { connector: { key: body.data.connectorKey } } : {}),
+      ...(body.data.connectorKey
+        ? { connector: { orgId: session.user.orgId, key: body.data.connectorKey } }
+        : {}),
       ...(body.data.ids ? { id: { in: body.data.ids } } : {}),
     },
     // Oldest first so repeated runs drain the backlog instead of re-picking the same head.

@@ -8,7 +8,7 @@ const CONNECTOR_KEY = "eligibility";
 export const eligibilityApp = new Hono();
 
 eligibilityApp.post("/eligibility/check", async (c) => {
-  const chaos = await applyChaos(CONNECTOR_KEY, c);
+  const chaos = await applyChaos(CONNECTOR_KEY, c, { orgId: c.req.header("x-pulse-org-id") });
   if (chaos.response) return chaos.response;
 
   const body = await c.req.json().catch(() => null);

@@ -129,3 +129,41 @@ export async function enforceSummaryQuotas(userId: string, orgId: string) {
     failClosed: true,
   });
 }
+
+/** Recruiter demo guardrails: cheap, deterministic caps before a provider call is made. */
+export async function enforceInvestigationQuotas(
+  userId: string,
+  orgId: string,
+  demoSessionId?: string,
+) {
+  await enforceRateLimit({
+    key: `user:${userId}:investigation:hour`,
+    capacity: 10,
+    // Ten requests per rolling hour.
+    refillPerMinute: 10 / 60,
+    failClosed: true,
+  });
+  await enforceRateLimit({
+    key: `org:${orgId}:investigation:day`,
+    capacity: 30,
+    // Thirty requests per rolling day.
+    refillPerMinute: 30 / (24 * 60),
+    failClosed: true,
+  });
+  if (demoSessionId) {
+    await enforceRateLimit({
+      key: `demo:${demoSessionId}:investigation:session`,
+      capacity: 2,
+      // Two recorded/live questions per demo session.
+      refillPerMinute: 2 / (60 * 60),
+      failClosed: true,
+    });
+  }
+  await enforceRateLimit({
+    key: "deployment:investigation:day",
+    capacity: 30,
+    // Thirty investigations per deployment per rolling day.
+    refillPerMinute: 30 / (24 * 60),
+    failClosed: true,
+  });
+}

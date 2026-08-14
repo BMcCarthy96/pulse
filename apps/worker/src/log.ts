@@ -11,6 +11,7 @@ const pinoLogger = pino({
 });
 
 export interface LogContext {
+  orgId?: string;
   connectorId?: string;
   jobId?: string;
   syncRunId?: string;
@@ -19,8 +20,8 @@ export interface LogContext {
   [key: string]: unknown;
 }
 
-async function getOrgId(): Promise<string | null> {
-  const org = await prisma.organization.findFirst();
+async function getFallbackOrgId(): Promise<string | null> {
+  const org = await prisma.organization.findFirst({ select: { id: true } });
   return org?.id ?? null;
 }
 
@@ -37,18 +38,81 @@ async function flush() {
   if (pendingEntries.length === 0) return;
   const batch = pendingEntries.splice(0, pendingEntries.length);
   try {
-    const orgId = await getOrgId();
-    if (!orgId) return; // no org seeded yet — drop rather than block boot logging
-    await prisma.logEntry.createMany({ data: batch.map((b) => ({ ...b, orgId })) });
+    const connectorIds = [
+      ...new Set(batch.map((entry) => entry.connectorId).filter(Boolean)),
+    ] as string[];
+    const jobIds = [...new Set(batch.map((entry) => entry.jobId).filter(Boolean))] as string[];
+    const syncRunIds = [
+      ...new Set(batch.map((entry) => entry.syncRunId).filter(Boolean)),
+    ] as string[];
+    const incidentIds = [
+      ...new Set(batch.map((entry) => entry.incidentId).filter(Boolean)),
+    ] as string[];
+    const [connectors, jobs, syncRuns, incidents, fallbackOrgId] = await Promise.all([
+      prisma.connector.findMany({
+        where: { id: { in: connectorIds } },
+        select: { id: true, orgId: true },
+      }),
+      prisma.job.findMany({ where: { id: { in: jobIds } }, select: { id: true, orgId: true } }),
+      prisma.syncRun.findMany({
+        where: { id: { in: syncRunIds } },
+        select: { id: true, connector: { select: { orgId: true } } },
+      }),
+      prisma.incident.findMany({
+        where: { id: { in: incidentIds } },
+        select: { id: true, orgId: true },
+      }),
+      getFallbackOrgId(),
+    ]);
+    const orgByConnector = new Map(connectors.map((item) => [item.id, item.orgId]));
+    const orgByJob = new Map(jobs.map((item) => [item.id, item.orgId]));
+    const orgBySyncRun = new Map(syncRuns.map((item) => [item.id, item.connector.orgId]));
+    const orgByIncident = new Map(incidents.map((item) => [item.id, item.orgId]));
+    const existingConnectorIds = new Set(connectors.map((item) => item.id));
+    const resolved: Prisma.LogEntryCreateManyInput[] = batch.flatMap((entry) => {
+      const orgId =
+        entry.orgId ||
+        (entry.connectorId ? orgByConnector.get(entry.connectorId) : undefined) ||
+        (entry.jobId ? orgByJob.get(entry.jobId) : undefined) ||
+        (entry.syncRunId ? orgBySyncRun.get(entry.syncRunId) : undefined) ||
+        (entry.incidentId ? orgByIncident.get(entry.incidentId) : undefined) ||
+        (!entry.connectorId && !entry.jobId && !entry.syncRunId && !entry.incidentId
+          ? fallbackOrgId
+          : undefined);
+      return orgId
+        ? [
+            {
+              ...entry,
+              orgId,
+              // An ephemeral demo reset may remove a connector after the log was queued. Keep
+              // the useful message and let the optional connector relation become null.
+              connectorId:
+                entry.connectorId && existingConnectorIds.has(entry.connectorId)
+                  ? entry.connectorId
+                  : null,
+            },
+          ]
+        : [];
+    });
+    const orgIds = [...new Set(resolved.map((entry) => entry.orgId))];
+    const existingOrganizations = await prisma.organization.findMany({
+      where: { id: { in: orgIds } },
+      select: { id: true },
+    });
+    const existingOrgIds = new Set(existingOrganizations.map((item) => item.id));
+    // Demo tenants are intentionally disposable. If one disappears while its worker log is
+    // buffered, drop only that orphaned entry instead of failing the entire createMany batch.
+    const data = resolved.filter((entry) => existingOrgIds.has(entry.orgId));
+    if (data.length > 0) await prisma.logEntry.createMany({ data });
   } catch (err) {
     console.warn("[log] failed to flush LogEntry batch to DB:", err);
   }
 }
 
 function queueDbInsert(level: LogLevel, message: string, context: LogContext) {
-  const { connectorId, jobId, syncRunId, incidentId, traceId, ...rest } = context;
+  const { orgId, connectorId, jobId, syncRunId, incidentId, traceId, ...rest } = context;
   pendingEntries.push({
-    orgId: "", // filled in at flush time
+    orgId: orgId ?? "", // resolved from the scoped target at flush time when absent
     level,
     source: "worker",
     connectorId,

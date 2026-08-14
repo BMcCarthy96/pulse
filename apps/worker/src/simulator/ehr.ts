@@ -56,7 +56,7 @@ function appointmentBundle(page: number, count: number) {
 export const ehrApp = new Hono();
 
 ehrApp.get("/ehr/fhir/Patient", async (c) => {
-  const chaos = await applyChaos(CONNECTOR_KEY, c);
+  const chaos = await applyChaos(CONNECTOR_KEY, c, { orgId: c.req.header("x-pulse-org-id") });
   if (chaos.response) return chaos.response;
 
   const page = Number(c.req.query("_page") ?? 1);
@@ -69,7 +69,7 @@ ehrApp.get("/ehr/fhir/Patient", async (c) => {
 });
 
 ehrApp.get("/ehr/fhir/Appointment", async (c) => {
-  const chaos = await applyChaos(CONNECTOR_KEY, c);
+  const chaos = await applyChaos(CONNECTOR_KEY, c, { orgId: c.req.header("x-pulse-org-id") });
   if (chaos.response) return chaos.response;
 
   const page = Number(c.req.query("_page") ?? 1);

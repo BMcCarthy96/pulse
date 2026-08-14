@@ -22,6 +22,7 @@ criteria with a one-line verification note. Deviations from reference docs get l
 | 14 evals | code complete; reviewed live run pending | 2026-08-09 | 14-case network-free corpus, deterministic graders, model/prompt/context/settings-keyed fixtures, baseline regression scores, prompt v1/v2 comparison metadata, offline report, stale-report CI gate, and optional live/judge CLI modes implemented; `pnpm eval:check` passes |
 | 15 copilot | code complete; provider/browser smoke pending | 2026-08-09 | OPS-only persistent SSE Ask Pulse route, six scoped read-only tools, redaction/leak scans, durable turns/history, budgets/cancellation, audit, UI, OpenAPI, and unit coverage implemented |
 | 16 hardening | code complete; observability/deploy smoke pending | 2026-08-09 | OTLP Next/worker tracing, W3C queue propagation, Redis rate limits/budgets, timestamped webhook signatures, headers/boundaries, retention, demo reset, and CI eval gate implemented; production credentials and Jaeger/provider trace remain account/config checks |
+| 17 v3 recruiter workspace | code complete; account-owned deploy pending | 2026-08-09 | `DemoSession` tenant isolation, one-click guarded demo, durable investigation evidence/actions, live/recorded SSE, quotas and cost caps, approval audit trail, security proof, a11y/eval gates, and release docs; baseline local gates pass, while the final Docker image and expanded browser rerun await Docker Desktop recovery |
 
 ## Phase 9 — acceptance criteria
 
@@ -180,6 +181,17 @@ Outstanding, and genuinely a user task:
 
 ## Post-v1.0.0 fixes
 
+- **Fresh WSL bootstrap failed before the app could start** (fixed 2026-08-09). A clean checkout
+  on a machine with native Postgres/Redis services exposed three hidden assumptions: Compose's
+  fixed host ports collided with existing listeners, `db:seed` and `dev` expected pre-existing
+  `@pulse/shared`/`@pulse/db` build artifacts, and current Node typings rejected `Buffer` at the
+  `timingSafeEqual` boundary. Compose host ports are now configurable with unchanged defaults;
+  the root commands build their runtime workspace prerequisites; and signature verification uses
+  owned `Uint8Array` values while preserving the constant-time comparison. Verified from a clean
+  local install with Node 22.23.2/pnpm 9.15.9: seeded Postgres + Redis + Jaeger healthy, worker
+  image build and clean-database boot smoke green, lint/typecheck/format/build/evals green, 198
+  unit + 51 integration + 7 Playwright tests green, and documented coverage claims still met.
+
 - **The worker image had never been built, and did not work** (fixed 2026-07-31). Phase 10 was
   recorded as "code done"; the Dockerfile, `railway.json` and runbook were all written, and the
   runbook called them "production-ready". Attempting the actual deployment turned up **four**
@@ -210,7 +222,7 @@ Outstanding, and genuinely a user task:
      the generator tries to `npm i` it mid-build.
 
   Verified by running it: image builds, boots against real Postgres and Redis, applies the
-  migration to an empty database, connects to both stores, starts all six queues, and answers
+  migration to an empty database, connects to both stores, starts all seven queues, and answers
   `/healthz` with `{"ok":true}` — container reports `healthy`.
 
   A **`Worker image` CI job** now builds the image and asserts it boots and goes healthy on every

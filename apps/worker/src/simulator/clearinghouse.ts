@@ -10,7 +10,8 @@ const CONNECTOR_KEY = "claims";
 export const clearinghouseApp = new Hono();
 
 clearinghouseApp.post("/clearinghouse/claims", async (c) => {
-  const chaos = await applyChaos(CONNECTOR_KEY, c);
+  const orgId = c.req.header("x-pulse-org-id");
+  const chaos = await applyChaos(CONNECTOR_KEY, c, { orgId });
   if (chaos.response) return chaos.response;
 
   const body = await c.req.json().catch(() => null);
@@ -28,13 +29,18 @@ clearinghouseApp.post("/clearinghouse/claims", async (c) => {
   const delayMs = faker.number.int({ min: 5000, max: 20000 });
   const accepted = faker.number.float({ min: 0, max: 1 }) < 0.85;
   setTimeout(() => {
-    void emitWebhook(CONNECTOR_KEY, "claim.ack", {
-      claimId,
-      status: accepted ? "accepted" : "rejected",
-      reason: accepted ? undefined : "missing prior authorization",
-    });
+    void emitWebhook(
+      CONNECTOR_KEY,
+      "claim.ack",
+      {
+        claimId,
+        status: accepted ? "accepted" : "rejected",
+        reason: accepted ? undefined : "missing prior authorization",
+      },
+      orgId,
+    );
   }, delayMs);
 
-  log.info({ claimId, delayMs, accepted }, "claim accepted, ack scheduled");
+  log.info({ orgId, claimId, delayMs, accepted }, "claim accepted, ack scheduled");
   return c.json({ claimId, status: "accepted" });
 });

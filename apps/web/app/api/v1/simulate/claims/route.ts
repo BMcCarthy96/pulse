@@ -11,7 +11,9 @@ export const POST = handleApiError("simulate.claims", async (req) => {
   const body = simulateClaimsSchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) throw ApiError.validation(body.error.message);
 
-  const connector = await prisma.connector.findUnique({ where: { key: "claims" } });
+  const connector = await prisma.connector.findFirst({
+    where: { key: "claims", orgId: session.user.orgId },
+  });
   if (!connector) throw ApiError.notFound('connector "claims" not found');
 
   const dbJobIds: string[] = [];

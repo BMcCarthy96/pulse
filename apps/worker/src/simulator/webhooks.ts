@@ -10,18 +10,35 @@ import {
 } from "@pulse/shared/webhook-signature";
 import { log } from "../log.js";
 import { getChaosState } from "./chaos.js";
+import { prisma } from "@pulse/db";
 
 const WEBHOOK_TARGET_URL = process.env.WEBHOOK_TARGET_URL ?? "http://localhost:3010";
 const WEBHOOK_SIGNING_SECRET =
   process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
 const EMIT_TIMEOUT_MS = 5000;
 
-async function post(connectorKey: string, eventType: string, body: string, deliveryId: string) {
+async function post(
+  connectorKey: string,
+  eventType: string,
+  body: string,
+  deliveryId: string,
+  orgId?: string,
+) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), EMIT_TIMEOUT_MS);
   try {
     const timestamp = Math.floor(Date.now() / 1000);
-    const res = await fetch(`${WEBHOOK_TARGET_URL}/api/webhooks/${connectorKey}`, {
+    const org = orgId
+      ? await prisma.organization.findUnique({ where: { id: orgId }, select: { slug: true } })
+      : null;
+    if (orgId && !org) {
+      log.warn({ orgId, connectorKey, deliveryId }, "dropping webhook for deleted tenant");
+      return;
+    }
+    const targetPath = org
+      ? `/api/webhooks/tenant/${org.slug}/${connectorKey}`
+      : `/api/webhooks/${connectorKey}`;
+    const res = await fetch(`${WEBHOOK_TARGET_URL}${targetPath}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -30,16 +47,20 @@ async function post(connectorKey: string, eventType: string, body: string, deliv
         [WEBHOOK_TIMESTAMP_HEADER]: String(timestamp),
         [WEBHOOK_DELIVERY_HEADER]: deliveryId,
         [WEBHOOK_EVENT_HEADER]: eventType,
+        ...(orgId ? { "x-pulse-org-id": orgId } : {}),
       },
       body,
       signal: controller.signal,
     });
     log.info(
-      { connectorKey, eventType, deliveryId, status: res.status },
+      { orgId, connectorKey, eventType, deliveryId, status: res.status },
       "simulator webhook delivered",
     );
   } catch (err) {
-    log.warn({ connectorKey, eventType, deliveryId, err }, "simulator webhook delivery failed");
+    log.warn(
+      { orgId, connectorKey, eventType, deliveryId, err },
+      "simulator webhook delivery failed",
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -54,8 +75,9 @@ export async function emitWebhook(
   connectorKey: string,
   eventType: string,
   payload: unknown,
+  orgId?: string,
 ): Promise<void> {
-  const { mode } = await getChaosState(connectorKey);
+  const { mode } = await getChaosState(connectorKey, orgId);
   const deliveryId = randomUUID();
 
   const bodyObj =
@@ -64,15 +86,15 @@ export async function emitWebhook(
 
   if (mode === "BAD_PAYLOAD") {
     log.warn(
-      { connectorKey, eventType, deliveryId, body: bodyObj },
+      { orgId, connectorKey, eventType, deliveryId, body: bodyObj },
       "emitting schema-invalid webhook body (chaos: BAD_PAYLOAD)",
     );
   }
 
-  void post(connectorKey, eventType, body, deliveryId);
+  void post(connectorKey, eventType, body, deliveryId, orgId);
 
   if (mode === "DEGRADED" && Math.random() < 0.15) {
     // Duplicate delivery: same delivery id, sent again shortly after.
-    setTimeout(() => void post(connectorKey, eventType, body, deliveryId), 500);
+    setTimeout(() => void post(connectorKey, eventType, body, deliveryId, orgId), 500);
   }
 }

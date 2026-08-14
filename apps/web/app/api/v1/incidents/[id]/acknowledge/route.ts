@@ -8,7 +8,7 @@ export const POST = handleApiError("incidents.acknowledge", async (_req, ctx) =>
   const session = await requireRole("OPS");
   const { id } = await ctx.params;
 
-  const incident = await prisma.incident.findUnique({ where: { id } });
+  const incident = await prisma.incident.findFirst({ where: { id, orgId: session.user.orgId } });
   if (!incident) throw ApiError.notFound(`incident "${id}" not found`);
   if (incident.status === "RESOLVED") throw ApiError.conflict("incident is already resolved");
   if (incident.status === "ACKNOWLEDGED")

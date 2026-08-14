@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   healthTick: "health-tick",
   retention: "retention",
   demoReset: "demo-reset",
+  demoCleanup: "demo-cleanup",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

@@ -5,7 +5,7 @@ import { handleApiError, requireSession } from "@/lib/authz";
 import { paginate } from "@/lib/pagination";
 
 export const GET = handleApiError("jobs.list", async (req) => {
-  await requireSession();
+  const session = await requireSession();
   const url = new URL(req.url);
   const { cursor, limit } = paginationSchema.parse(Object.fromEntries(url.searchParams));
 
@@ -16,6 +16,7 @@ export const GET = handleApiError("jobs.list", async (req) => {
   const status = statusParam ? jobStatusSchema.safeParse(statusParam) : undefined;
 
   const where: Prisma.JobWhereInput = {
+    orgId: session.user.orgId,
     ...(status?.success ? { status: status.data } : {}),
     ...(queue ? { queue } : {}),
     ...(connectorKey ? { connector: { key: connectorKey } } : {}),
@@ -30,7 +31,7 @@ export const GET = handleApiError("jobs.list", async (req) => {
   });
 
   const withConnector = await prisma.job.findMany({
-    where: { id: { in: data.map((j) => j.id) } },
+    where: { orgId: session.user.orgId, id: { in: data.map((j) => j.id) } },
     include: { connector: { select: { key: true, displayName: true } } },
     orderBy: { createdAt: "desc" },
   });

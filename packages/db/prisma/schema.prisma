@@ -10,13 +10,20 @@ datasource db {
 // ── Identity ────────────────────────────────────────────────
 
 model Organization {
-  id         String      @id @default(cuid())
-  name       String
-  slug       String      @unique
-  createdAt  DateTime    @default(now())
-  users      User[]
-  connectors Connector[]
-  aiRuns     AiRun[]
+  id             String             @id @default(cuid())
+  name           String
+  slug           String             @unique
+  createdAt      DateTime           @default(now())
+  users          User[]
+  connectors     Connector[]
+  jobs           Job[]
+  events         IntegrationEvent[]
+  logs           LogEntry[]
+  incidents      Incident[]
+  aiRuns         AiRun[]
+  auditEntries   AuditEntry[]
+  demoSession    DemoSession?
+  investigations Investigation[]
 }
 
 enum Role {
@@ -26,16 +33,21 @@ enum Role {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  orgId        String
-  org          Organization @relation(fields: [orgId], references: [id])
-  email        String       @unique
-  name         String
-  passwordHash String
-  role         Role         @default(VIEWER)
-  createdAt    DateTime     @default(now())
-  auditEntries AuditEntry[]
-  aiRuns       AiRun[]
+  id                    String                @id @default(cuid())
+  orgId                 String
+  org                   Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  email                 String
+  name                  String
+  passwordHash          String
+  role                  Role                  @default(VIEWER)
+  createdAt             DateTime              @default(now())
+  auditEntries          AuditEntry[]
+  aiRuns                AiRun[]
+  demoSession           DemoSession?
+  investigationsCreated Investigation[]       @relation("InvestigationCreator")
+  actionsApproved       InvestigationAction[] @relation("InvestigationApprover")
+
+  @@unique([orgId, email])
 }
 
 // ── Connectors & health ─────────────────────────────────────
@@ -60,8 +72,8 @@ enum ChaosMode {
 model Connector {
   id              String          @id @default(cuid())
   orgId           String
-  org             Organization    @relation(fields: [orgId], references: [id])
-  key             String          @unique // "ehr-fhir" | "lab-results" | "claims" | "eligibility" | "erx"
+  org             Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key             String // "ehr-fhir" | "lab-results" | "claims" | "eligibility" | "erx"
   displayName     String
   description     String
   kind            String // "poll_sync" | "inbound_webhook" | "outbound_async" | "request_response"
@@ -79,12 +91,14 @@ model Connector {
   incidents Incident[]
   snapshots HealthSnapshot[]
   logs      LogEntry[]
+
+  @@unique([orgId, key])
 }
 
 model HealthSnapshot {
   id           String          @id @default(cuid())
   connectorId  String
-  connector    Connector       @relation(fields: [connectorId], references: [id])
+  connector    Connector       @relation(fields: [connectorId], references: [id], onDelete: Cascade)
   status       ConnectorStatus
   errorRate    Float
   p95LatencyMs Int?
@@ -109,7 +123,7 @@ enum RunStatus {
 model SyncRun {
   id             String    @id @default(cuid())
   connectorId    String
-  connector      Connector @relation(fields: [connectorId], references: [id])
+  connector      Connector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
   status         RunStatus @default(RUNNING)
   trigger        String // "schedule" | "manual"
   startedAt      DateTime  @default(now())
@@ -132,26 +146,27 @@ enum JobStatus {
 }
 
 model Job {
-  id           String    @id @default(cuid())
+  id           String       @id @default(cuid())
   orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   connectorId  String
-  connector    Connector @relation(fields: [connectorId], references: [id])
+  connector    Connector    @relation(fields: [connectorId], references: [id], onDelete: Cascade)
   syncRunId    String?
-  syncRun      SyncRun?  @relation(fields: [syncRunId], references: [id])
+  syncRun      SyncRun?     @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
   queue        String
   type         String
   bullJobId    String?
-  status       JobStatus @default(QUEUED)
-  attempts     Int       @default(0)
-  maxAttempts  Int       @default(5)
+  status       JobStatus    @default(QUEUED)
+  attempts     Int          @default(0)
+  maxAttempts  Int          @default(5)
   payload      Json
   lastError    String?
-  errorHistory Json      @default("[]")
+  errorHistory Json         @default("[]")
   scheduledFor DateTime?
   startedAt    DateTime?
   finishedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([connectorId, status, createdAt])
   @@index([status, createdAt])
@@ -176,8 +191,9 @@ enum EventStatus {
 model IntegrationEvent {
   id          String         @id @default(cuid())
   orgId       String
+  org         Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
   connectorId String
-  connector   Connector      @relation(fields: [connectorId], references: [id])
+  connector   Connector      @relation(fields: [connectorId], references: [id], onDelete: Cascade)
   direction   EventDirection
   eventType   String
   dedupeKey   String?
@@ -202,19 +218,20 @@ enum LogLevel {
 }
 
 model LogEntry {
-  id          String     @id @default(cuid())
+  id          String       @id @default(cuid())
   orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   level       LogLevel
   source      String // "worker" | "web" | "simulator"
   connectorId String?
-  connector   Connector? @relation(fields: [connectorId], references: [id])
+  connector   Connector?   @relation(fields: [connectorId], references: [id], onDelete: SetNull)
   jobId       String?
   syncRunId   String?
   incidentId  String?
-  traceId      String?
+  traceId     String?
   message     String
-  context     Json       @default("{}")
-  createdAt   DateTime   @default(now())
+  context     Json         @default("{}")
+  createdAt   DateTime     @default(now())
 
   @@index([connectorId, createdAt])
   @@index([level, createdAt])
@@ -238,8 +255,9 @@ enum IncidentSeverity {
 model Incident {
   id              String                  @id @default(cuid())
   orgId           String
+  org             Organization            @relation(fields: [orgId], references: [id], onDelete: Cascade)
   connectorId     String
-  connector       Connector               @relation(fields: [connectorId], references: [id])
+  connector       Connector               @relation(fields: [connectorId], references: [id], onDelete: Cascade)
   status          IncidentStatus          @default(OPEN)
   severity        IncidentSeverity
   title           String
@@ -251,6 +269,7 @@ model Incident {
   aiSummaryStatus String                  @default("none")
   timeline        IncidentTimelineEntry[]
   aiRuns          AiRun[]
+  investigations  Investigation[]
 
   @@index([connectorId, status])
 }
@@ -258,7 +277,7 @@ model Incident {
 model IncidentTimelineEntry {
   id         String   @id @default(cuid())
   incidentId String
-  incident   Incident @relation(fields: [incidentId], references: [id])
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   kind       String // "opened" | "status_change" | "note" | "ai_summary" | "health_transition" | "retry_burst"
   message    String
   actor      String // "system" | userId
@@ -272,6 +291,7 @@ model IncidentTimelineEntry {
 enum AiRunKind {
   SUMMARY
   COPILOT
+  INVESTIGATION
 }
 
 enum AiRunStatus {
@@ -290,36 +310,160 @@ enum AiCallStatus {
   REFUSED
 }
 
+enum InvestigationStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+enum EvidenceKind {
+  LOG
+  JOB
+  EVENT
+  HEALTH_SNAPSHOT
+  TIMELINE
+}
+
+enum InvestigationActionType {
+  RETRY_JOB
+  ACKNOWLEDGE_INCIDENT
+  RESOLVE_INCIDENT
+  REGENERATE_SUMMARY
+}
+
+enum InvestigationActionStatus {
+  PROPOSED
+  EXECUTING
+  SUCCEEDED
+  FAILED
+  DISMISSED
+  STALE
+}
+
+enum InvestigationMode {
+  LIVE
+  RECORDED
+}
+
+enum DemoSessionStatus {
+  ACTIVE
+  EXPIRED
+  DELETING
+}
+
+model DemoSession {
+  id         String            @id @default(cuid())
+  orgId      String            @unique
+  org        Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId     String            @unique
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String            @unique
+  status     DemoSessionStatus @default(ACTIVE)
+  expiresAt  DateTime
+  lastSeenAt DateTime          @default(now())
+  createdAt  DateTime          @default(now())
+
+  @@index([status, expiresAt])
+}
+
+model Investigation {
+  id          String                  @id @default(cuid())
+  orgId       String
+  org         Organization            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  incidentId  String
+  incident    Incident                @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User                    @relation("InvestigationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  status      InvestigationStatus     @default(ACTIVE)
+  title       String
+  report      Json?
+  startedAt   DateTime                @default(now())
+  completedAt DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  evidence    InvestigationEvidence[]
+  actions     InvestigationAction[]
+  aiRuns      AiRun[]
+
+  @@index([orgId, createdAt])
+  @@index([incidentId, status])
+}
+
+model InvestigationEvidence {
+  id              String        @id @default(cuid())
+  investigationId String
+  investigation   Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  kind            EvidenceKind
+  sourceId        String
+  label           String
+  excerpt         String
+  href            String?
+  observedAt      DateTime?
+  metadata        Json          @default("{}")
+  createdAt       DateTime      @default(now())
+
+  @@unique([investigationId, kind, sourceId])
+  @@index([investigationId, createdAt])
+}
+
+model InvestigationAction {
+  id              String                    @id @default(cuid())
+  investigationId String
+  investigation   Investigation             @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  type            InvestigationActionType
+  targetId        String
+  rationale       String
+  evidenceIds     Json
+  payload         Json                      @default("{}")
+  status          InvestigationActionStatus @default(PROPOSED)
+  result          Json?
+  errorCode       String?
+  errorMessage    String?
+  approvedById    String?
+  approvedBy      User?                     @relation("InvestigationApprover", fields: [approvedById], references: [id])
+  proposedAt      DateTime                  @default(now())
+  approvedAt      DateTime?
+  executedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([investigationId, status])
+}
+
 // One logical AI operation. A retry reuses this row and adds another AiCall, so dashboards can
 // distinguish user-visible generations from provider attempts and their accumulated cost.
 model AiRun {
-  id                            String       @id @default(cuid())
+  id                            String            @id @default(cuid())
   orgId                         String
-  org                           Organization @relation(fields: [orgId], references: [id])
+  org                           Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   incidentId                    String?
-  incident                      Incident?    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incident                      Incident?         @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   userId                        String?
-  user                          User?        @relation(fields: [userId], references: [id])
+  user                          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  investigationId               String?
+  investigation                 Investigation?    @relation(fields: [investigationId], references: [id], onDelete: Cascade)
   kind                          AiRunKind
-  status                        AiRunStatus  @default(QUEUED)
+  status                        AiRunStatus       @default(QUEUED)
+  mode                          InvestigationMode @default(LIVE)
   model                         String
   promptVersion                 String
   question                      String?
   answer                        String?
   toolEvents                    Json?
   contextChars                  Int?
-  contextTruncated              Boolean      @default(false)
-  totalInputTokens              Int          @default(0)
-  totalOutputTokens             Int          @default(0)
-  totalCacheCreationInputTokens Int          @default(0)
-  totalCacheReadInputTokens     Int          @default(0)
-  totalCostUsd                  Decimal?     @db.Decimal(12, 6)
+  contextTruncated              Boolean           @default(false)
+  totalInputTokens              Int               @default(0)
+  totalOutputTokens             Int               @default(0)
+  totalCacheCreationInputTokens Int               @default(0)
+  totalCacheReadInputTokens     Int               @default(0)
+  totalCostUsd                  Decimal?          @db.Decimal(12, 6)
+  latencyMs                     Int?
   errorCode                     String?
   errorMessage                  String?
   traceId                       String?
   startedAt                     DateTime?
   completedAt                   DateTime?
-  createdAt                     DateTime     @default(now())
+  createdAt                     DateTime          @default(now())
   calls                         AiCall[]
 
   @@index([orgId, createdAt])
@@ -352,15 +496,16 @@ model AiCall {
 }
 
 model AuditEntry {
-  id         String   @id @default(cuid())
+  id         String       @id @default(cuid())
   orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   action     String
   targetType String
   targetId   String
-  metadata   Json     @default("{}")
-  createdAt  DateTime @default(now())
+  metadata   Json         @default("{}")
+  createdAt  DateTime     @default(now())
 
   @@index([orgId, createdAt])
 }

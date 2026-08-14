@@ -1,6 +1,6 @@
 {
   "name": "@pulse/web",
-  "version": "0.1.0",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3010",
@@ -9,9 +9,12 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:e2e": "node scripts/prepare-e2e-db.mjs && playwright test",
+    "smoke:remote": "playwright test --config playwright.remote.config.ts",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "test:a11y": "playwright test e2e/auth.spec.ts -g accessibility",
+    "audit:lighthouse": "node scripts/lighthouse.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",
@@ -45,15 +48,18 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.62.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "chrome-launcher": "^1.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.20",
     "eslint-plugin-import": "^2.32.0",
+    "lighthouse": "^13.4.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

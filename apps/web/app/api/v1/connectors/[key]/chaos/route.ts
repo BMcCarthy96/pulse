@@ -9,7 +9,7 @@ export const POST = handleApiError("connectors.chaos", async (req, ctx) => {
   const session = await requireRole("ADMIN");
   const { key } = await ctx.params;
 
-  const connector = await prisma.connector.findUnique({ where: { key } });
+  const connector = await prisma.connector.findFirst({ where: { key, orgId: session.user.orgId } });
   if (!connector) throw ApiError.notFound(`connector "${key}" not found`);
 
   const body = setChaosSchema.safeParse(await req.json().catch(() => ({})));

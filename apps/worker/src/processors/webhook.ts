@@ -40,7 +40,11 @@ async function processClaimAck(event: IntegrationEvent) {
   const { claimId, status, reason } = parsed.data;
 
   const claimJob = await prisma.job.findFirst({
-    where: { type: "claim.submit", payload: { path: ["claimId"], equals: claimId } },
+    where: {
+      orgId: event.orgId,
+      type: "claim.submit",
+      payload: { path: ["claimId"], equals: claimId },
+    },
   });
 
   if (claimJob) {

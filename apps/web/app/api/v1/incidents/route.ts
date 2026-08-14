@@ -5,7 +5,7 @@ import { handleApiError, requireSession } from "@/lib/authz";
 import { paginate } from "@/lib/pagination";
 
 export const GET = handleApiError("incidents.list", async (req) => {
-  await requireSession();
+  const session = await requireSession();
   const url = new URL(req.url);
   const { cursor, limit } = paginationSchema.parse(Object.fromEntries(url.searchParams));
 
@@ -14,6 +14,7 @@ export const GET = handleApiError("incidents.list", async (req) => {
   const statusParsed = incidentStatusSchema.safeParse(statusParam);
 
   const where: Prisma.IncidentWhereInput = {
+    orgId: session.user.orgId,
     // "ACTIVE" is a UI convenience for the three non-RESOLVED statuses.
     ...(statusParam === "ACTIVE"
       ? { status: { in: [...INCIDENT_ACTIVE_STATUSES] } }
@@ -31,7 +32,7 @@ export const GET = handleApiError("incidents.list", async (req) => {
   });
 
   const withConnector = await prisma.incident.findMany({
-    where: { id: { in: data.map((i) => i.id) } },
+    where: { orgId: session.user.orgId, id: { in: data.map((i) => i.id) } },
     include: { connector: { select: { key: true, displayName: true, status: true } } },
     orderBy: { openedAt: "desc" },
   });

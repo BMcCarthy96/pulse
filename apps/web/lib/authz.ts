@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@pulse/db";
 import { auth } from "@/auth";
 import { ApiError, roleAtLeast, type RoleName } from "@pulse/shared";
 import { log } from "./log";
@@ -6,6 +7,7 @@ import { currentTraceId, withSpan } from "@pulse/shared";
 import {
   enforceAuthenticatedRateLimit,
   enforceCopilotQuotas,
+  enforceInvestigationQuotas,
   enforceSummaryQuotas,
   RateLimitExceededError,
   RateLimitUnavailableError,
@@ -14,6 +16,18 @@ import {
 export async function requireSession() {
   const session = await auth();
   if (!session?.user) throw ApiError.unauthorized();
+  if (session.user.demoSessionId) {
+    const activeDemo = await prisma.demoSession.findFirst({
+      where: {
+        id: session.user.demoSessionId,
+        userId: session.user.id,
+        status: "ACTIVE",
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (!activeDemo) throw ApiError.unauthorized("Demo session expired");
+  }
   return session;
 }
 
@@ -44,6 +58,12 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
           await enforceAuthenticatedRateLimit(session.user.id, paid);
           if (routeName.includes("copilot_ask")) {
             await enforceCopilotQuotas(session.user.id, session.user.orgId);
+          } else if (routeName.includes("investigation_ask")) {
+            await enforceInvestigationQuotas(
+              session.user.id,
+              session.user.orgId,
+              session.user.demoSessionId,
+            );
           } else if (routeName.includes("summary_regenerate")) {
             await enforceSummaryQuotas(session.user.id, session.user.orgId);
           }

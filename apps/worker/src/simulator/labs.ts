@@ -51,7 +51,8 @@ function labResultPayload() {
 export const labsApp = new Hono();
 
 labsApp.post("/labs/emit", async (c) => {
-  const chaos = await applyChaos(CONNECTOR_KEY, c);
+  const orgId = c.req.header("x-pulse-org-id");
+  const chaos = await applyChaos(CONNECTOR_KEY, c, { orgId });
   if (chaos.response) return chaos.response;
 
   const body = await c.req.json().catch(() => ({}) as { count?: number });
@@ -60,7 +61,7 @@ labsApp.post("/labs/emit", async (c) => {
   for (let i = 0; i < count; i++) {
     const delayMs = i * faker.number.int({ min: 200, max: 800 });
     setTimeout(() => {
-      void emitWebhook(CONNECTOR_KEY, "lab.result.created", labResultPayload());
+      void emitWebhook(CONNECTOR_KEY, "lab.result.created", labResultPayload(), orgId);
     }, delayMs);
   }
 

@@ -12,13 +12,15 @@ export const POST = handleApiError("simulate.lab-results", async (req) => {
   const body = simulateLabResultsSchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) throw ApiError.validation(body.error.message);
 
-  const connector = await prisma.connector.findUnique({ where: { key: "lab-results" } });
+  const connector = await prisma.connector.findFirst({
+    where: { key: "lab-results", orgId: session.user.orgId },
+  });
   if (!connector) throw ApiError.notFound('connector "lab-results" not found');
 
   const res = await fetch(`${SIMULATOR_BASE_URL}/labs/emit`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ count: body.data.count }),
+    body: JSON.stringify({ count: body.data.count, orgSlug: session.user.orgId }),
   });
   if (!res.ok) throw ApiError.internal(`simulator returned ${res.status}`);
   const result = (await res.json()) as { scheduled: number };

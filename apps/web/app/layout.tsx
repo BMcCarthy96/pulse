@@ -12,7 +12,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Pulse — Integration Health",
-  description: "Integration health monitoring for Lakeview Health Partners.",
+  description:
+    "AI-assisted integration incident investigation with evidence, human approval, and durable audit trails.",
 };
 
 export default function RootLayout({
@@ -23,6 +24,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
+        <a
+          href="#main-content"
+          className="focus:bg-background focus:text-foreground sr-only z-[100] rounded-md px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        >
+          Skip to main content
+        </a>
         <Providers>
           <TooltipProvider>{children}</TooltipProvider>
           <Toaster />

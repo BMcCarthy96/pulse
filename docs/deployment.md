@@ -17,7 +17,7 @@ Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#
 >
 > The worker image, however, is no longer merely _written_ — it is **built and booted** on every
 > CI run (the `Worker image` job), against real Postgres and Redis containers, asserting that it
-> migrates from an empty database, starts all six queues, and answers `/healthz`.
+> migrates from an empty database, starts all seven queues, and answers `/healthz`.
 >
 > That job exists because an earlier version of this document called the Dockerfile "complete and
 > production-ready" when the image had never once been built. It contained four independent
@@ -88,29 +88,31 @@ workspace packages, so building from `apps/worker` alone cannot resolve `workspa
 Set these under the worker service → **Variables**. The two `${{...}}` values are Railway
 plugin references — type them exactly; Railway resolves them at deploy time.
 
-| Variable                      | Value                                                      |
-| ----------------------------- | ---------------------------------------------------------- |
-| `DATABASE_URL`                | `${{Postgres.DATABASE_URL}}`                               |
-| `REDIS_URL`                   | `${{Redis.REDIS_URL}}`                                     |
-| `WEBHOOK_SIGNING_SECRET`      | the `openssl rand -hex 32` value from step 0               |
-| `WEBHOOK_TARGET_URL`          | `https://placeholder.invalid` — **corrected in step 3**    |
-| `SIMULATOR_PORT`              | `4001`                                                     |
-| `SIMULATOR_BASE_URL`          | `http://localhost:4001`                                    |
-| `ANTHROPIC_API_KEY`           | your key, or leave unset for the graceful-degradation path |
-| `ANTHROPIC_MODEL`             | compatibility fallback, `claude-opus-4-8`                  |
-| `ANTHROPIC_SUMMARY_MODEL`     | `claude-opus-4-8`                                          |
-| `ANTHROPIC_COPILOT_MODEL`     | `claude-sonnet-4-6`                                        |
-| `AI_ENABLED`                  | `false` until rate-limit/budget smoke passes               |
-| `AI_DAILY_BUDGET_USD`         | `5`                                                        |
-| `AI_RUN_MAX_COST_USD`         | `0.50` per copilot run                                     |
-| `AI_ALLOW_UNPRICED`           | `false`                                                    |
-| `DEMO_MODE`                   | `true` only for the public demo auto-reset behavior        |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | optional Jaeger/OTLP HTTP endpoint                         |
-| `WEBHOOK_REQUIRE_TIMESTAMP`   | `false` during dual-signature rollout; enable after smoke  |
-| `HEALTH_TICK_SEC`             | `30`                                                       |
-| `HEALTH_WINDOW_MIN`           | `15`                                                       |
-| `INCIDENT_STABILITY_MIN`      | `10`                                                       |
-| `NODE_ENV`                    | `production`                                               |
+| Variable                            | Value                                                      |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `DATABASE_URL`                      | `${{Postgres.DATABASE_URL}}`                               |
+| `REDIS_URL`                         | `${{Redis.REDIS_URL}}`                                     |
+| `WEBHOOK_SIGNING_SECRET`            | the `openssl rand -hex 32` value from step 0               |
+| `WEBHOOK_TARGET_URL`                | `https://placeholder.invalid` — **corrected in step 3**    |
+| `SIMULATOR_PORT`                    | `4001`                                                     |
+| `SIMULATOR_BASE_URL`                | `http://localhost:4001`                                    |
+| `ANTHROPIC_API_KEY`                 | your key, or leave unset for the graceful-degradation path |
+| `ANTHROPIC_MODEL`                   | compatibility fallback, `claude-opus-4-8`                  |
+| `ANTHROPIC_SUMMARY_MODEL`           | `claude-opus-4-8`                                          |
+| `ANTHROPIC_COPILOT_MODEL`           | `claude-sonnet-4-6`                                        |
+| `AI_ENABLED`                        | `false` until rate-limit/budget smoke passes               |
+| `AI_DAILY_BUDGET_USD`               | `5`                                                        |
+| `AI_RUN_MAX_COST_USD`               | `0.50` per copilot run                                     |
+| `AI_INVESTIGATION_MAX_COST_USD`     | `0.20` hard cap per live investigation                     |
+| `AI_INVESTIGATION_DAILY_BUDGET_USD` | `5` deployment-wide live investigation budget              |
+| `AI_ALLOW_UNPRICED`                 | `false`                                                    |
+| `DEMO_MODE`                         | `true` only for the public demo auto-reset behavior        |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`       | optional Jaeger/OTLP HTTP endpoint                         |
+| `WEBHOOK_REQUIRE_TIMESTAMP`         | `false` during dual-signature rollout; enable after smoke  |
+| `HEALTH_TICK_SEC`                   | `30`                                                       |
+| `HEALTH_WINDOW_MIN`                 | `15`                                                       |
+| `INCIDENT_STABILITY_MIN`            | `10`                                                       |
+| `NODE_ENV`                          | `production`                                               |
 
 `WEBHOOK_TARGET_URL` is a placeholder because of a genuine circular dependency: the worker needs
 the Vercel URL, and Vercel needs the Railway database. Deploy the worker first with the
@@ -148,20 +150,29 @@ Vercel reaches Railway over the **public** endpoints. In the Railway Postgres/Re
 open **Connect** and copy the _public_ connection string (the one with a `*.proxy.rlwy.net`
 host), not the internal `*.railway.internal` one — Vercel cannot resolve internal hosts.
 
-| Variable                    | Value                                                            |
-| --------------------------- | ---------------------------------------------------------------- |
-| `DATABASE_URL`              | Railway Postgres **public** connection string                    |
-| `REDIS_URL`                 | Railway Redis **public** connection string                       |
-| `AUTH_SECRET`               | the `openssl rand -base64 32` value from step 0                  |
-| `AUTH_URL`                  | `https://<your-project>.vercel.app`                              |
-| `WEBHOOK_SIGNING_SECRET`    | **the same value as the worker**                                 |
-| `NEXT_PUBLIC_DEMO_PASSWORD` | `pulse-demo-2026` (must match `SEED_DEMO_PASSWORD` used at seed) |
-| `AI_ENABLED`                | `false` until the final production smoke                         |
-| `AI_DAILY_BUDGET_USD`       | `5`                                                              |
-| `AI_RUN_MAX_COST_USD`       | `0.50`                                                           |
-| `AI_ALLOW_UNPRICED`         | `false`                                                          |
+| Variable                            | Value                                                            |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `DATABASE_URL`                      | Railway Postgres **public** connection string                    |
+| `REDIS_URL`                         | Railway Redis **public** connection string                       |
+| `AUTH_SECRET`                       | the `openssl rand -base64 32` value from step 0                  |
+| `AUTH_URL`                          | `https://<your-project>.vercel.app`                              |
+| `WEBHOOK_SIGNING_SECRET`            | **the same value as the worker**                                 |
+| `NEXT_PUBLIC_DEMO_PASSWORD`         | `pulse-demo-2026` (must match `SEED_DEMO_PASSWORD` used at seed) |
+| `AI_ENABLED`                        | `false` until the final production smoke                         |
+| `AI_DAILY_BUDGET_USD`               | `5`                                                              |
+| `AI_RUN_MAX_COST_USD`               | `0.50`                                                           |
+| `AI_INVESTIGATION_MAX_COST_USD`     | `0.20` hard cap per live investigation                           |
+| `AI_INVESTIGATION_DAILY_BUDGET_USD` | `5` deployment-wide live investigation budget                    |
+| `AI_ALLOW_UNPRICED`                 | `false`                                                          |
+| `DEMO_MODE`                         | `true` for isolated one-click recruiter tenants                  |
+| `INVESTIGATION_LIVE_ENABLED`        | `false` until live-AI cost and safety review is complete         |
 
 Deploy. Note the resulting URL.
+
+In GitHub → Settings → Secrets and variables → Actions → Variables, add `DEMO_BASE_URL` with this
+origin (no trailing slash). The daily `Deployed demo smoke` workflow will then verify the public
+page, provision/reset path, health endpoint, and Lighthouse budgets. A missing variable causes the
+scheduled job to skip rather than claim the undeployed system is healthy.
 
 ---
 
