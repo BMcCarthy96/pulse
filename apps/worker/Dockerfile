@@ -74,14 +74,13 @@ COPY --from=build /app/apps/worker/package.json ./package.json
 # needing the repository present.
 COPY --from=build /app/packages/db/prisma ./prisma
 
-# The simulator's port. It is also the container healthcheck target — the simulator only starts
-# listening once the worker has connected to Postgres and Redis, which makes it a genuine
-# readiness signal rather than a liveness formality.
+# The simulator's port. The container healthcheck uses the dependency-aware readiness route;
+# `/livez` remains available to distinguish a live process from a ready worker.
 ENV SIMULATOR_PORT=4001
 EXPOSE 4001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.SIMULATOR_PORT||4001)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.SIMULATOR_PORT||4001)+'/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 USER node
 

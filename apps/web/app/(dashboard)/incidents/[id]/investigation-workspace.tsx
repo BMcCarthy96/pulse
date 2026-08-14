@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Timestamp } from "@/components/timestamp";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { announceRecruiterTourStep } from "@/components/recruiter-tour";
 import { apiFetch, apiPost } from "@/lib/api-client";
-import { GUIDED_INVESTIGATION_QUESTIONS } from "@pulse/shared";
+import { GUIDED_INVESTIGATION_QUESTIONS, type InvestigationActionType } from "@pulse/shared";
 import { toast } from "sonner";
 
 type Evidence = {
@@ -19,7 +20,7 @@ type Evidence = {
 };
 type Action = {
   id: string;
-  type: string;
+  type: InvestigationActionType;
   targetId: string;
   rationale: string;
   evidenceIds: unknown;
@@ -50,6 +51,13 @@ type Workspace = {
     latencyMs: number | null;
     traceId: string | null;
     createdAt: string;
+    calls: {
+      sequence: number;
+      providerRequestId: string | null;
+      status: string;
+      latencyMs: number;
+      costUsd: string | null;
+    }[];
   }[];
   audit: {
     id: string;
@@ -59,6 +67,18 @@ type Workspace = {
     user: { name: string } | null;
   }[];
 };
+
+function formatCost(value: string | null | undefined) {
+  if (value == null) return "$0.00";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "$0.00";
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: amount > 0 && amount < 0.01 ? 6 : 2,
+    maximumFractionDigits: 6,
+  });
+}
 
 function parseFrame(raw: string) {
   const event = raw
@@ -79,17 +99,70 @@ function parseFrame(raw: string) {
 
 function activityLabel(event: string, data: Record<string, unknown>) {
   if (event === "run.started")
-    return "Started " + (data.mode === "LIVE" ? "live investigation" : "recorded investigation");
+    return (
+      "Started " +
+      (data.mode === "LIVE" ? "live investigation" : "deterministic demo investigation")
+    );
   if (event === "evidence.added") return "Added evidence · " + String(data.label ?? data.kind);
-  if (event === "tool.started") return "Tool started · " + String(data.name ?? "evidence query");
-  if (event === "tool.completed") return "Tool completed · " + String(data.summary ?? data.name);
+  if (event === "tool.started")
+    return "Server retrieval started · " + String(data.name ?? "evidence query");
+  if (event === "tool.completed")
+    return "Server retrieval completed · " + String(data.summary ?? data.name);
   if (event === "hypothesis.updated") return "Updated a cited hypothesis";
   if (event === "action.proposed")
     return "Proposed action · " + String(data.type ?? "operator approval");
-  if (event === "answer.delta") return "Drafted evidence-bounded answer";
+  if (event === "report.completed") return "Validated evidence-bounded report";
   if (event === "run.completed") return "Investigation complete";
   if (event === "run.error") return "Investigation error · " + String(data.message ?? "unknown");
   return event.replaceAll(".", " ");
+}
+
+const ACTION_PRESENTATION: Record<
+  InvestigationActionType,
+  { label: string; targetLabel: string; expectedEffect: string; execution: string }
+> = {
+  RETRY_JOB: {
+    label: "Retry job",
+    targetLabel: "Job",
+    expectedEffect: "Queue one guarded retry if the job is still failed and retryable.",
+    execution:
+      "The worker receives the queued retry; audit records the operator and queue handoff.",
+  },
+  ACKNOWLEDGE_INCIDENT: {
+    label: "Acknowledge incident",
+    targetLabel: "Incident",
+    expectedEffect: "Mark the incident acknowledged and add a timeline entry if it is still open.",
+    execution: "The server applies the eligible state change and records the operator in audit.",
+  },
+  RESOLVE_INCIDENT: {
+    label: "Resolve incident",
+    targetLabel: "Incident",
+    expectedEffect:
+      "Resolve only after the incident is monitoring, the connector is healthy, and the stability window has passed.",
+    execution: "The server applies the eligible state change and records the operator in audit.",
+  },
+  REGENERATE_SUMMARY: {
+    label: "Regenerate incident summary",
+    targetLabel: "Incident",
+    expectedEffect: "Queue a fresh summary if another summary run is not already active.",
+    execution: "The worker receives the summary job; audit records the operator and queue handoff.",
+  },
+};
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  "job.retry": "Job retry executed",
+  "incident.acknowledge": "Incident acknowledged",
+  "incident.resolve": "Incident resolved",
+  "incident.summary_regenerate": "Incident summary regeneration queued",
+  "investigation.action_approved": "Investigation action approved",
+  "investigation.action_dismissed": "Investigation action dismissed",
+};
+
+function auditActionLabel(action: string) {
+  const knownLabel = AUDIT_ACTION_LABELS[action];
+  if (knownLabel) return knownLabel;
+  const words = action.replaceAll(".", " ").replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
@@ -99,6 +172,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [evidenceAnnouncement, setEvidenceAnnouncement] = useState("");
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const askInFlightRef = useRef(false);
@@ -115,7 +189,9 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
   }, [incidentId]);
 
   useEffect(() => {
-    void ensureWorkspace().finally(() => setLoading(false));
+    void ensureWorkspace()
+      .then(() => announceRecruiterTourStep("incident"))
+      .finally(() => setLoading(false));
     return () => abortRef.current?.abort();
   }, [ensureWorkspace]);
 
@@ -177,8 +253,8 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
               { id: activitySeqRef.current++, label: activityLabel(parsed.event, parsed.data) },
             ].slice(-20),
           );
-          if (parsed.event === "answer.delta" && typeof parsed.data.text === "string") {
-            setAnswer((previous) => previous + parsed.data.text);
+          if (parsed.event === "report.completed" && typeof parsed.data.summary === "string") {
+            setAnswer(parsed.data.summary);
           }
           if (parsed.event === "run.error") {
             toast.error(
@@ -211,14 +287,13 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
     setActionBusy(true);
     try {
       await apiPost(`/api/v1/investigations/${workspace.id}/actions/${path}`);
-      const refreshed = await refresh();
+      await refresh();
       if (path.endsWith("approve")) {
         announceRecruiterTourStep("approve");
-        if (refreshed?.audit.some((entry) => entry.action === "investigation.action_approved")) {
-          announceRecruiterTourStep("audit");
-        }
       }
-      toast.success(path.endsWith("approve") ? "Action approved and executed" : "Action dismissed");
+      toast.success(
+        path.endsWith("approve") ? "Action approved; audit record written" : "Action dismissed",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Action failed");
       await refresh();
@@ -238,6 +313,16 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
   const proposed = workspace.actions.filter((item) => item.status === "PROPOSED");
   const history = workspace.actions.filter((item) => item.status !== "PROPOSED");
   const latestRun = workspace.aiRuns[0];
+  const evidenceById = new Map(workspace.evidence.map((item) => [item.id, item]));
+  function focusEvidence(id: string) {
+    if (!workspace) return;
+    const target = document.getElementById(`evidence-${id}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+    const index = workspace.evidence.findIndex((entry) => entry.id === id);
+    const label = evidenceById.get(id)?.label ?? "Evidence";
+    setEvidenceAnnouncement(`Focused evidence E${index + 1}: ${label}`);
+  }
 
   return (
     <section className="rounded-lg border p-4" aria-labelledby="investigation-heading">
@@ -255,8 +340,8 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
             {!latestRun
               ? "Ready to investigate"
               : latestRun.mode === "LIVE"
-                ? "Live AI"
-                : "Recorded fixture"}
+                ? "Live provider"
+                : "Deterministic demo synthesis"}
           </span>
           {latestRun && (
             <div
@@ -276,66 +361,106 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {GUIDED_INVESTIGATION_QUESTIONS.map((item) => (
-          <Button
-            key={item.id}
-            data-testid={`guided-question-${item.id}`}
-            variant="outline"
-            type="button"
-            className="h-auto justify-start p-3 text-left text-xs whitespace-normal"
-            disabled={busy}
-            onClick={() => void ask(item.question)}
+      <nav className="mb-4 flex flex-wrap gap-2 border-y py-3" aria-label="Investigation sections">
+        {[
+          ["investigate", "Investigate"],
+          ...(workspace.report
+            ? [
+                ["findings", "Findings"],
+                ["actions", "Actions"],
+              ]
+            : []),
+          ["evidence", "Evidence"],
+          ["run-details", "Run details"],
+        ].map(([anchor, label]) => (
+          <a
+            key={anchor}
+            href={`#${anchor}`}
+            className="bg-muted text-foreground/80 hover:text-foreground rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
           >
-            <span>
-              <span className="font-medium">{item.label}</span>
-              <br />
-              <span className="text-muted-foreground">{item.question}</span>
-            </span>
-          </Button>
+            {label}
+          </a>
         ))}
-      </div>
+      </nav>
 
-      <div className="mt-3 flex gap-2">
-        <Textarea
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          maxLength={2_000}
-          rows={2}
-          disabled={busy}
-          placeholder="Choose a guided question, or ask a live investigation question when AI is enabled…"
-        />
-        <Button
-          type="button"
-          className="self-end"
-          disabled={busy || !question.trim()}
-          onClick={() => void ask()}
-        >
-          {busy ? "Investigating…" : "Ask"}
-        </Button>
-      </div>
-
-      {answer && (
-        <p className="bg-muted/40 mt-4 rounded-md p-3 text-sm whitespace-pre-wrap">{answer}</p>
-      )}
-
-      {activity.length > 0 && (
-        <div className="bg-muted/20 mt-4 rounded-md border p-3" aria-live="polite">
-          <h3 className="text-xs font-semibold tracking-wide uppercase">Investigation activity</h3>
-          <ol className="text-muted-foreground mt-2 space-y-1 text-xs">
-            {activity.slice(-8).map((item) => (
-              <li key={item.id} className="flex gap-2">
-                <span aria-hidden="true">•</span>
-                <span>{item.label}</span>
-              </li>
-            ))}
-          </ol>
+      <div
+        id="investigate"
+        tabIndex={-1}
+        className="scroll-mt-6 rounded-md focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+      >
+        <p className="text-muted-foreground mb-2 text-xs">
+          Start with a guided question to keep the demo deterministic, or ask your own question when
+          live provider mode is enabled.
+        </p>
+        <div className="grid gap-3 md:grid-cols-3">
+          {GUIDED_INVESTIGATION_QUESTIONS.map((item) => (
+            <Button
+              key={item.id}
+              data-testid={`guided-question-${item.id}`}
+              variant="outline"
+              type="button"
+              className="h-auto justify-start p-3 text-left text-xs whitespace-normal"
+              disabled={busy}
+              onClick={() => void ask(item.question)}
+            >
+              <span>
+                <span className="font-medium">{item.label}</span>
+                <br />
+                <span className="text-muted-foreground group-hover/button:text-foreground">
+                  {item.question}
+                </span>
+              </span>
+            </Button>
+          ))}
         </div>
-      )}
+
+        <div className="mt-3 flex gap-2">
+          <Textarea
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            maxLength={2_000}
+            rows={2}
+            disabled={busy}
+            placeholder="Choose a guided question, or ask a live investigation question when AI is enabled…"
+          />
+          <Button
+            type="button"
+            className="self-end"
+            disabled={busy || !question.trim()}
+            onClick={() => void ask()}
+          >
+            {busy ? "Investigating…" : "Ask"}
+          </Button>
+        </div>
+
+        {answer && (
+          <p className="bg-muted/40 mt-4 rounded-md p-3 text-sm whitespace-pre-wrap">{answer}</p>
+        )}
+
+        {activity.length > 0 && (
+          <div className="bg-muted/20 mt-4 rounded-md border p-3" aria-live="polite">
+            <h3 className="text-xs font-semibold tracking-wide uppercase">
+              Investigation activity
+            </h3>
+            <ol className="text-muted-foreground mt-2 space-y-1 text-xs">
+              {activity.slice(-8).map((item) => (
+                <li key={item.id} className="flex gap-2">
+                  <span aria-hidden="true">•</span>
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </div>
 
       {workspace.report && (
         <div className="mt-4 grid gap-4 border-t pt-4 lg:grid-cols-2">
-          <div>
+          <div
+            id="findings"
+            tabIndex={-1}
+            className="scroll-mt-6 rounded-md focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+          >
             <h3 className="text-xs font-semibold tracking-wide uppercase">Hypotheses</h3>
             <div className="mt-2 space-y-2">
               {workspace.report.hypotheses.map((item, index) => (
@@ -344,9 +469,21 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
                     <span>{item.statement}</span>
                     <span className="text-muted-foreground text-xs">{item.confidence}</span>
                   </div>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {item.evidenceIds.length} evidence citations
-                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-muted-foreground text-xs">Evidence</span>
+                    {item.evidenceIds.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800 hover:bg-teal-100"
+                        onClick={() => focusEvidence(id)}
+                        aria-label={`View evidence E${workspace.evidence.findIndex((entry) => entry.id === id) + 1}: ${evidenceById.get(id)?.label ?? "Evidence"}`}
+                        title={evidenceById.get(id)?.label ?? "Evidence"}
+                      >
+                        E{workspace.evidence.findIndex((entry) => entry.id === id) + 1}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -354,7 +491,11 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
               <span className="font-medium">Uncertainty:</span> {workspace.report.uncertainty}
             </p>
           </div>
-          <div>
+          <div
+            id="actions"
+            tabIndex={-1}
+            className="scroll-mt-6 rounded-md focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+          >
             <h3 className="text-xs font-semibold tracking-wide uppercase">Proposed actions</h3>
             {proposed.length === 0 ? (
               <p className="text-muted-foreground mt-2 text-sm">No pending actions.</p>
@@ -362,18 +503,127 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
               <div className="mt-2 space-y-2">
                 {proposed.map((item) => (
                   <div key={item.id} className="rounded-md border p-2">
-                    <p className="text-sm font-medium">{item.type.replaceAll("_", " ")}</p>
+                    <p className="text-sm font-medium">{ACTION_PRESENTATION[item.type].label}</p>
                     <p className="text-muted-foreground mt-1 text-xs">{item.rationale}</p>
                     <div className="mt-2 flex gap-2">
-                      <Button
-                        data-testid="approve-action"
-                        type="button"
-                        size="sm"
-                        disabled={actionBusy}
-                        onClick={() => void action(`${item.id}/approve`)}
-                      >
-                        {actionBusy ? "Working…" : "Approve"}
-                      </Button>
+                      <ConfirmDialog
+                        trigger={
+                          <Button
+                            data-testid="approve-action"
+                            type="button"
+                            size="sm"
+                            disabled={actionBusy}
+                          >
+                            {actionBusy ? "Working…" : "Approve"}
+                          </Button>
+                        }
+                        title="Approve this recovery action?"
+                        description={
+                          <div className="space-y-3 text-left">
+                            <div className="bg-muted/40 rounded-lg border p-3">
+                              <p className="text-foreground text-xs font-semibold tracking-wide uppercase">
+                                AI proposal · no operation has run
+                              </p>
+                              <p className="text-foreground mt-1 font-medium">
+                                {ACTION_PRESENTATION[item.type].label}
+                              </p>
+                              <p className="mt-1 text-xs leading-relaxed">{item.rationale}</p>
+                            </div>
+
+                            <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                              <div className="rounded-md border p-2.5">
+                                <dt className="text-foreground font-medium">Target</dt>
+                                <dd className="mt-1">
+                                  <span>{ACTION_PRESENTATION[item.type].targetLabel} </span>
+                                  <code className="text-foreground break-all" title={item.targetId}>
+                                    {item.targetId}
+                                  </code>
+                                </dd>
+                              </div>
+                              <div className="rounded-md border p-2.5">
+                                <dt className="text-foreground font-medium">
+                                  Current target state
+                                </dt>
+                                <dd className="mt-1">
+                                  Not assumed in the browser; the server checks it on approval.
+                                </dd>
+                              </div>
+                              <div className="rounded-md border p-2.5 sm:col-span-2">
+                                <dt className="text-foreground font-medium">Expected effect</dt>
+                                <dd className="mt-1">
+                                  {ACTION_PRESENTATION[item.type].expectedEffect}
+                                </dd>
+                              </div>
+                            </dl>
+
+                            <div>
+                              <p className="text-foreground text-xs font-semibold tracking-wide uppercase">
+                                Human approval boundary
+                              </p>
+                              <ol
+                                className="mt-2 grid gap-2 text-xs sm:grid-cols-2"
+                                aria-label="Approval and execution sequence"
+                              >
+                                <li className="flex gap-2 rounded-md border p-2.5">
+                                  <span
+                                    aria-hidden="true"
+                                    className="bg-muted text-foreground flex size-5 shrink-0 items-center justify-center rounded-full font-semibold"
+                                  >
+                                    1
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground block">AI proposes</strong>
+                                    Recommendation only; it cannot approve itself.
+                                  </span>
+                                </li>
+                                <li className="flex gap-2 rounded-md border p-2.5">
+                                  <span
+                                    aria-hidden="true"
+                                    className="bg-muted text-foreground flex size-5 shrink-0 items-center justify-center rounded-full font-semibold"
+                                  >
+                                    2
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground block">OPS approves</strong>
+                                    Your signed-in operator owns this decision.
+                                  </span>
+                                </li>
+                                <li className="flex gap-2 rounded-md border p-2.5">
+                                  <span
+                                    aria-hidden="true"
+                                    className="bg-muted text-foreground flex size-5 shrink-0 items-center justify-center rounded-full font-semibold"
+                                  >
+                                    3
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground block">
+                                      Server revalidates
+                                    </strong>
+                                    It checks tenant scope, eligibility, and single execution.
+                                  </span>
+                                </li>
+                                <li className="flex gap-2 rounded-md border p-2.5">
+                                  <span
+                                    aria-hidden="true"
+                                    className="bg-muted text-foreground flex size-5 shrink-0 items-center justify-center rounded-full font-semibold"
+                                  >
+                                    4
+                                  </span>
+                                  <span>
+                                    <strong className="text-foreground block">
+                                      Execute and record
+                                    </strong>
+                                    {ACTION_PRESENTATION[item.type].execution}
+                                  </span>
+                                </li>
+                              </ol>
+                            </div>
+                          </div>
+                        }
+                        confirmLabel="Revalidate and approve"
+                        contentClassName="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
+                        onConfirm={() => action(`${item.id}/approve`)}
+                      />
                       <Button
                         type="button"
                         size="sm"
@@ -404,15 +654,30 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
               </div>
             )}
             {workspace.audit.length > 0 && (
-              <div className="mt-3 border-t pt-3">
+              <div
+                id="audit-trail"
+                tabIndex={-1}
+                onFocus={() => announceRecruiterTourStep("audit")}
+                className="mt-3 scroll-mt-6 rounded-md border-t pt-3 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+              >
                 <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                   Audit trail
                 </h4>
                 <div className="mt-2 space-y-1 text-xs">
                   {workspace.audit.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between gap-2">
-                      <span>{entry.action.replaceAll(".", " · ")}</span>
-                      <span>{entry.user?.name ?? "system"}</span>
+                    <div key={entry.id} className="flex items-start justify-between gap-3">
+                      <span>
+                        <span title={entry.action}>{auditActionLabel(entry.action)}</span>
+                        <span className="text-muted-foreground block" title={entry.targetId}>
+                          target {entry.targetId.slice(0, 12)}…
+                        </span>
+                      </span>
+                      <span className="text-right">
+                        {entry.user?.name ?? "system"}
+                        <span className="text-muted-foreground block">
+                          <Timestamp date={entry.createdAt} />
+                        </span>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -422,25 +687,113 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
         </div>
       )}
 
-      <div className="mt-4 border-t pt-4">
+      <div id="evidence" className="mt-4 scroll-mt-6 border-t pt-4">
         <h3 className="text-xs font-semibold tracking-wide uppercase">
           Evidence board ({workspace.evidence.length})
         </h3>
         <div className="mt-2 grid gap-2 md:grid-cols-2">
-          {workspace.evidence.slice(-10).map((item) => (
-            <a
-              key={item.id}
-              href={item.href ?? "#"}
-              className="hover:bg-muted/40 rounded-md border p-2 text-xs"
-            >
-              <div className="flex justify-between gap-2">
-                <span className="font-medium">{item.label}</span>
-                {item.observedAt && <Timestamp date={item.observedAt} />}
+          {workspace.evidence.map((item, index) => {
+            const content = (
+              <>
+                <div className="flex justify-between gap-2">
+                  <span className="font-medium">
+                    <span className="text-muted-foreground mr-1">E{index + 1}</span>
+                    {item.label}
+                  </span>
+                  {item.observedAt && <Timestamp date={item.observedAt} />}
+                </div>
+                <p className="text-muted-foreground mt-1 line-clamp-2">{item.excerpt}</p>
+              </>
+            );
+            const className =
+              "hover:bg-muted/40 rounded-md border p-2 text-xs transition-shadow focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none";
+            return item.href ? (
+              <a
+                key={item.id}
+                id={`evidence-${item.id}`}
+                href={item.href}
+                aria-label={`Evidence E${index + 1}: ${item.label}`}
+                className={className}
+              >
+                {content}
+              </a>
+            ) : (
+              <div
+                key={item.id}
+                id={`evidence-${item.id}`}
+                tabIndex={-1}
+                role="group"
+                aria-label={`Evidence E${index + 1}: ${item.label}`}
+                className={className}
+              >
+                {content}
               </div>
-              <p className="text-muted-foreground mt-1 line-clamp-2">{item.excerpt}</p>
-            </a>
-          ))}
+            );
+          })}
         </div>
+        <p className="sr-only" aria-live="polite">
+          {evidenceAnnouncement}
+        </p>
+      </div>
+
+      <div id="run-details" className="mt-4 scroll-mt-6 border-t pt-4">
+        <h3 className="text-xs font-semibold tracking-wide uppercase">Run details</h3>
+        {latestRun ? (
+          <dl className="text-muted-foreground mt-2 grid gap-2 text-xs sm:grid-cols-2">
+            <div>
+              <dt className="text-foreground font-medium">Source</dt>
+              <dd>
+                {latestRun.mode === "LIVE"
+                  ? "Credentialed live provider"
+                  : "Deterministic demo synthesis"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground font-medium">Engine</dt>
+              <dd>
+                {latestRun.mode === "LIVE" ? latestRun.model : `${latestRun.model} · no model call`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground font-medium">Prompt version</dt>
+              <dd>{latestRun.promptVersion}</dd>
+            </div>
+            <div>
+              <dt className="text-foreground font-medium">Usage</dt>
+              <dd>
+                {latestRun.totalInputTokens + latestRun.totalOutputTokens} tokens ·{" "}
+                {formatCost(latestRun.totalCostUsd)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-foreground font-medium">Latency</dt>
+              <dd>{latestRun.latencyMs == null ? "Not reported" : `${latestRun.latencyMs}ms`}</dd>
+            </div>
+            <div>
+              <dt className="text-foreground font-medium">Trace</dt>
+              <dd className="truncate" title={latestRun.traceId ?? undefined}>
+                {latestRun.traceId ? `${latestRun.traceId.slice(0, 18)}…` : "Not reported"}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-foreground font-medium">Provider attempts</dt>
+              <dd>
+                {latestRun.calls.length === 0
+                  ? "No provider call — deterministic demo synthesis"
+                  : latestRun.calls
+                      .map(
+                        (call) =>
+                          `#${call.sequence} ${call.status.toLowerCase()} · ${call.latencyMs}ms · ${formatCost(call.costUsd)}${call.providerRequestId ? ` · ${call.providerRequestId.slice(0, 12)}…` : ""}`,
+                      )
+                      .join(" | ")}
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="text-muted-foreground mt-2 text-xs">
+            Run a question to capture model and safety telemetry.
+          </p>
+        )}
       </div>
     </section>
   );

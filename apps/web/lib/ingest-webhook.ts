@@ -85,8 +85,9 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
   if (!def || !connector) return { outcome: "unknown-connector", status: 404 };
 
   const headersCapture = {
-    [WEBHOOK_SIGNATURE_HEADER]: signature,
-    [WEBHOOK_SIGNATURE_V2_HEADER]: signatureV2,
+    // Preserve whether a signature arrived without storing reusable authentication material.
+    [WEBHOOK_SIGNATURE_HEADER]: signature ? "[REDACTED]" : null,
+    [WEBHOOK_SIGNATURE_V2_HEADER]: signatureV2 ? "[REDACTED]" : null,
     [WEBHOOK_TIMESTAMP_HEADER]: timestamp,
     [WEBHOOK_DELIVERY_HEADER]: deliveryId,
     [WEBHOOK_EVENT_HEADER]: eventType,
@@ -95,7 +96,8 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
   const v2Present = !!signatureV2 || !!timestamp;
   const v2Valid =
     v2Present && verifyWebhookSignatureV2(rawBody, signatureV2, timestamp, WEBHOOK_SIGNING_SECRET);
-  const legacyAllowed = process.env.WEBHOOK_REQUIRE_TIMESTAMP !== "true";
+  const legacyAllowed =
+    process.env.NODE_ENV !== "production" && process.env.WEBHOOK_REQUIRE_TIMESTAMP !== "true";
   const signatureValid =
     v2Valid ||
     (!v2Present &&
@@ -119,6 +121,7 @@ export async function ingestWebhook(input: IngestInput): Promise<IngestOutcome> 
     });
     log.warn({ connectorKey, deliveryId }, "webhook signature verification failed");
     await logToDb("WARN", `${connectorKey} webhook rejected: signature verification failed`, {
+      orgId: connector.orgId,
       connectorId: connector.id,
     });
     return { outcome: "invalid-signature", status: 401, eventId: invalid.id };

@@ -1,11 +1,12 @@
-import type { Job } from "bullmq";
+import { UnrecoverableError, type Job } from "bullmq";
 import { prisma } from "@pulse/db";
-import { SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
+import { fhirBundleSchema, SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
 import { log } from "../log.js";
 import { syncQueue, createTrackedJob } from "../queues.js";
 
 const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? "http://localhost:4001";
 const PAGE_COUNT = 15;
+type FhirBundle = ReturnType<typeof fhirBundleSchema.parse>;
 
 interface SyncStartPayload {
   connectorId: string;
@@ -19,11 +20,6 @@ interface SyncPagePayload {
   syncRunId: string;
   page: number;
   resource: "Patient" | "Appointment";
-}
-
-interface FhirBundle {
-  entry?: unknown[];
-  link?: { next?: string };
 }
 
 export async function processSyncJob(job: Job) {
@@ -81,13 +77,13 @@ async function processSyncPage(job: Job<SyncPagePayload>) {
       },
     );
     if (!res.ok) throw new Error(`simulator returned ${res.status}`);
-    bundle = (await res.json()) as FhirBundle;
+    const parsed = fhirBundleSchema.safeParse(await res.json().catch(() => null));
+    if (!parsed.success) {
+      throw new UnrecoverableError("simulator returned a schema-invalid FHIR bundle");
+    }
+    bundle = parsed.data;
   } finally {
     clearTimeout(timeout);
-  }
-
-  if (!Array.isArray(bundle.entry)) {
-    throw new Error("simulator returned a schema-invalid bundle (missing entry array)");
   }
 
   const fetched = bundle.entry.length;

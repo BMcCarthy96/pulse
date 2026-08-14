@@ -8,31 +8,21 @@ import { currentTraceId } from "@pulse/shared";
 // route logging; it's the same story in production either way.
 export const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
-// Deliberately not memoised. A module-level cache here is never invalidated, so it outlives the
-// row it points at — and a stale org id turns every subsequent write into a silent foreign-key
-// failure inside the catch below. `logToDb` is called on route-level WARN/ERROR only, so the
-// extra indexed lookup costs nothing worth having a stale-state bug for.
-async function getOrgId(): Promise<string | null> {
-  const org = await prisma.organization.findFirst();
-  return org?.id ?? null;
-}
-
 /** Persist a single structured LogEntry (source: "web"). Used sparingly — route-level WARN/ERROR only, not every request. */
 export async function logToDb(
   level: LogLevel,
   message: string,
   context: {
+    orgId: string;
     connectorId?: string;
     jobId?: string;
     incidentId?: string;
     traceId?: string;
     [key: string]: unknown;
-  } = {},
+  },
 ) {
   try {
-    const orgId = await getOrgId();
-    if (!orgId) return;
-    const { connectorId, jobId, incidentId, traceId, ...rest } = context;
+    const { orgId, connectorId, jobId, incidentId, traceId, ...rest } = context;
     await prisma.logEntry.create({
       data: {
         orgId,

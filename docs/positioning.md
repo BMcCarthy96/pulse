@@ -8,16 +8,16 @@ code, it does not belong.
 
 ## Résumé bullet (primary)
 
-> Built a monitoring console for healthcare integrations with job queues, retry logic, structured
-> logs, sync health views, and AI-generated incident summaries (with PHI redaction) for failed
-> workflows — Next.js/TypeScript, PostgreSQL, Redis/BullMQ, deployed on Vercel + Railway with CI,
-> unit, and e2e tests.
+> Built an AI-assisted incident investigation platform for simulated healthcare integrations,
+> combining BullMQ retry and health pipelines with evidence-cited LLM analysis, PHI redaction,
+> human-approved recovery actions, tenant-isolated demos, and deterministic eval/CI gates across
+> 267 automated tests.
 
 ### Shorter variant (one line, for a dense résumé)
 
-> Healthcare integration monitoring console — BullMQ job queues with retry/backoff, rolling-window
-> health scoring, auto-opened incidents, and PHI-redacted AI incident summaries. Next.js,
-> Postgres, Redis, Vercel + Railway, 236 tests across unit/integration/e2e.
+> AI investigation workspace for simulated healthcare integrations — Next.js, PostgreSQL,
+> Redis/BullMQ, cited findings, runtime PHI and grounding policies, human-approved recovery, and
+> 267 automated tests plus 19 offline eval fixtures.
 
 ### Supporting bullets (pick two, matched to the role)
 
@@ -37,11 +37,9 @@ code, it does not belong.
 
 ## LinkedIn blurb (2 sentences)
 
-> Pulse is a monitoring console for a healthcare organisation's third-party integrations — EHR
-> syncs, lab feeds, claims submissions, eligibility checks — with job queues, retry and backoff,
-> structured logs, rolling-window health scoring, and auto-opened incidents. Every upstream is
-> simulated with a chaos panel so any failure mode is reproducible on demand, and incident
-> summaries are drafted by Claude from PHI-redacted context with a leak check behind it.
+> Pulse is an AI-assisted investigation workspace for simulated EHR, lab, claims, and eligibility
+> integrations. It turns durable jobs, health windows, and incident evidence into cited findings,
+> then keeps every recovery action behind target revalidation, human approval, and an audit trail.
 
 ---
 
@@ -99,7 +97,8 @@ Lead with **the whole system existing and being demonstrable in three minutes**.
 - One person, planned in phases, every phase's acceptance criteria verified and recorded —
   including the deviations, which is the part worth reading.
 - Two-service deployment with a real reason for the split (BullMQ needs a live process).
-- 236 tests across three layers, chosen by what each layer can actually prove.
+- 267 automated tests across three layers plus 19 offline eval fixtures, chosen by what each layer
+  can actually prove.
 - The demo is the pitch: break something, watch it get detected, watch it recover.
 
 ---

@@ -73,9 +73,11 @@ describe("ingestWebhook — happy path", () => {
 
     const event = await prisma.integrationEvent.findFirstOrThrow({});
     expect(event.headers).toMatchObject({
+      "x-pulse-signature": "[REDACTED]",
       "x-pulse-delivery": input.deliveryId,
       "x-pulse-event": "lab.result",
     });
+    expect(JSON.stringify(event.headers)).not.toContain(input.signature);
   });
 
   it("stores the parsed payload", async () => {

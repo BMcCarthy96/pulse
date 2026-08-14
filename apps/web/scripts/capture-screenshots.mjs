@@ -1,15 +1,17 @@
 /**
- * Captures the five README/portfolio screenshots into `docs/media/`.
+ * Captures the recruiter-facing v3 story into `docs/media/`.
  *
- * Deliberately a script rather than a Playwright test: it is not an assertion about the app, it
- * is a build step for the docs, and running it in CI would mean committing binaries from a job.
- * It talks to an already-running stack (`pnpm dev` or `pnpm --filter @pulse/web start`) so the
- * charts and job tables contain the same seeded data a reader will see when they clone and run.
+ * This deliberately enters through the public `/recruiter` page and provisions the same
+ * short-lived, tenant-isolated demo a recruiter receives. It does not use a shared admin
+ * account, an AI provider key, or mutable seed history. The result is one coherent incident:
+ * public pitch → broken overview → cited findings → approval → execution + audit.
+ *
+ * It is a documentation build step rather than a Playwright test. Run it against an already
+ * running current build with `DEMO_MODE=true`:
  *
  *   pnpm --filter @pulse/web screenshots
  *
- * Re-seed first (`pnpm db:seed`) if the shots need to match a clean checkout — phase 11 task 3
- * asks for "consistent seeded state", and the health engine mutates connector status as it ticks.
+ * Override `SCREENSHOT_BASE_URL` when the preview is not on http://localhost:3010.
  */
 import { chromium } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
@@ -17,41 +19,46 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const BASE_URL = process.env.SCREENSHOT_BASE_URL ?? "http://localhost:3010";
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "pulse-demo-2026";
-const ADMIN_EMAIL = "dana@lakeviewhealth.example";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MEDIA_DIR = path.resolve(here, "../../../docs/media");
+const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
-/**
- * Output is 1440px wide — about 1.6x the ~900px content column GitHub renders a README into, so
- * text stays crisp after downscaling while each file stays around 100–200 KB.
- *
- * `deviceScaleFactor` is deliberately absent. Setting it to 2 does nothing here: `shoot()` passes
- * `scale: "css"`, which pins the output to CSS pixels and overrides it. Keeping both would look
- * like these are 2x captures when they are not.
- */
-const VIEWPORT = { width: 1440, height: 900 };
-
-/**
- * Next's dev-tools bubble renders into a `<nextjs-portal>` element and floats over the
- * bottom-left corner of every page, so it lands in the frame of anything captured against
- * `pnpm dev`. Hidden per-navigation rather than by turning `devIndicators` off in
- * `next.config.ts`, which would take the indicator away from normal development too.
- */
+/** Hide development-only UI without changing normal application configuration. */
 async function hideDevOverlay(page) {
   await page.addStyleTag({
     content: "nextjs-portal, [data-nextjs-toast] { display: none !important; }",
   });
 }
 
-async function shoot(page, name, { fullPage = false } = {}) {
+async function settle(page) {
   await hideDevOverlay(page);
-  // Recharts animates on mount; without settling first the line chart is captured mid-draw.
-  await page.waitForTimeout(1200);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  // Recharts and route transitions animate on mount. A short settle keeps captures repeatable.
+  await page.waitForTimeout(900);
+}
+
+async function shoot(page, name, { fullPage = false } = {}) {
+  await settle(page);
   const file = path.join(MEDIA_DIR, `${name}.png`);
   await page.screenshot({ path: file, fullPage, animations: "disabled", scale: "css" });
   console.log(`  wrote docs/media/${name}.png`);
+}
+
+async function openRecruiterLanding(page) {
+  const response = await page.goto(`${BASE_URL}/recruiter`, { waitUntil: "networkidle" });
+  if (!response?.ok()) {
+    throw new Error(`Recruiter landing failed: ${response?.status() ?? "no response"}`);
+  }
+  await page
+    .getByRole("heading", {
+      name: /Investigate integration failures before clinicians discover them/i,
+    })
+    .waitFor();
+  await page.getByText("Provider-free by default").waitFor();
 }
 
 async function main() {
@@ -59,69 +66,97 @@ async function main() {
 
   const browser = await chromium.launch();
   const context = await browser.newContext({
-    viewport: VIEWPORT,
+    viewport: DESKTOP_VIEWPORT,
     colorScheme: "light",
-    // Pinned so relative timestamps ("2d ago") and the 24h chart axis read the same for every
-    // person who regenerates these, rather than tracking the machine's locale.
+    reducedMotion: "reduce",
     locale: "en-US",
     timezoneId: "America/New_York",
   });
   const page = await context.newPage();
+  let demoCreated = false;
 
-  // Admin persona: the chaos panel and the audit log are both ADMIN-gated, and two of the five
-  // required shots are of exactly those.
-  console.log(`Signing in as ${ADMIN_EMAIL} at ${BASE_URL}`);
-  await page.goto(`${BASE_URL}/login`);
-  await page.getByLabel("Email").fill(ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(DEMO_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("button", { name: "Sign out" }).waitFor({ timeout: 30_000 });
+  try {
+    console.log(`Capturing the public recruiter path at ${BASE_URL}`);
+    await openRecruiterLanding(page);
+    await shoot(page, "01-recruiter-landing");
 
-  // 1 — Overview. The README hero.
-  await page.goto(`${BASE_URL}/`);
-  await page.getByText("Integration health across all connectors.").waitFor();
-  await shoot(page, "01-overview");
-
-  // 2 — Connector detail with the chaos panel. Full page: the panel sits below the metrics.
-  await page.goto(`${BASE_URL}/connectors/ehr-fhir`);
-  await page.getByText("Chaos panel").waitFor({ timeout: 30_000 });
-  await shoot(page, "02-connector-chaos-panel", { fullPage: true });
-
-  // 3 — Failing jobs. The page already defaults its status filter to DEAD.
-  await page.goto(`${BASE_URL}/jobs`);
-  await page.getByRole("table").waitFor({ timeout: 30_000 });
-  await shoot(page, "03-dead-jobs");
-
-  // 4 — An incident with a finished AI summary. Picked from the API rather than hardcoded,
-  // because the seed uses cuids for some incidents and uuids for others.
-  const incidents = await page.evaluate(async () => {
-    const res = await fetch("/api/v1/incidents?limit=50");
-    if (!res.ok) throw new Error(`incidents list failed: ${res.status}`);
-    return (await res.json()).data;
-  });
-  const withSummary = incidents.find(
-    (i) => i.aiSummaryStatus === "ready" || i.aiSummaryStatus === "edited",
-  );
-  if (!withSummary) {
-    throw new Error(
-      "No incident has a completed AI summary. Run the worker with ANTHROPIC_API_KEY set, or re-seed.",
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await openRecruiterLanding(page);
+    const hasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
     );
+    if (hasHorizontalOverflow) throw new Error("Recruiter landing overflows the mobile viewport");
+    await shoot(page, "02-recruiter-mobile");
+
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await openRecruiterLanding(page);
+    await page
+      .getByRole("button", { name: /Launch interactive demo/i })
+      .first()
+      .click();
+    try {
+      await page.getByTestId("recruiter-tour-button").waitFor({ timeout: 30_000 });
+    } catch (error) {
+      const visibleError = await page
+        .getByRole("alert")
+        .textContent()
+        .catch(() => null);
+      throw new Error(
+        visibleError
+          ? `Demo provisioning failed: ${visibleError}`
+          : "Demo provisioning failed. Confirm the current app was started with DEMO_MODE=true.",
+        { cause: error },
+      );
+    }
+    demoCreated = true;
+
+    await page.getByText("Synthetic incident workspace").waitFor();
+    await page.getByRole("link", { name: "Continue investigation" }).waitFor();
+    await shoot(page, "03-broken-overview");
+
+    await page.getByRole("link", { name: "Continue investigation" }).click();
+    await page.getByRole("heading", { name: "Investigation workspace" }).waitFor();
+    await page.getByTestId("guided-question-first-signal").click();
+    await page.getByText("Deterministic demo synthesis").first().waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { name: "Proposed actions" }).waitFor();
+    await page.getByText(/Evidence board/).waitFor();
+    await page.getByRole("link", { name: "Findings", exact: true }).click();
+    await page.locator("#findings").waitFor();
+    await shoot(page, "04-cited-investigation");
+
+    const approve = page.getByTestId("approve-action").first();
+    await approve.scrollIntoViewIfNeeded();
+    await approve.click();
+    await page.getByRole("button", { name: "Revalidate and approve" }).waitFor();
+    await shoot(page, "05-approval-confirmation");
+
+    const approvalResponse = page.waitForResponse(
+      (response) => response.url().includes("/actions/") && response.url().endsWith("/approve"),
+    );
+    await page.getByRole("button", { name: "Revalidate and approve" }).click();
+    const response = await approvalResponse;
+    if (!response.ok()) throw new Error(`Action approval failed: ${response.status()}`);
+
+    await page.getByText("Action history").waitFor();
+    await page.getByText("SUCCEEDED", { exact: true }).first().waitFor();
+    const auditHeading = page.getByText("Audit trail", { exact: true });
+    await auditHeading.waitFor();
+    await auditHeading.scrollIntoViewIfNeeded();
+    await shoot(page, "06-executed-action-audit");
+
+    console.log("Done. Captured one isolated, provider-free recruiter story.");
+  } finally {
+    if (demoCreated) {
+      const reset = await page.request.post(`${BASE_URL}/api/demo/reset`).catch(() => null);
+      if (reset?.ok()) {
+        console.log("  reset demo to baseline; one-hour TTL cleanup remains scheduled");
+      } else console.warn("  demo reset did not complete; one-hour TTL cleanup remains scheduled");
+    }
+    await browser.close();
   }
-  console.log(`  incident ${withSummary.id} (${withSummary.aiSummaryStatus})`);
-  await page.goto(`${BASE_URL}/incidents/${withSummary.id}`);
-  await page.getByText("AI summary").waitFor({ timeout: 30_000 });
-  await shoot(page, "04-incident-ai-summary", { fullPage: true });
-
-  // 5 — Audit log. It is the default tab on Settings.
-  await page.goto(`${BASE_URL}/settings`);
-  await page.getByRole("table").waitFor({ timeout: 30_000 });
-  await shoot(page, "05-audit-log");
-
-  await browser.close();
-  console.log("Done.");
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });

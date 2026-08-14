@@ -23,17 +23,19 @@ export function DemoEntryButton({ authenticated = false }: { authenticated?: boo
       if (result?.error) {
         setError(
           result.url?.includes("demo_capacity")
-            ? "The live demo is at capacity. The video and engineering proof remain available below."
+            ? "The interactive demo is at capacity. Use the walkthrough and engineering proof below."
             : result.url?.includes("demo_rate_limit")
               ? "This network has created several demos recently. Please try again later."
-              : "The live workspace is temporarily unavailable. Please use the walkthrough below.",
+              : "The interactive workspace is temporarily unavailable. Please use the walkthrough below.",
         );
         return;
       }
       router.push("/");
       router.refresh();
     } catch {
-      setError("The live workspace is temporarily unavailable. Please use the walkthrough below.");
+      setError(
+        "The interactive workspace is temporarily unavailable. Please use the walkthrough below.",
+      );
     } finally {
       setBusy(false);
     }
@@ -47,7 +49,7 @@ export function DemoEntryButton({ authenticated = false }: { authenticated?: boo
           ? "Preparing isolated workspace…"
           : authenticated
             ? "Open dashboard"
-            : "Try the live demo"}
+            : "Launch interactive demo"}
         {!busy && <ArrowRight />}
       </Button>
       {error && (

@@ -112,7 +112,7 @@ export async function processIncidentSummaryJob(job: BullJob) {
   ]);
 
   try {
-    if (process.env.AI_ENABLED === "false" || !process.env.ANTHROPIC_API_KEY) {
+    if (process.env.AI_ENABLED !== "true" || !process.env.ANTHROPIC_API_KEY) {
       throw new AiNotConfiguredError();
     }
     const worstCaseCost = costOf({ inputTokens: 12_000, outputTokens: 1_500 }, modelName()) ?? 0.5;

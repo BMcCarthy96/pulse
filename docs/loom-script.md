@@ -1,18 +1,18 @@
 # Recruiter video script — 90 seconds
 
 Record against the public deployment at 1440×900, 100% zoom. Start on `/recruiter` in a signed-out
-browser and leave live AI disabled: the recorded path is deterministic, labelled honestly, and is
+browser and leave live AI disabled: the deterministic path is repeatable, labelled honestly, and is
 the same path CI verifies. A clean demo session is provisioned during the take.
 
 ## 0:00–0:15 — State the product problem
 
-Show the public hero and the synthetic/recorded badges.
+Show the public hero and the synthetic/deterministic badges.
 
 > “Pulse is an investigation workspace for integration failures. It combines job attempts,
 > connector health, and incident evidence so an operator can find what changed and recover safely
 > before a clinician discovers missing data.”
 
-Choose **Try the live demo**.
+Choose **Launch interactive demo**.
 
 ## 0:15–0:35 — Establish the system and the boundary
 
@@ -28,13 +28,13 @@ Choose **Next: Open the EHR incident**.
 ## 0:35–1:05 — Investigate from bounded evidence
 
 In the investigation workspace, choose **Find the first signal**. Let the activity stream finish,
-then point to **Recorded fixture**, evidence citations, confidence, uncertainty, and the proposed
+then point to **Deterministic demo synthesis**, evidence citations, confidence, uncertainty, and the proposed
 retry.
 
-> “The investigation can run live, but this public path uses a versioned recording, so it is
-> repeatable and spends no model budget. The same schema and safety boundary apply: evidence is
-> redacted before model access, every claim cites the bounded evidence set, and the model may only
-> propose allow-listed actions.”
+> “The investigation can run live, but this public path uses provider-free deterministic evidence
+> synthesis, so it is repeatable and spends no model budget. The same report schema and runtime
+> policies apply: every finding cites the bounded evidence set, and only allow-listed actions can
+> reach operator approval.”
 
 ## 1:05–1:22 — Show human approval and auditability
 
@@ -48,13 +48,14 @@ Approve the retry, then show **SUCCEEDED** and the audit entries.
 Return to `/recruiter` or cut to the proof cards.
 
 > “The repository verifies its own test and eval counts, enforces coverage and Lighthouse budgets,
-> boots the production worker image in CI, and smoke-tests this deployed journey every day.”
+> boots the production worker image in CI, and can smoke-test the deployed journey every day once
+> the public URL is configured.”
 
 End on the repository URL and public demo URL.
 
 ## Recording checklist
 
-- Say “synthetic data” and “recorded AI” aloud.
+- Say “synthetic data” and “provider-free deterministic evidence synthesis” aloud.
 - Show the generated demo—not the shared seeded personas—as the primary recruiter path.
 - Do not imply a discovered root cause when the evidence only supports a hypothesis.
 - Do not expose environment values, provider keys, Railway/Vercel dashboards, or real user data.

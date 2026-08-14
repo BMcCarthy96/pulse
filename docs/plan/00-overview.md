@@ -26,7 +26,7 @@ and differentiates against generic CRM-sync demos.
 > Built a monitoring console for healthcare integrations with job queues, retry logic,
 > structured logs, sync health views, and AI-generated incident summaries (with PHI
 > redaction) for failed workflows — Next.js/TypeScript, PostgreSQL, Redis/BullMQ,
-> deployed on Vercel + Railway with CI, unit, and e2e tests.
+> deployment-ready for Vercel + Railway, with CI, unit, and e2e tests.
 
 ## Personas (seeded users)
 

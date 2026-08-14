@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   LineChart,
   Line,
@@ -22,6 +23,7 @@ import { Timestamp } from "@/components/timestamp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { announceRecruiterTourStep } from "@/components/recruiter-tour";
 
 const CONNECTOR_COLORS: Record<string, string> = {
   "ehr-fhir": "#2563eb",
@@ -32,6 +34,8 @@ const CONNECTOR_COLORS: Record<string, string> = {
 
 export default function OverviewPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isRecruiterDemo = Boolean(session?.user?.demoSessionId);
   const { data: overview, isLoading: overviewLoading } =
     usePolling<OverviewResponse>("/api/v1/overview");
   const { data: connectorsResp } = usePolling<{ data: ConnectorRow[] }>("/api/v1/connectors");
@@ -39,9 +43,62 @@ export default function OverviewPage() {
   const connectors = connectorsResp?.data ?? [];
   const chartData = buildChartData(connectors);
 
+  const primaryIncident = overview?.recentIncidents.find(
+    (incident) => incident.status !== "RESOLVED",
+  );
+  const needsAttention = Boolean(
+    overview && (overview.totals.deadJobs > 0 || overview.totals.openIncidents > 0),
+  );
+
   return (
     <div>
       <PageHeader title="Overview" description="Integration health across all connectors." />
+
+      {isRecruiterDemo && (
+        <section
+          id="demo-overview"
+          tabIndex={-1}
+          className="mb-6 overflow-hidden rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 via-white to-indigo-50 p-5 shadow-sm focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.18em] text-teal-700 uppercase">
+                Synthetic incident workspace
+              </p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">
+                {needsAttention && primaryIncident
+                  ? `${primaryIncident.connectorDisplayName} needs an operator`
+                  : "Connectors are ready for review"}
+              </h2>
+              <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+                Follow one failure from health signal to cited investigation, human approval, and an
+                auditable recovery action.
+              </p>
+              <p className="mt-2 text-xs text-teal-900/70">
+                Guided path: use Tour in the header. Explore on your own: open any connector or
+                incident.
+              </p>
+            </div>
+            {primaryIncident ? (
+              <Link
+                href={`/incidents/${primaryIncident.id}#investigation-heading`}
+                onClick={() => announceRecruiterTourStep("overview")}
+                className="inline-flex shrink-0 items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Continue investigation →
+              </Link>
+            ) : (
+              <Link
+                href="/incidents"
+                onClick={() => announceRecruiterTourStep("overview")}
+                className="inline-flex shrink-0 items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Explore incidents →
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard

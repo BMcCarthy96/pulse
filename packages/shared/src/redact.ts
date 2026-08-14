@@ -100,9 +100,39 @@ export function redactDeep<T>(value: T, knownNames: string[] = []): T {
   return value;
 }
 
-export function findLeakedIdentifiers(text: string, knownIdentifiers: string[] = []): string[] {
+export interface LeakScanOptions {
+  /** Standalone codes such as W123456789 are treated as member IDs by the strict outbound scan. */
+  includeAmbiguousMemberIds?: boolean;
+  /** Bare YYYY-MM-DD values are DOB-like in source data but can be legitimate incident dates. */
+  includeBareDates?: boolean;
+}
+
+export function findLeakedIdentifiers(
+  text: string,
+  knownIdentifiers: string[] = [],
+  options: LeakScanOptions = {},
+): string[] {
   const leaks = new Set<string>();
-  for (const pattern of [/\bPAT-\d+/gi, /\bCLM-\d+/gi, /\bAPT-\d+/gi, /\b\d{3}-\d{2}-\d{4}\b/g]) {
+  // Keep this scanner intentionally independent from `RULES`. If the redactor regresses, the
+  // policy check must still catch every protected category rather than reusing the same patterns.
+  const protectedPatterns = [
+    /\bPatient\/PAT-\d+/gi,
+    /\bPAT-\d+/gi,
+    /\bCLM-\d+/gi,
+    /\bAPT-\d+/gi,
+    /\bMEM-\d+\b/gi,
+    /\b\d{3}-\d{2}-\d{4}\b/g,
+    /\b[\w.+-]+@[\w-]+\.[\w.]+\b/gi,
+    /(?<!\w)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g,
+    /\b\d{1,2}\/\d{1,2}\/(?:19|20)\d{2}\b/g,
+  ];
+  if (options.includeAmbiguousMemberIds !== false) {
+    protectedPatterns.push(/\b[A-Z]{1,3}\d{6,12}\b/gi);
+  }
+  if (options.includeBareDates !== false) {
+    protectedPatterns.push(/\b(?:19|20)\d{2}-\d{2}-\d{2}\b(?!T)/g);
+  }
+  for (const pattern of protectedPatterns) {
     for (const match of text.matchAll(pattern)) leaks.add(match[0]);
   }
   for (const identifier of knownIdentifiers) {

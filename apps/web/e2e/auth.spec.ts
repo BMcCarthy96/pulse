@@ -13,8 +13,20 @@ test.describe("auth and role gates", () => {
         name: /Investigate integration failures before clinicians discover them/i,
       }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try the live demo" }).first()).toBeVisible();
-    await expect(page.getByText("Recorded AI by default")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Launch interactive demo/i }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Provider-free by default")).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    const live = await page.request.get("/livez", { maxRedirects: 0 });
+    expect(live.status()).toBe(200);
+    expect(await live.json()).toMatchObject({ ok: true, service: "web" });
+    const ready = await page.request.get("/readyz", { maxRedirects: 0 });
+    expect([200, 503]).toContain(ready.status());
+    expect(await ready.json()).toHaveProperty("ready");
 
     await page.goto("/incidents");
     await expect(page).toHaveURL(/\/login/);
@@ -40,41 +52,73 @@ test.describe("auth and role gates", () => {
   test("signs in and out through the demo persona buttons", async ({ page }) => {
     await loginAs(page, "ops");
     await expect(page.getByRole("link", { name: /connectors/i })).toBeVisible();
+    await expect(page.getByText("Synthetic incident workspace")).toHaveCount(0);
     await logout(page);
   });
 
-  test("opens an isolated recruiter workspace with recorded investigation evidence", async ({
+  test("opens an isolated recruiter workspace with deterministic investigation evidence", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/recruiter");
-    await page.getByRole("button", { name: "Try the live demo" }).first().click();
+    await page
+      .getByRole("button", { name: /Launch interactive demo/i })
+      .first()
+      .click();
+    const recruiterTourButton = page.getByTestId("recruiter-tour-button");
+    await expect(recruiterTourButton).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Math.abs(window.scrollY))).toBeLessThanOrEqual(1);
+    await recruiterTourButton.click();
     await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
     await expect(page.getByText("1. Review the overview")).toBeVisible();
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Next: Review the overview" }).click();
+    await page.getByRole("link", { name: "Continue investigation" }).click();
     await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();
-    await page.goto("/incidents");
-    await page.getByRole("link", { name: /Mercy General EHR sync is failing/i }).click();
     await expect(page.getByRole("heading", { name: "Investigation workspace" })).toBeVisible();
+    await expect(page.getByTestId("recruiter-tour-button")).toContainText("2/5");
+    await page.getByTestId("recruiter-tour-button").click();
+    await page.getByRole("button", { name: "Next: Find the first signal" }).click();
     const firstSignal = page.getByTestId("guided-question-first-signal");
     await firstSignal.click();
-    await expect(page.getByText("Recorded fixture")).toBeVisible();
-    await expect(page.getByTestId("investigation-telemetry")).toContainText("recorded-fixture-v3");
+    await expect(page.getByText("Deterministic demo synthesis").first()).toBeVisible();
+    await expect(page.getByTestId("investigation-telemetry")).toContainText(
+      "deterministic-demo-v3",
+    );
     await expect(page.getByText("Investigation activity")).toBeVisible();
     await expect(page.getByText(/Evidence board/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Proposed actions" })).toBeVisible();
+    await expect(page.getByTestId("recruiter-tour-button")).toContainText("3/5");
+    const firstCitation = page.getByRole("button", { name: /View evidence E/i }).first();
+    await firstCitation.click();
+    await expect(page.locator('[id^="evidence-"]:focus')).toHaveCount(1);
+    await page.reload();
     await expect(page.getByRole("heading", { name: "Proposed actions" })).toBeVisible();
     // The report renders from the run.completed refresh just before the stream's finally block
     // clears `busy`. Waiting for the guided control to re-enable avoids clicking an action while
     // that final workspace refresh can still replace the proposed-action DOM.
     await expect(firstSignal).toBeEnabled();
+    await page.getByTestId("approve-action").first().click();
+    await expect(page.getByRole("button", { name: "Revalidate and approve" })).toBeVisible();
     const approvalResponse = page.waitForResponse(
       (response) => response.url().includes("/actions/") && response.url().endsWith("/approve"),
     );
-    await page.getByTestId("approve-action").first().click();
+    await page.getByRole("button", { name: "Revalidate and approve" }).click();
     expect((await approvalResponse).ok()).toBeTruthy();
     await expect(page.getByText("Action history")).toBeVisible();
     await expect(page.getByText("SUCCEEDED")).toBeVisible();
     await expect(page.getByText("Audit trail")).toBeVisible();
-    await expect(page.getByText("job · retry")).toBeVisible();
+    await expect(page.getByText("Job retry executed")).toBeVisible();
+    await expect(page.getByTestId("recruiter-tour-button")).toContainText("4/5");
+    await page.getByTestId("recruiter-tour-button").click();
+    await page.getByRole("button", { name: "Next: Review the audit" }).click();
+    await expect(page.getByTestId("recruiter-tour-button")).toContainText("5/5");
+
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(
+      results.violations.filter((violation) =>
+        ["serious", "critical"].includes(violation.impact ?? ""),
+      ),
+    ).toEqual([]);
   });
 
   test("keeps concurrent recruiter tenants isolated", async ({ browser }) => {
@@ -86,6 +130,7 @@ test.describe("auth and role gates", () => {
     for (const page of [pageA, pageB]) {
       await page.goto("/login");
       await page.getByRole("button", { name: "Enter one-click demo" }).click();
+      await page.getByTestId("recruiter-tour-button").click();
       await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
       await page.getByRole("button", { name: "Close" }).click();
       await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();
@@ -139,6 +184,7 @@ test.describe("auth and role gates", () => {
   }) => {
     await page.goto("/login");
     await page.getByRole("button", { name: "Enter one-click demo" }).click();
+    await page.getByTestId("recruiter-tour-button").click();
     await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
     await page.getByRole("button", { name: "Close" }).click();
     await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();

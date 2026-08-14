@@ -33,7 +33,7 @@ This project is built from a phased plan in `docs/plan/`. Working rules:
 - UI: shadcn/ui components; status colors only via `StatusBadge`; every list has loading,
   empty, and error states. Copy vocabulary per `docs/plan/05-ui-spec.md` — no marketing tone.
 - Money/PHI discipline: all data is synthetic; anything sent to the Anthropic API must pass
-  through `ai/redact.ts` first.
+  through `packages/shared/src/redact.ts` first.
 - Windows host: npm scripts must run under PowerShell (use `concurrently`, cross-env style
   patterns; no bash-isms).
 
@@ -41,7 +41,7 @@ This project is built from a phased plan in `docs/plan/`. Working rules:
 
 ```
 docker compose up -d       # postgres + redis
-pnpm dev                   # web :3000 + worker (+ simulator :4001)
+pnpm dev                   # web :3010 + worker (+ simulator :4001)
 pnpm lint | typecheck | build | test | test:e2e
 pnpm db:push | db:migrate | db:seed
 ```

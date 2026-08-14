@@ -238,4 +238,24 @@ describe("findLeakedIdentifiers", () => {
       "connector-42",
     ]);
   });
+
+  it("independently detects every protected category covered by the redactor", () => {
+    expect(
+      findLeakedIdentifiers(
+        "MEM-123456 reached dana@example.com at 212-555-0199; DOB 1974-03-02 and SSN 123-45-6789",
+      ),
+    ).toEqual(["MEM-123456", "123-45-6789", "dana@example.com", "212-555-0199", "1974-03-02"]);
+    expect(
+      findLeakedIdentifiers(
+        redact("MEM-123456 reached dana@example.com at 212-555-0199; DOB 1974-03-02"),
+      ),
+    ).toEqual([]);
+    expect(
+      findLeakedIdentifiers(
+        "Errors began on 2026-08-14; vendor code EHR123456; Dana Alvarez reviewed it",
+        ["Dana Alvarez"],
+        { includeAmbiguousMemberIds: false, includeBareDates: false },
+      ),
+    ).toEqual(["Dana Alvarez"]);
+  });
 });

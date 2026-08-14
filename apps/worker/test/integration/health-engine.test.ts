@@ -6,6 +6,7 @@ import {
   createFailedJobs,
   createOrg,
   createSucceededJobs,
+  createUser,
 } from "../../../../test/integration/fixtures.js";
 
 /**
@@ -38,17 +39,54 @@ describe("runHealthTick — snapshots", () => {
     expect(await prisma.healthSnapshot.count()).toBe(2);
   });
 
+  it("keeps active recruiter fixtures deterministic while ticking ordinary tenants", async () => {
+    const demoOrg = await createOrg("Recruiter fixture");
+    const demoUser = await createUser(demoOrg.id);
+    const demoConnector = await createConnector(demoOrg.id);
+    await prisma.demoSession.create({
+      data: {
+        id: "health-engine-demo-session",
+        orgId: demoOrg.id,
+        userId: demoUser.id,
+        tokenHash: "health-engine-demo-token",
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    const ordinary = await seedConnector({ key: "claims" });
+
+    await runHealthTick();
+
+    expect(await prisma.healthSnapshot.count({ where: { connectorId: demoConnector.id } })).toBe(0);
+    expect(
+      await prisma.healthSnapshot.count({ where: { connectorId: ordinary.connector.id } }),
+    ).toBe(1);
+  });
+
   it("records the window arithmetic, not just the verdict", async () => {
     const { org, connector } = await seedConnector();
     await createSucceededJobs(connector.id, org.id, 8, { minutesAgo: 1 });
     await createFailedJobs(connector.id, org.id, 1, { attempts: 2, minutesAgo: 1 });
+    await prisma.job.create({
+      data: {
+        orgId: org.id,
+        connectorId: connector.id,
+        queue: "sync",
+        type: "sync.page",
+        status: "FAILED",
+        attempts: 0,
+        maxAttempts: 5,
+        payload: { page: 99 },
+        lastError: "queue dispatch failed",
+      },
+    });
 
     await runHealthTick();
 
     const snapshot = await prisma.healthSnapshot.findFirstOrThrow({
       where: { connectorId: connector.id },
     });
-    // 8 successes + 2 failed attempts = 10 calls, 2 failed.
+    // 8 successes + 2 failed attempts = 10 calls, 2 failed. The zero-attempt Redis dispatch
+    // failure is visible in Jobs but is not an upstream call.
     expect(snapshot.totalCalls).toBe(10);
     expect(snapshot.failedCalls).toBe(2);
     expect(snapshot.errorRate).toBeCloseTo(0.2, 5);

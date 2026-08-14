@@ -7,6 +7,10 @@ import {
   INVESTIGATION_PROMPT_V3,
   INVESTIGATION_PROMPT_VERSION,
   GUIDED_INVESTIGATION_QUESTIONS,
+  MODEL_PRICING_VERSION,
+  MONITORING_ENTRY_SUFFIX,
+  findLeakedIdentifiers,
+  getHealthConfig,
   investigationReportSchema,
   redact,
   type InvestigationMode,
@@ -28,7 +32,8 @@ import { retryTrackedJob } from "@pulse/shared";
 
 const LIVE_MODEL =
   process.env.ANTHROPIC_INVESTIGATION_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8";
-const LIVE_ENABLED = process.env.INVESTIGATION_LIVE_ENABLED !== "false";
+const AI_ENABLED = process.env.AI_ENABLED === "true";
+const LIVE_ENABLED = process.env.INVESTIGATION_LIVE_ENABLED === "true";
 
 type EvidenceDraft = {
   kind: "LOG" | "JOB" | "EVENT" | "HEALTH_SNAPSHOT" | "TIMELINE";
@@ -60,7 +65,7 @@ function questionIsGuided(question: string) {
 }
 
 function liveAvailable() {
-  return LIVE_ENABLED && Boolean(process.env.ANTHROPIC_API_KEY);
+  return AI_ENABLED && LIVE_ENABLED && Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
 export function investigationMode() {
@@ -79,6 +84,7 @@ async function loadEvidence(
     openedAt: Date;
     connector: { id: string; key: string; displayName: string; kind: string };
   };
+  knownNames: string[];
   evidence: EvidenceDraft[];
 }> {
   const incident = await prisma.incident.findFirst({
@@ -118,7 +124,7 @@ async function loadEvidence(
       take: 10,
     }),
     prisma.healthSnapshot.findMany({
-      where: { connectorId: incident.connectorId, createdAt: window },
+      where: { connectorId: incident.connectorId, connector: { orgId }, createdAt: window },
       orderBy: { createdAt: "asc" },
       take: 12,
     }),
@@ -172,7 +178,7 @@ async function loadEvidence(
       sourceId: snapshot.id,
       label: `Health · ${snapshot.status}`,
       excerpt: redactExcerpt(
-        `${snapshot.status}, error rate ${(snapshot.errorRate * 100).toFixed(1)}%, p95 ${snapshot.p95LatencyMs ?? "n/a"}ms`,
+        `${snapshot.status}, error rate ${(snapshot.errorRate * 100).toFixed(1)}%, p95 ${snapshot.p95LatencyMs === null ? "n/a" : `${snapshot.p95LatencyMs}ms`}`,
         knownNames,
       ),
       href: `/connectors/${incident.connector.key}`,
@@ -192,7 +198,7 @@ async function loadEvidence(
     href: `/incidents/${incident.id}`,
     observedAt: incident.openedAt,
   });
-  return { incident, evidence };
+  return { incident, knownNames, evidence };
 }
 
 async function persistEvidence(investigationId: string, drafts: EvidenceDraft[]) {
@@ -233,8 +239,15 @@ async function persistEvidence(investigationId: string, drafts: EvidenceDraft[])
 function recordedReport(
   incident: Awaited<ReturnType<typeof loadEvidence>>["incident"],
   evidence: Awaited<ReturnType<typeof persistEvidence>>,
+  questionKey: (typeof GUIDED_INVESTIGATION_QUESTIONS)[number]["id"] | undefined,
 ): InvestigationReport {
-  const firstError = evidence.find((item) => item.kind === "LOG" || item.kind === "JOB");
+  const firstError = evidence
+    .filter((item) => item.kind === "LOG" || item.kind === "JOB" || item.kind === "EVENT")
+    .sort(
+      (left, right) =>
+        (left.observedAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+        (right.observedAt?.getTime() ?? Number.MAX_SAFE_INTEGER),
+    )[0];
   const deadJob = evidence.find(
     (item) =>
       item.kind === "JOB" &&
@@ -242,16 +255,33 @@ function recordedReport(
       typeof item.metadata === "object" &&
       (item.metadata as { status?: string }).status === "DEAD",
   );
+  const healthSignal = evidence.find(
+    (item) => item.kind === "HEALTH_SNAPSHOT" && !item.label.endsWith("HEALTHY"),
+  );
   const incidentEvidence = evidence.find((item) => item.sourceId === incident.id) ?? evidence[0];
-  const support = [incidentEvidence?.id, firstError?.id].filter((id): id is string => Boolean(id));
+  const uniqueEvidenceIds = (ids: Array<string | undefined>) =>
+    [...new Set(ids.filter((id): id is string => Boolean(id)))].slice(0, 8);
+  const support = uniqueEvidenceIds([incidentEvidence?.id, firstError?.id, healthSignal?.id]);
+  const impactSupport = uniqueEvidenceIds([
+    deadJob?.id,
+    firstError?.id,
+    healthSignal?.id,
+    incidentEvidence?.id,
+  ]);
+  const independentKinds = (ids: string[]) =>
+    new Set(
+      ids
+        .map((id) => evidence.find((item) => item.id === id))
+        .filter((item) => item && item.sourceId !== incident.id)
+        .map((item) => item?.kind),
+    ).size;
   const recommendedActions: InvestigationReport["recommendedActions"] = [];
   if (deadJob) {
     recommendedActions.push({
       type: "RETRY_JOB",
       targetId: deadJob.sourceId,
-      rationale:
-        "A DEAD sync job has exhausted retries and is safe to replay after the upstream signal is checked.",
-      evidenceIds: [deadJob.id, ...support].slice(0, 8),
+      rationale: `${deadJob.label} has exhausted retries and is safe to replay after the failure signal is checked.`,
+      evidenceIds: uniqueEvidenceIds([deadJob.id, ...support]),
     });
   }
   if (incident.status === "OPEN") {
@@ -259,29 +289,99 @@ function recordedReport(
       type: "ACKNOWLEDGE_INCIDENT",
       targetId: incident.id,
       rationale:
-        "Acknowledge ownership while the upstream outage is investigated; this does not mutate connector state.",
-      evidenceIds: support.slice(0, 8),
+        "Acknowledge ownership while the integration failure is investigated; this does not mutate connector state.",
+      evidenceIds: support,
     });
   }
+  const firstSignal = firstError
+    ? `${firstError.label.toLowerCase()} — ${firstError.excerpt}`
+    : "no error-level job, event, or log in the bounded window";
+  const summaryByQuestion = {
+    "first-signal": `The earliest captured failure signal for ${incident.connector.displayName} is ${firstSignal}. Later evidence is consistent with the incident, but the bounded data does not prove an external root cause.`,
+    impact: deadJob
+      ? `${incident.connector.displayName} has a DEAD job after retry exhaustion, so the affected integration work remains incomplete until an operator safely replays it.`
+      : `${incident.connector.displayName} has failure evidence in the incident window, but the bounded snapshot does not show a DEAD job or prove broader downstream loss.`,
+    "next-action": deadJob
+      ? `The safest bounded action is to revalidate and retry the DEAD job for ${incident.connector.displayName}; incident ownership can be acknowledged separately.`
+      : `No retryable DEAD job is present for ${incident.connector.displayName}. Acknowledge ownership and gather provider or network evidence before changing connector state.`,
+  } as const;
   return {
-    summary: `${incident.title} is backed by a bounded failure window on ${incident.connector.displayName}. The strongest signal is repeated upstream failure paired with a failed or dead sync job; the evidence does not establish a deeper upstream root cause yet.`,
+    summary: summaryByQuestion[questionKey ?? "first-signal"] ?? summaryByQuestion["first-signal"],
     hypotheses: [
       {
-        statement: "The upstream EHR endpoint is returning transient or sustained 503 responses.",
-        confidence: firstError ? "high" : "medium",
-        evidenceIds: support.slice(0, 8),
+        statement: firstError
+          ? `${firstError.label} is the earliest captured failure signal in this incident's bounded evidence window.`
+          : "The bounded evidence window does not contain an error-level job, event, or log yet.",
+        confidence: firstError && independentKinds(support) >= 2 ? "high" : "medium",
+        evidenceIds: support,
       },
       {
-        statement:
-          "Downstream record freshness is affected until the failed sync jobs are replayed successfully.",
-        confidence: deadJob ? "high" : "medium",
-        evidenceIds: [deadJob?.id, incidentEvidence?.id].filter((id): id is string => Boolean(id)),
+        statement: deadJob
+          ? `${deadJob.label} shows that integration work exhausted retries and remains incomplete.`
+          : "The bounded evidence set does not show a DEAD job, so retry exhaustion is not established.",
+        confidence: deadJob && independentKinds(impactSupport) >= 2 ? "high" : "medium",
+        evidenceIds: impactSupport,
       },
     ],
     uncertainty:
       "The evidence cannot distinguish an upstream outage from a deployment or network regression without external provider health data.",
     recommendedActions,
   };
+}
+
+function validateInvestigationReport(
+  report: InvestigationReport,
+  incident: Awaited<ReturnType<typeof loadEvidence>>["incident"],
+  evidence: Awaited<ReturnType<typeof persistEvidence>>,
+  knownNames: string[],
+) {
+  const parsed = investigationReportSchema.safeParse(report);
+  if (!parsed.success)
+    throw ApiError.conflict("The investigation report failed policy validation.");
+  const evidenceById = new Map(evidence.map((item) => [item.id, item]));
+  const validCitations = (ids: string[]) => ids.every((id) => evidenceById.has(id));
+  if (!parsed.data.hypotheses.every((hypothesis) => validCitations(hypothesis.evidenceIds))) {
+    throw ApiError.conflict("The investigation cited evidence outside its bounded snapshot.");
+  }
+  for (const hypothesis of parsed.data.hypotheses) {
+    const citedKinds = new Set(
+      hypothesis.evidenceIds
+        .map((id) => evidenceById.get(id))
+        .filter((item) => item && item.sourceId !== incident.id)
+        .map((item) => item?.kind),
+    );
+    if (hypothesis.confidence === "high" && citedKinds.size < 2) {
+      throw ApiError.conflict("High-confidence findings require two independent evidence kinds.");
+    }
+  }
+  for (const action of parsed.data.recommendedActions) {
+    if (!validCitations(action.evidenceIds))
+      throw ApiError.conflict("The investigation proposed an action with invalid citations.");
+    const target = evidence.find((item) => item.sourceId === action.targetId);
+    const targetIsIncident = action.targetId === incident.id;
+    const validTarget =
+      action.type === "RETRY_JOB"
+        ? target?.kind === "JOB"
+        : targetIsIncident &&
+          ["ACKNOWLEDGE_INCIDENT", "RESOLVE_INCIDENT", "REGENERATE_SUMMARY"].includes(action.type);
+    if (!validTarget)
+      throw ApiError.conflict("The investigation proposed an invalid action target.");
+  }
+  // Scan prose separately from validated correlation IDs. Incident dates and operational codes
+  // are legitimate findings; explicit PHI shapes and tenant-known names still fail closed.
+  const reportText = [
+    parsed.data.summary,
+    parsed.data.uncertainty,
+    ...parsed.data.hypotheses.map((item) => item.statement),
+    ...parsed.data.recommendedActions.map((item) => item.rationale),
+  ].join("\n");
+  const leaks = findLeakedIdentifiers(reportText, knownNames, {
+    includeAmbiguousMemberIds: false,
+    includeBareDates: false,
+  });
+  if (leaks.length > 0)
+    throw ApiError.conflict("The investigation output failed the privacy policy.");
+  return parsed.data;
 }
 
 async function askLive(context: string): Promise<{
@@ -353,8 +453,12 @@ export async function createInvestigation(args: {
 }) {
   const loaded = await loadEvidence(args.orgId, args.incidentId);
   const existing = await prisma.investigation.findFirst({
-    where: { orgId: args.orgId, incidentId: args.incidentId, status: "ACTIVE" },
-    orderBy: { createdAt: "desc" },
+    where: {
+      orgId: args.orgId,
+      incidentId: args.incidentId,
+      status: { in: ["ACTIVE", "COMPLETED"] },
+    },
+    orderBy: { updatedAt: "desc" },
     select: { id: true },
   });
   const investigation = existing
@@ -402,6 +506,16 @@ export async function getInvestigation(orgId: string, id: string) {
           traceId: true,
           createdAt: true,
           completedAt: true,
+          calls: {
+            orderBy: { sequence: "asc" },
+            select: {
+              sequence: true,
+              providerRequestId: true,
+              status: true,
+              latencyMs: true,
+              costUsd: true,
+            },
+          },
         },
       },
     },
@@ -459,10 +573,11 @@ export async function runInvestigation(
   const mode: InvestigationMode = investigationMode();
   if (!guided && mode === "RECORDED") {
     throw ApiError.conflict(
-      "Live investigations are unavailable. Choose one of the three recorded questions.",
+      "Live investigations are unavailable. Choose one of the three deterministic questions.",
     );
   }
   const loaded = await loadEvidence(args.orgId, investigation.incidentId);
+  const safeQuestion = redact(args.question.trim(), loaded.knownNames).slice(0, 2_000);
   const evidence = await persistEvidence(investigation.id, loaded.evidence);
   let reservedSpend = 0;
   if (mode === "LIVE") {
@@ -483,28 +598,53 @@ export async function runInvestigation(
     }
   }
   const startedAt = Date.now();
-  const run = await prisma.aiRun.create({
-    data: {
-      orgId: args.orgId,
-      incidentId: investigation.incidentId,
-      investigationId: investigation.id,
-      userId: args.userId,
-      kind: "INVESTIGATION",
-      mode,
-      status: "RUNNING",
-      model: mode === "LIVE" ? LIVE_MODEL : "recorded-fixture-v3",
-      promptVersion: INVESTIGATION_PROMPT_VERSION,
-      question: args.question.trim().slice(0, 2_000),
-      contextChars: 0,
-      traceId: currentTraceId(),
-      startedAt: new Date(),
-    },
-  });
+  let run;
+  try {
+    run = await prisma.$transaction(async (tx) => {
+      // Serialize the short claim transaction per investigation. The provider call remains
+      // outside the transaction, while concurrent requests see the durable RUNNING row.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${investigation.id}, 0))::text AS "lock"`;
+      const activeRun = await tx.aiRun.findFirst({
+        where: {
+          investigationId: investigation.id,
+          kind: "INVESTIGATION",
+          status: "RUNNING",
+        },
+        select: { id: true },
+      });
+      if (activeRun) throw ApiError.conflict("an investigation run is already in progress");
+      return tx.aiRun.create({
+        data: {
+          orgId: args.orgId,
+          incidentId: investigation.incidentId,
+          investigationId: investigation.id,
+          userId: args.userId,
+          kind: "INVESTIGATION",
+          mode,
+          status: "RUNNING",
+          model: mode === "LIVE" ? LIVE_MODEL : "deterministic-demo-v3",
+          promptVersion: INVESTIGATION_PROMPT_VERSION,
+          question: safeQuestion,
+          contextChars: 0,
+          traceId: currentTraceId(),
+          startedAt: new Date(),
+        },
+      });
+    });
+  } catch (error) {
+    if (reservedSpend > 0) await settleInvestigationSpend(reservedSpend, 0);
+    throw error;
+  }
   const eventLog: InvestigationStreamEvent[] = [];
   const emit = async (event: InvestigationStreamEvent) => {
     eventLog.push(event);
     await onEvent?.(event);
   };
+  let settledSpend = false;
+  let providerDispatched = false;
+  let providerRequestId: string | null = null;
+  let measuredUsage = { input: 0, output: 0 };
+  let measuredCost: number | null = mode === "LIVE" ? null : 0;
   try {
     await emit({
       event: "run.started",
@@ -531,12 +671,16 @@ export async function runInvestigation(
     const context = JSON.stringify({
       incident: {
         id: loaded.incident.id,
-        title: redact(loaded.incident.title),
+        title: redact(loaded.incident.title, loaded.knownNames),
         status: loaded.incident.status,
         severity: loaded.incident.severity,
-        connector: loaded.incident.connector,
+        connector: {
+          key: loaded.incident.connector.key,
+          displayName: redact(loaded.incident.connector.displayName, loaded.knownNames),
+          kind: loaded.incident.connector.kind,
+        },
       },
-      question: args.question.trim(),
+      question: safeQuestion,
       evidence: evidence.map(({ id, kind, label, excerpt, observedAt }) => ({
         id,
         kind,
@@ -545,6 +689,13 @@ export async function runInvestigation(
         observedAt,
       })),
     });
+    // Database/source IDs are intentionally present as opaque correlation tokens so the model
+    // can cite evidence and target the incident. The privacy boundary is concerned with PHI-like
+    // identifiers here; validating those opaque IDs as known identifiers would flag the incident
+    // ID that is deliberately included in the structured context.
+    const contextLeaks = findLeakedIdentifiers(context, loaded.knownNames);
+    if (contextLeaks.length > 0)
+      throw ApiError.conflict("Investigation context failed privacy validation.");
     await prisma.aiRun.update({
       where: { id: run.id },
       data: { contextChars: context.length },
@@ -558,18 +709,72 @@ export async function runInvestigation(
         rowCount: evidence.length,
       },
     });
-    const live = mode === "LIVE" ? await askLive(context) : null;
-    const report = live?.report ?? recordedReport(loaded.incident, evidence);
+    const providerStartedAt = Date.now();
+    let live: Awaited<ReturnType<typeof askLive>> | null = null;
+    try {
+      providerDispatched = mode === "LIVE";
+      live = mode === "LIVE" ? await askLive(context) : null;
+      providerRequestId = live?.requestId ?? null;
+      const usage = live?.usage ?? { input: 0, output: 0 };
+      measuredUsage = usage;
+      const providerCost = live
+        ? costOf({ inputTokens: usage.input, outputTokens: usage.output }, LIVE_MODEL)
+        : 0;
+      measuredCost = providerCost;
+      if (mode === "LIVE") {
+        // Usage is known once the provider returns. Settle immediately so later policy or
+        // persistence failures charge measured usage instead of the conservative reservation.
+        await settleInvestigationSpend(reservedSpend, providerCost ?? reservedSpend);
+        settledSpend = true;
+        await prisma.aiCall.create({
+          data: {
+            runId: run.id,
+            sequence: 1,
+            attempt: 1,
+            providerRequestId,
+            model: LIVE_MODEL,
+            inputTokens: usage.input,
+            outputTokens: usage.output,
+            pricingVersion: providerCost === null ? null : MODEL_PRICING_VERSION,
+            costUsd: providerCost ?? reservedSpend,
+            latencyMs: Date.now() - providerStartedAt,
+            status: "OK",
+          },
+        });
+      }
+    } catch (error) {
+      if (mode === "LIVE") {
+        await prisma.aiCall
+          .create({
+            data: {
+              runId: run.id,
+              sequence: 1,
+              attempt: 1,
+              providerRequestId,
+              model: LIVE_MODEL,
+              latencyMs: Date.now() - providerStartedAt,
+              status: error instanceof ApiError ? "REFUSED" : "FAILED",
+              errorCode: error instanceof ApiError ? error.code : "PROVIDER_FAILED",
+              errorMessage:
+                error instanceof Error ? error.message.slice(0, 500) : "provider failed",
+            },
+          })
+          .catch(() => undefined);
+      }
+      throw error;
+    }
+    const report = validateInvestigationReport(
+      live?.report ?? recordedReport(loaded.incident, evidence, guided?.id),
+      loaded.incident,
+      evidence,
+      loaded.knownNames,
+    );
     const usage = live?.usage ?? { input: 0, output: 0 };
     const cost = live
       ? costOf({ inputTokens: usage.input, outputTokens: usage.output }, LIVE_MODEL)
       : 0;
     if (live && cost !== null && cost > investigationRunBudgetUsd()) {
       throw ApiError.conflict("The live investigation exceeded the $0.20 run budget.");
-    }
-    if (live) {
-      // Unknown model pricing remains conservatively reserved at the hard per-run cap.
-      await settleInvestigationSpend(reservedSpend, cost ?? reservedSpend);
     }
     await writeActions(investigation.id, report, evidence);
     await prisma.investigation.update({
@@ -587,7 +792,7 @@ export async function runInvestigation(
         answer: report.summary,
         totalInputTokens: usage.input,
         totalOutputTokens: usage.output,
-        totalCostUsd: cost,
+        totalCostUsd: live ? (cost ?? reservedSpend) : 0,
         latencyMs: Date.now() - startedAt,
         completedAt: new Date(),
         toolEvents: { evidenceCount: evidence.length, questionKey: guided?.id ?? null, mode },
@@ -610,24 +815,38 @@ export async function runInvestigation(
           evidenceIds: action.evidenceIds as string[],
         },
       });
-    await emit({ event: "answer.delta", data: { text: report.summary } });
+    await emit({ event: "report.completed", data: { summary: report.summary } });
     await emit({ event: "run.completed", data: { runId: run.id, mode } });
     return { runId: run.id, mode, report, events: eventLog };
   } catch (error) {
+    if (error instanceof Error && providerRequestId) {
+      Object.assign(error, { providerRequestId });
+    }
+    const policyRefusal = error instanceof ApiError;
     await prisma.aiRun
       .update({
         where: { id: run.id },
         data: {
-          status: "FAILED",
-          errorCode: "INVESTIGATION_FAILED",
+          status: policyRefusal ? "REFUSED" : "FAILED",
+          errorCode: policyRefusal ? error.code : "INVESTIGATION_FAILED",
           errorMessage:
             error instanceof Error ? error.message.slice(0, 500) : "investigation failed",
+          totalInputTokens: measuredUsage.input,
+          totalOutputTokens: measuredUsage.output,
+          totalCostUsd:
+            mode === "LIVE" && providerDispatched ? (measuredCost ?? reservedSpend) : measuredCost,
           latencyMs: Date.now() - startedAt,
           completedAt: new Date(),
         },
       })
       .catch(() => undefined);
     throw error;
+  } finally {
+    if (mode === "LIVE" && reservedSpend > 0 && !settledSpend) {
+      await settleInvestigationSpend(reservedSpend, providerDispatched ? reservedSpend : 0).catch(
+        () => undefined,
+      );
+    }
   }
 }
 
@@ -643,7 +862,7 @@ export async function approveInvestigationAction(args: {
       investigationId: args.investigationId,
       investigation: { orgId: args.orgId, incident: { orgId: args.orgId } },
     },
-    include: { investigation: { include: { incident: true } } },
+    include: { investigation: { include: { incident: { include: { connector: true } } } } },
   });
   if (!action) throw ApiError.notFound(`action "${args.actionId}" not found`);
   if (action.status === "SUCCEEDED") return action;
@@ -714,6 +933,30 @@ export async function approveInvestigationAction(args: {
     } else if (action.type === "RESOLVE_INCIDENT") {
       if (incident.status === "RESOLVED")
         throw ApiError.conflict("target incident is stale; it is already resolved");
+      if (incident.status !== "MONITORING") {
+        throw ApiError.conflict("incident must enter monitoring before it can be resolved");
+      }
+      if (incident.connector.status !== "HEALTHY") {
+        throw ApiError.conflict("connector is not currently healthy");
+      }
+      const monitoringEntry = await prisma.incidentTimelineEntry.findFirst({
+        where: {
+          incidentId: incident.id,
+          kind: "status_change",
+          message: { endsWith: MONITORING_ENTRY_SUFFIX },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!monitoringEntry) {
+        throw ApiError.conflict("monitoring stability window has not started");
+      }
+      const stabilityMinutes = getHealthConfig().monitoringStabilityMinutes;
+      const stableForMs = Date.now() - monitoringEntry.createdAt.getTime();
+      if (stableForMs < stabilityMinutes * 60_000) {
+        throw ApiError.conflict(
+          `connector has not completed the ${stabilityMinutes}-minute monitoring window`,
+        );
+      }
       await prisma.$transaction(async (tx) => {
         await tx.incident.update({
           where: { id: incident.id },

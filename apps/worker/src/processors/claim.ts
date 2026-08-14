@@ -1,7 +1,7 @@
-import type { Job } from "bullmq";
+import { UnrecoverableError, type Job } from "bullmq";
 import { faker } from "@faker-js/faker";
 import { prisma } from "@pulse/db";
-import { SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
+import { claimSubmitResponseSchema, SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
 import { log } from "../log.js";
 
 const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? "http://localhost:4001";
@@ -33,7 +33,11 @@ export async function processClaimJob(job: Job<ClaimSubmitPayload>) {
     });
     if (!res.ok) throw new Error(`simulator returned ${res.status}`);
 
-    const result = (await res.json()) as { claimId: string; status: string };
+    const parsed = claimSubmitResponseSchema.safeParse(await res.json().catch(() => null));
+    if (!parsed.success) {
+      throw new UnrecoverableError("simulator returned a schema-invalid claim response");
+    }
+    const result = parsed.data;
     if (dbJobId) {
       await prisma.job.update({
         where: { id: dbJobId },

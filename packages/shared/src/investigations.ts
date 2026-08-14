@@ -81,6 +81,7 @@ export type InvestigationStreamEvent =
   | { event: "evidence.added"; data: InvestigationEvidence }
   | { event: "hypothesis.updated"; data: z.infer<typeof investigationHypothesisSchema> }
   | { event: "action.proposed"; data: InvestigationAction }
+  | { event: "report.completed"; data: { summary: string } }
   | { event: "answer.delta"; data: { text: string } }
   | { event: "tool.started"; data: { name: string; turn: number } }
   | {

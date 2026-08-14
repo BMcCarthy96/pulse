@@ -1,11 +1,12 @@
-# ADR 0003: Exact-question recorded fallback
+# ADR 0003: Exact-question deterministic demo fallback
 
 ## Decision
 
-The investigation SSE contract is identical in live and recorded mode. Without a configured
-provider, only three exact, versioned guided questions are answered from deterministic fixtures;
-arbitrary questions return a clear conflict response. Recorded runs still persist `AiRun` metadata
-with mode `RECORDED` and never imply a provider call.
+The investigation SSE contract is identical in live and deterministic demo mode. Without a
+configured provider, only three exact guided questions are answered from bounded, evidence-derived
+synthesis; arbitrary questions return a clear conflict response. Deterministic runs persist
+`AiRun` metadata with mode `RECORDED` and explicitly identify `deterministic-demo-v3` rather than
+implying a provider call or a provider-recorded trace.
 
 ## Why
 

@@ -77,6 +77,9 @@ export default defineConfig({
       "@pulse/shared/webhook-signature": fileURLToPath(
         new URL("./packages/shared/src/webhook-signature.ts", import.meta.url),
       ),
+      "@pulse/shared/ai-budget": fileURLToPath(
+        new URL("./packages/shared/src/ai-budget.ts", import.meta.url),
+      ),
       "@pulse/shared": fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url)),
       "@pulse/db": fileURLToPath(new URL("./packages/db/src/index.ts", import.meta.url)),
       // Mirrors apps/web/tsconfig.json's path mapping so web lib modules can be imported and

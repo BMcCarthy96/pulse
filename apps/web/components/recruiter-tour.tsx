@@ -19,7 +19,7 @@ import {
 export type RecruiterTourStep = "overview" | "incident" | "investigate" | "approve" | "audit";
 
 type TourState = {
-  version: 1;
+  version: 2;
   demoSessionId: string;
   completed: RecruiterTourStep[];
   minimized: boolean;
@@ -40,7 +40,7 @@ const TOUR_STEPS: { id: RecruiterTourStep; title: string; description: string }[
   {
     id: "investigate",
     title: "Find the first signal",
-    description: "Run the deterministic recorded investigation.",
+    description: "Run a bounded, provider-free investigation and inspect its citations.",
   },
   {
     id: "approve",
@@ -59,7 +59,7 @@ export function announceRecruiterTourStep(step: RecruiterTourStep | "reset") {
 }
 
 function initialState(demoSessionId: string): TourState {
-  return { version: 1, demoSessionId, completed: [], minimized: false };
+  return { version: 2, demoSessionId, completed: [], minimized: false };
 }
 
 export function RecruiterTour({ demoSessionId }: { demoSessionId: string }) {
@@ -76,12 +76,10 @@ export function RecruiterTour({ demoSessionId }: { demoSessionId: string }) {
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as TourState;
-        if (parsed.version === 1 && parsed.demoSessionId === demoSessionId) setState(parsed);
+        if (parsed.version === 2 && parsed.demoSessionId === demoSessionId) setState(parsed);
       } catch {
         window.localStorage.removeItem(storageKey);
       }
-    } else {
-      setOpen(true);
     }
     setReady(true);
   }, [demoSessionId, storageKey]);
@@ -98,11 +96,6 @@ export function RecruiterTour({ demoSessionId }: { demoSessionId: string }) {
         : { ...current, completed: [...current.completed, step] },
     );
   }, []);
-
-  useEffect(() => {
-    if (pathname === "/") complete("overview");
-    if (pathname.startsWith("/incidents/")) complete("incident");
-  }, [complete, pathname]);
 
   useEffect(() => {
     const listener = (event: Event) => {
@@ -136,10 +129,35 @@ export function RecruiterTour({ demoSessionId }: { demoSessionId: string }) {
       setOpen(false);
       return;
     }
-    if (nextStep.id === "overview") router.push("/");
-    else if (incidentId) router.push(`/incidents/${incidentId}#investigation-heading`);
+    if (nextStep.id === "overview") {
+      setOpen(false);
+      if (pathname !== "/") router.push("/");
+      else {
+        window.setTimeout(() => document.getElementById("demo-overview")?.focus(), 150);
+      }
+      return;
+    }
+    if (nextStep.id === "incident") {
+      setOpen(false);
+      if (incidentId) router.push(`/incidents/${incidentId}#investigation-heading`);
+      else router.push("/incidents");
+      return;
+    }
+    const anchor =
+      nextStep.id === "investigate"
+        ? "investigate"
+        : nextStep.id === "approve"
+          ? "actions"
+          : "audit-trail";
+    const focusAnchor = () => {
+      const element = document.getElementById(anchor);
+      element?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (element instanceof HTMLElement) element.focus({ preventScroll: true });
+    };
+    setOpen(false);
+    if (pathname.startsWith("/incidents/")) window.setTimeout(focusAnchor, 150);
+    else if (incidentId) router.push(`/incidents/${incidentId}#${anchor}`);
     else router.push("/incidents");
-    if (nextStep.id === "overview" || nextStep.id === "incident") setOpen(false);
   }
 
   function restart() {
@@ -149,61 +167,100 @@ export function RecruiterTour({ demoSessionId }: { demoSessionId: string }) {
   }
 
   const completed = state.completed.length;
+  const currentIndex = nextStep ? TOUR_STEPS.findIndex((step) => step.id === nextStep.id) : -1;
+  const shortTitles: Record<RecruiterTourStep, string> = {
+    overview: "Review",
+    incident: "Incident",
+    investigate: "Investigate",
+    approve: "Approve",
+    audit: "Audit",
+  };
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={<Button size="sm" variant="outline" data-testid="recruiter-tour-button" />}
+    <>
+      <nav
+        className="bg-muted/40 hidden items-center gap-1 rounded-full border px-2 py-1 xl:flex"
+        aria-label={`Demo journey: ${completed} of ${TOUR_STEPS.length} steps complete`}
       >
-        <Route /> Tour {completed}/{TOUR_STEPS.length}
-      </SheetTrigger>
-      <SheetContent side="right" className="sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Recruiter walkthrough</SheetTitle>
-          <SheetDescription>
-            Follow one incident from detection to an approved and audited operational action.
-          </SheetDescription>
-        </SheetHeader>
-        <ol className="flex-1 space-y-2 overflow-y-auto px-4" aria-label="Recruiter tour progress">
-          {TOUR_STEPS.map((step, index) => {
-            const done = state.completed.includes(step.id);
-            const current = nextStep?.id === step.id;
-            return (
-              <li
-                key={step.id}
-                className={`rounded-lg border p-3 ${current ? "border-foreground bg-muted/40" : ""}`}
-                aria-current={current ? "step" : undefined}
-              >
-                <div className="flex gap-3">
-                  <span className="mt-0.5" aria-hidden="true">
-                    {done ? (
-                      <Check className="text-emerald-600" />
-                    ) : (
-                      <Circle className="text-muted-foreground" />
-                    )}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {index + 1}. {step.title}
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-xs leading-5">
-                      {step.description}
-                    </p>
+        {TOUR_STEPS.map((step, index) => {
+          const done = state.completed.includes(step.id);
+          const current = currentIndex === index;
+          return (
+            <span
+              key={step.id}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${
+                current
+                  ? "bg-teal-100 text-teal-900"
+                  : done
+                    ? "text-emerald-700"
+                    : "text-muted-foreground"
+              }`}
+              aria-current={current ? "step" : undefined}
+              title={step.title}
+            >
+              {done ? <Check className="size-3" aria-hidden="true" /> : <span>{index + 1}</span>}
+              {shortTitles[step.id]}
+            </span>
+          );
+        })}
+      </nav>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger
+          render={<Button size="sm" variant="outline" data-testid="recruiter-tour-button" />}
+        >
+          <Route /> Tour {completed}/{TOUR_STEPS.length}
+        </SheetTrigger>
+        <SheetContent side="right" className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Recruiter walkthrough</SheetTitle>
+            <SheetDescription>
+              Follow one incident from detection to an approved and audited operational action.
+            </SheetDescription>
+          </SheetHeader>
+          <ol
+            className="flex-1 space-y-2 overflow-y-auto px-4"
+            aria-label="Recruiter tour progress"
+          >
+            {TOUR_STEPS.map((step, index) => {
+              const done = state.completed.includes(step.id);
+              const current = nextStep?.id === step.id;
+              return (
+                <li
+                  key={step.id}
+                  className={`rounded-lg border p-3 ${current ? "border-foreground bg-muted/40" : ""}`}
+                  aria-current={current ? "step" : undefined}
+                >
+                  <div className="flex gap-3">
+                    <span className="mt-0.5" aria-hidden="true">
+                      {done ? (
+                        <Check className="text-emerald-600" />
+                      ) : (
+                        <Circle className="text-muted-foreground" />
+                      )}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {index + 1}. {step.title}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs leading-5">
+                        {step.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-        <SheetFooter>
-          <Button onClick={goNext}>
-            {nextStep ? `Next: ${nextStep.title}` : "Walkthrough complete"}
-          </Button>
-          <Button variant="ghost" onClick={restart}>
-            <RotateCcw /> Restart tour
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+                </li>
+              );
+            })}
+          </ol>
+          <SheetFooter>
+            <Button onClick={goNext}>
+              {nextStep ? `Next: ${nextStep.title}` : "Walkthrough complete"}
+            </Button>
+            <Button variant="ghost" onClick={restart}>
+              <RotateCcw /> Restart tour
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

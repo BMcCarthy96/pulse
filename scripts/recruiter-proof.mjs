@@ -85,15 +85,38 @@ try {
     const next = {
       ...existing,
       ...derived,
-      verifiedAt: new Date().toISOString().slice(0, 10),
+      evals: { ...existing.evals, ...derived.evals },
+      totalAutomatedTests: derived.tests.unit + derived.tests.integration + derived.tests.e2e,
+      generatedAt: new Date().toISOString().slice(0, 10),
     };
+    // A local count refresh is not a commit-specific CI verification. Release automation owns
+    // the immutable run/SHA association; keep the local manifest honest about what it proves.
+    delete next.verifiedAt;
+    delete next.lastVerifiedCommit;
     writeFileSync(manifestPath, `${JSON.stringify(next, null, 2)}\n`);
     console.log(`Updated ${manifestPath}`);
     console.log(JSON.stringify(derived, null, 2));
   } else {
     const mismatches = [];
-    for (const key of ["appVersion", "apiVersion", "tests", "evals"]) {
+    for (const key of ["appVersion", "apiVersion", "tests"]) {
       if (JSON.stringify(existing[key]) !== JSON.stringify(derived[key])) mismatches.push(key);
+    }
+    const existingEvalCounts = {
+      summaryCases: existing.evals?.summaryCases,
+      investigationFixtures: existing.evals?.investigationFixtures,
+      safetyCategories: existing.evals?.safetyCategories,
+    };
+    if (JSON.stringify(existingEvalCounts) !== JSON.stringify(derived.evals))
+      mismatches.push("evals");
+    if (typeof existing.totalAutomatedTests === "number") {
+      const total = derived.tests.unit + derived.tests.integration + derived.tests.e2e;
+      if (existing.totalAutomatedTests !== total) mismatches.push("totalAutomatedTests");
+    }
+    if (typeof existing.ciRunUrl === "string" && /actions\/workflows\//.test(existing.ciRunUrl)) {
+      mismatches.push("ciRunUrl (must point to an immutable run)");
+    }
+    if ("verifiedAt" in existing || "lastVerifiedCommit" in existing) {
+      mismatches.push("legacy verification metadata (run proof:refresh)");
     }
     if (mismatches.length > 0) {
       console.error(`Recruiter proof is stale: ${mismatches.join(", ")}`);

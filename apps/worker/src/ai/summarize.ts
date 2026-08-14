@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import {
   IncidentSummaryAiSchema,
@@ -212,8 +213,13 @@ export async function summarizePreparedContext(
   if (leaks.length > 0) throw new RedactionLeakError(leaks);
 
   log.debug(
-    { incidentId: opts.incidentId, context: context.markdown },
-    "incident summary context (redacted, as sent)",
+    {
+      incidentId: opts.incidentId,
+      contextHash: createHash("sha256").update(context.markdown).digest("hex").slice(0, 16),
+      contextChars: context.markdown.length,
+      truncated: context.truncated,
+    },
+    "incident summary context prepared",
   );
 
   const startedAt = Date.now();
@@ -254,7 +260,7 @@ export async function summarizePreparedContext(
 
 /** Builds the redacted context, checks it, and asks Claude for a structured summary. */
 export async function summarizeIncident(incidentId: string): Promise<SummaryResult> {
-  if (process.env.AI_ENABLED === "false" || !process.env.ANTHROPIC_API_KEY) {
+  if (process.env.AI_ENABLED !== "true" || !process.env.ANTHROPIC_API_KEY) {
     throw new AiNotConfiguredError();
   }
   const context = await buildIncidentContext(incidentId);

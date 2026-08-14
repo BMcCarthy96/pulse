@@ -5,18 +5,18 @@ without an Anthropic key.
 
 ## 90-second walkthrough
 
-1. Open `/recruiter` and choose **Try the live demo**.
+1. Open `/recruiter` and choose **Launch interactive demo**.
 2. Show the persistent walkthrough, isolated OPS badge, and **Reset demo** control.
 3. Follow the walkthrough to the seeded EHR incident and choose **Find the first signal**.
-4. Point to the streamed `Recorded fixture` label, redacted evidence board, cited hypotheses, and
+4. Point to the streamed `Deterministic demo synthesis` label, redacted evidence board, cited hypotheses, and
    proposed `RETRY_JOB` action.
 5. Approve the retry, refresh the workspace, and show the action status plus audit entry.
 6. Reset the demo to return the workspace to a known state.
 
-With `ANTHROPIC_API_KEY` and `INVESTIGATION_LIVE_ENABLED=true`, the same guided UI emits live
-structured output and persists model, prompt version, token, cost, latency, and trace metadata.
-Without the key, arbitrary text is rejected with a clear “choose a recorded question” response;
-only the three exact guided questions use fixtures.
+With `AI_ENABLED=true`, `ANTHROPIC_API_KEY`, and `INVESTIGATION_LIVE_ENABLED=true`, the same guided
+UI emits live provider output and persists model, prompt version, token, cost, latency, and trace
+metadata. Without those flags, arbitrary text is rejected with a clear “choose a guided question”
+response; the three guided questions use deterministic synthesis.
 
 ## Proof points
 
@@ -42,7 +42,7 @@ The canonical commands and expected evidence are maintained in
 - `DEMO_BASE_URL=https://<deployment> pnpm verify:release`
 - `k6 run scripts/k6/v3-demo.js` against a disposable deployment
   The k6 profile provisions one isolated demo tenant per VU, exercises authenticated overview and
-  incident reads, runs the provider-free fixture SSE, reads persisted telemetry, resets the tenant,
+  incident reads, runs the provider-free deterministic SSE path, reads persisted telemetry, resets the tenant,
   and enforces the 1% error / 750ms API p95 / 3s provisioning thresholds. Set K6_WEBHOOK_URL and
   K6_WEBHOOK_SECRET to include a signed tenant webhook; set K6_APPROVE_ACTION=true to include the
   proposal approval path.

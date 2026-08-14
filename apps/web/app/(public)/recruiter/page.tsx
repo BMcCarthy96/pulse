@@ -10,7 +10,6 @@ import {
   PlayCircle,
   ShieldCheck,
   TestTube2,
-  Workflow,
 } from "lucide-react";
 import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Pulse — Recruiter-ready AI investigation workspace",
     description:
-      "A one-click, synthetic integration incident with cited evidence, approval-safe actions, and deterministic AI fallback.",
+      "A one-click, synthetic integration incident with cited evidence, approval-safe actions, and a provider-free deterministic fallback.",
     type: "website",
   },
 };
@@ -41,7 +40,7 @@ const WALKTHROUGH = [
   [
     "3",
     "Investigate the first signal",
-    "A recorded, versioned fixture streams the same contract as live AI.",
+    "A provider-free engine returns the same validated report contract used by live AI.",
   ],
   [
     "4",
@@ -58,39 +57,49 @@ const WALKTHROUGH = [
 const PROOF_CARDS = [
   {
     icon: TestTube2,
-    value: String(proof.tests.unit),
-    label: "unit tests",
-    detail: "Pure reliability and safety logic",
+    value: String(proof.totalAutomatedTests),
+    label: "automated tests",
+    detail: `${proof.tests.unit} unit · ${proof.tests.integration} integration · ${proof.tests.e2e} browser · ${proof.evals.summaryCases + proof.evals.investigationFixtures} offline eval fixtures`,
   },
   {
-    icon: Workflow,
-    value: String(proof.tests.integration),
-    label: "integration tests",
-    detail: "Real PostgreSQL and Redis",
-  },
-  {
-    icon: PlayCircle,
-    value: String(proof.tests.e2e),
-    label: "browser tests",
-    detail: "Production build plus real worker",
+    icon: ShieldCheck,
+    value: `${Math.round(proof.evals.groundingRate * 100)}%`,
+    label: "required-fact coverage",
+    detail: "13 of 14 cases on the latest summary eval corpus",
   },
   {
     icon: FileCheck2,
-    value: String(proof.evals.safetyCategories),
-    label: "AI safety categories",
-    detail: "Deterministic, network-free evals",
+    value: `${Math.round(
+      Math.min(
+        proof.evals.schemaPassRate,
+        proof.evals.leakGuardRate,
+        proof.evals.injectionResistanceRate,
+      ) * 100,
+    )}%`,
+    label: "safety fixture pass rate",
+    detail: "Schema, leak, and injection regression fixtures",
   },
 ] as const;
 
 export default async function RecruiterPage() {
   const session = await auth();
   const sha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local";
+  const videoUrl = process.env.NEXT_PUBLIC_RECRUITER_VIDEO_URL;
 
   return (
     <main id="main-content" className="min-h-screen bg-white text-slate-950">
       <header className="border-b border-slate-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/recruiter" className="text-lg font-semibold tracking-tight">
+          <Link
+            href="/recruiter"
+            className="flex items-center gap-2 text-lg font-semibold tracking-tight"
+          >
+            <span
+              aria-hidden="true"
+              className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-indigo-600 text-sm font-bold text-white"
+            >
+              P
+            </span>
             Pulse
           </Link>
           <nav aria-label="Recruiter links" className="flex items-center gap-2">
@@ -112,7 +121,7 @@ export default async function RecruiterPage() {
                 Synthetic healthcare data
               </Badge>
               <Badge className="border-white/20 bg-white/10 text-white">
-                Recorded AI by default
+                Provider-free by default
               </Badge>
             </div>
             <h1 className="max-w-3xl text-4xl leading-tight font-semibold tracking-tight sm:text-6xl">
@@ -125,6 +134,13 @@ export default async function RecruiterPage() {
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
               <DemoEntryButton authenticated={Boolean(session?.user)} />
+              <a
+                href={videoUrl ?? "#walkthrough-video"}
+                className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
+              >
+                <PlayCircle />
+                {videoUrl ? "Watch the 90-second walkthrough" : "Preview the demo path"}
+              </a>
               <a
                 href="#walkthrough"
                 className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
@@ -170,6 +186,47 @@ export default async function RecruiterPage() {
         </div>
       </section>
 
+      <section id="walkthrough-video" className="border-b border-slate-200 bg-slate-50">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <p className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+              {videoUrl ? "Watch the proof" : "Preview the proof"}
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+              See the whole recovery loop before signing in.
+            </h2>
+            <p className="mt-3 max-w-xl text-slate-600">
+              {videoUrl ? "The captioned recording" : "This guided outline"} follows one synthetic
+              EHR outage from the first health signal through cited findings, target revalidation,
+              worker execution, and the final audit row.
+            </p>
+            <ol className="mt-5 space-y-2 text-sm text-slate-600">
+              <li>
+                <strong className="text-slate-950">00:00</strong> · Review the degraded connector
+              </li>
+              <li>
+                <strong className="text-slate-950">00:25</strong> · Run the bounded investigation
+              </li>
+              <li>
+                <strong className="text-slate-950">00:55</strong> · Approve and inspect the audit
+              </li>
+            </ol>
+          </div>
+          <div className="flex min-h-48 items-center justify-center rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+            {videoUrl ? (
+              <a className="font-medium text-teal-700 hover:underline" href={videoUrl}>
+                Open the captioned walkthrough →
+              </a>
+            ) : (
+              <p className="text-sm text-slate-500">
+                The captioned release video is not configured in this environment. Launch the
+                interactive demo or follow the timestamped preview beside this card.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
       <section id="walkthrough" className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
@@ -207,10 +264,10 @@ export default async function RecruiterPage() {
               </h2>
             </div>
             <a href={proof.ciRunUrl} className="text-sm font-medium hover:underline">
-              Open GitHub Actions →
+              Open baseline GitHub Actions run →
             </a>
           </div>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {PROOF_CARDS.map(({ icon: Icon, value, label, detail }) => (
               <article key={label} className="rounded-xl border border-slate-200 bg-white p-5">
                 <Icon className="text-slate-500" />
@@ -253,8 +310,8 @@ export default async function RecruiterPage() {
           <CircleDollarSign />
           <h2 className="mt-4 text-lg font-semibold">Safe by default</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            The public path spends nothing on models. Live AI remains an explicitly credentialed
-            deployment mode.
+            Deterministic replay keeps the public path reliable; credentialed live AI uses the same
+            contract with redaction, budgets, telemetry, and eval gates.
           </p>
         </article>
       </section>

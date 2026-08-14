@@ -85,11 +85,19 @@ test("the full demo flow: healthy → outage → incident → recovery → audit
   await setChaosMode(page, EHR, "HEALTHY");
 
   await page.goto("/jobs");
-  await page.getByRole("button", { name: /retry all matching/i }).click();
-  await page.getByRole("button", { name: /retry/i }).last().click();
+  // The seeded database intentionally contains historical DEAD fixtures and unsupported demo
+  // job types. Retry the new sync.page failure from this run, rather than re-queuing that entire
+  // historical backlog and making recovery depend on unrelated simulator 404s.
+  const recoveryRow = page
+    .getByRole("row")
+    .filter({ hasText: "sync.page" })
+    .filter({ hasText: "simulator returned 503" })
+    .first();
+  await expect(recoveryRow).toBeVisible();
+  await recoveryRow.getByRole("button", { name: "Retry", exact: true }).click();
 
-  await waitForCondition(page, async () => (await countJobs(page, "DEAD")) === 0, {
-    label: "the dead-job queue to drain after retry",
+  await waitForCondition(page, async () => (await countJobs(page, "DEAD")) <= deadBefore, {
+    label: "the new dead job to leave the queue after retry",
     timeoutMs: 120_000,
     intervalMs: 5_000,
   });

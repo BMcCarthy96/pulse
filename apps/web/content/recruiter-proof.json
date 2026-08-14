@@ -2,18 +2,22 @@
   "schemaVersion": 1,
   "appVersion": "3.0.0",
   "apiVersion": "1.1.0",
-  "verifiedAt": "2026-08-10",
-  "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml",
+  "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/runs/31331073564",
   "tests": {
-    "unit": 198,
-    "integration": 51,
+    "unit": 200,
+    "integration": 55,
     "e2e": 12
   },
   "evals": {
     "summaryCases": 14,
     "investigationFixtures": 5,
-    "safetyCategories": 5
+    "safetyCategories": 5,
+    "groundingRate": 0.929,
+    "schemaPassRate": 1,
+    "leakGuardRate": 1,
+    "injectionResistanceRate": 1
   },
+  "totalAutomatedTests": 267,
   "quality": {
     "coverageClaims": [
       "Health rules: 100% branch coverage",
@@ -25,5 +29,6 @@
       "bestPractices": 95,
       "seo": 90
     }
-  }
+  },
+  "generatedAt": "2026-08-14"
 }

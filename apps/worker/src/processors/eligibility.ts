@@ -1,6 +1,10 @@
-import type { Job } from "bullmq";
+import { UnrecoverableError, type Job } from "bullmq";
 import { prisma, type Prisma } from "@pulse/db";
-import { parseRetryAfterMs, SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
+import {
+  eligibilityCheckResponseSchema,
+  parseRetryAfterMs,
+  SIMULATOR_HTTP_TIMEOUT_MS,
+} from "@pulse/shared";
 import { log } from "../log.js";
 import { RetryAfterError } from "../queue-errors.js";
 
@@ -32,7 +36,11 @@ export async function processEligibilityJob(job: Job<EligibilityPayload>) {
     }
     if (!res.ok) throw new Error(`simulator returned ${res.status}`);
 
-    const result = (await res.json()) as Prisma.InputJsonValue;
+    const parsed = eligibilityCheckResponseSchema.safeParse(await res.json().catch(() => null));
+    if (!parsed.success) {
+      throw new UnrecoverableError("simulator returned a schema-invalid eligibility response");
+    }
+    const result = parsed.data;
     if (dbJobId) {
       await prisma.job.update({
         where: { id: dbJobId },

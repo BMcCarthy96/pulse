@@ -8,15 +8,27 @@ import { authConfig } from "./auth.config";
 import { provisionDemoSession } from "./lib/demo-session";
 import {
   enforceRateLimit,
+  rateLimitClientKey,
   RateLimitExceededError,
   RateLimitUnavailableError,
 } from "./lib/rate-limit";
 
 function demoRateLimitKey(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const address = forwarded || request.headers.get("x-real-ip") || "local";
   const salt = process.env.AUTH_SECRET ?? "pulse-local-demo-rate-limit";
-  return createHash("sha256").update(`${salt}:${address}`).digest("hex").slice(0, 24);
+  return createHash("sha256")
+    .update(`${salt}:${rateLimitClientKey(request.headers)}`)
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function loginRateLimitKey(request: Request, organization: string, email: string) {
+  const salt = process.env.AUTH_SECRET ?? "pulse-local-login-rate-limit";
+  return createHash("sha256")
+    .update(
+      `${salt}:${rateLimitClientKey(request.headers)}:${organization || "unspecified"}:${email}`,
+    )
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -36,7 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      authorize: async (credentials) => {
+      authorize: async (credentials, request) => {
         const organization =
           typeof credentials?.organization === "string"
             ? credentials.organization.trim().toLowerCase()
@@ -48,6 +60,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password =
           typeof credentials?.password === "string" ? credentials.password : undefined;
         if (!email || !password) return null;
+
+        try {
+          await enforceRateLimit({
+            key: `login:${loginRateLimitKey(request, organization, email)}`,
+            capacity: 8,
+            refillPerMinute: 8 / 60,
+            failClosed: true,
+          });
+        } catch (error) {
+          if (error instanceof RateLimitExceededError) return null;
+          if (error instanceof RateLimitUnavailableError) {
+            const authError = new CredentialsSignin();
+            authError.code = "auth_unavailable";
+            throw authError;
+          }
+          throw error;
+        }
 
         const users = await prisma.user.findMany({
           where: {

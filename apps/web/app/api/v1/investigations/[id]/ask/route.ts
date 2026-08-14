@@ -32,13 +32,14 @@ export const POST = handleApiError("investigation_ask", async (req, ctx) => {
           (event) => send(event.event, event.data),
         );
       } catch (error) {
+        const providerRequestId =
+          error instanceof Error && "providerRequestId" in error
+            ? (error as Error & { providerRequestId?: string }).providerRequestId
+            : null;
         send("run.error", {
-          code:
-            error instanceof Error && "code" in error
-              ? (error as { code?: string }).code
-              : "INVESTIGATION_FAILED",
-          message: error instanceof Error ? error.message : "Investigation failed",
-          requestId: null,
+          code: error instanceof ApiError ? error.code : "INVESTIGATION_FAILED",
+          message: error instanceof ApiError ? error.message : "Investigation failed",
+          requestId: providerRequestId,
         });
       } finally {
         controller.close();

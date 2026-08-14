@@ -638,7 +638,7 @@ paths:
       description: |
         Role: OPS. Returns SSE events for `run.started`, evidence, hypotheses, proposed actions,
         answer deltas, and completion. Without a provider key, only the three exact guided
-        questions use deterministic recorded fixtures.
+        questions use deterministic provider-free synthesis; live provider mode is gated by AI flags.
       requestBody:
         required: true
         content:

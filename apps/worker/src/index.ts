@@ -53,7 +53,12 @@ async function clearRepeatables(queue: {
 }
 
 async function registerRepeatables() {
-  const pollConnectors = await prisma.connector.findMany({ where: { kind: "poll_sync" } });
+  const pollConnectors = (
+    await prisma.connector.findMany({
+      where: { kind: "poll_sync" },
+      include: { org: { select: { demoSession: { select: { status: true } } } } },
+    })
+  ).filter((connector) => connector.org.demoSession?.status !== "ACTIVE");
   await clearRepeatables(syncQueue);
 
   for (const connector of pollConnectors) {
@@ -105,16 +110,39 @@ async function registerRepeatables() {
 async function main() {
   log.info(`${APP_NAME} worker booted`);
 
-  const healthRedis = new Redis(REDIS_URL, { maxRetriesPerRequest: 3 });
+  const healthRedis = new Redis(REDIS_URL, {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 1_000,
+    commandTimeout: 1_000,
+  });
   const pong = await healthRedis.ping();
   log.info({ pong }, "redis connection ok");
-  await healthRedis.quit();
 
   await prisma.$queryRaw`SELECT 1`;
   log.info("postgres connection ok");
 
+  let workerReady = false;
   const app = new Hono();
-  app.get("/healthz", (c) => c.json({ ok: true }));
+  app.get("/livez", (c) => c.json({ ok: true, service: "worker" }));
+  app.get("/healthz", (c) => c.json({ ok: true, service: "worker" }));
+  app.get("/readyz", async (c) => {
+    let db = false;
+    let redis = false;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      db = true;
+    } catch {
+      db = false;
+    }
+    try {
+      await healthRedis.ping();
+      redis = true;
+    } catch {
+      redis = false;
+    }
+    const ready = workerReady && db && redis;
+    return c.json({ ok: ready, ready, db, redis }, ready ? 200 : 503);
+  });
   app.route("/", ehrApp);
   app.route("/", clearinghouseApp);
   app.route("/", eligibilityApp);
@@ -160,12 +188,14 @@ async function main() {
   );
 
   await registerRepeatables();
+  workerReady = true;
   log.info(`${APP_NAME} worker ready`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    workerReady = false;
     log.info({ signal }, "shutting down worker");
 
     // Release :4001 first and *wait* for it. Closing it last (or not awaiting it) meant a
@@ -197,6 +227,7 @@ async function main() {
     ]);
     await flushLogs();
     await stopTelemetry();
+    await healthRedis.quit().catch(() => healthRedis.disconnect());
     await prisma.$disconnect();
     process.exit(0);
   };

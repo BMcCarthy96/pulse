@@ -6,29 +6,31 @@ demo session.
 
 ## Review Pulse in three minutes
 
-1. Open `/recruiter`. Read the product problem, architecture proof, and the recorded-AI
+### Launching the demo
+
+1. Open `/recruiter`. Read the product problem, engineering proof, and the deterministic-demo
    disclosure without signing in.
-2. Choose **Try the live demo**. Pulse creates an isolated, synthetic tenant that expires after
+2. Choose **Launch interactive demo**. Pulse creates an isolated, synthetic tenant that expires after
    one hour.
 3. Follow the persistent **Recruiter walkthrough**: overview → EHR incident → **Find the first
    signal** → approve the retry → inspect the audit trail.
 4. Choose **Reset demo**. The operational data returns to its initial seeded state; the isolated
    tenant is deleted automatically when its one-hour session expires.
 
-No Anthropic key is required for this path. The guided questions use versioned recorded fixtures
-and are labelled **Recorded fixture** in the interface. Live model output is enabled only when
-both a key and `INVESTIGATION_LIVE_ENABLED=true` are present.
+No Anthropic key is required for this path. The guided questions use deterministic, evidence-bound
+synthesis and are labelled **Deterministic demo synthesis** in the interface. Live provider output
+is enabled only when `AI_ENABLED=true`, a key, and `INVESTIGATION_LIVE_ENABLED=true` are present.
 
 ## Where things are
 
-| Destination               | What it proves                                                             |
-| ------------------------- | -------------------------------------------------------------------------- |
-| Overview                  | Health roll-up, affected connectors, dead jobs, and active incidents       |
-| Incidents → investigation | Cited evidence, calibrated uncertainty, safe proposed actions              |
-| Jobs                      | Retry/backoff history and operator-controlled recovery                     |
-| Settings → audit          | Attribution for every operational mutation (ADMIN persona)                 |
-| API reference             | OpenAPI 1.1 contract rendered from the committed specification             |
-| `/recruiter`              | Public product story, architecture, safety, cost, and current proof counts |
+| Destination               | What it proves                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| Overview                  | Health roll-up, affected connectors, dead jobs, and active incidents                 |
+| Incidents → investigation | Cited evidence, calibrated uncertainty, safe proposed actions                        |
+| Jobs                      | Retry/backoff history and operator-controlled recovery                               |
+| Settings → audit          | Attribution for every operational mutation (ADMIN persona)                           |
+| API reference             | OpenAPI 1.1 contract rendered from the committed specification                       |
+| `/recruiter`              | Public product story, timestamped walkthrough outline, AI quality, safety, and proof |
 
 On narrow screens, use **Open navigation** in the header. The walkthrough and its progress survive
 navigation for the lifetime of the demo session.
@@ -64,7 +66,7 @@ pnpm verify:full
 DEMO_BASE_URL=https://your-deployment.example pnpm verify:release
 ```
 
-The fast gate covers formatting, lint, TypeScript, unit coverage, deterministic AI evals, and the
+The fast gate covers formatting, lint, TypeScript, unit coverage, deterministic evaluation fixtures, and the
 machine-derived recruiter proof manifest. The full gate adds real Postgres/Redis integration,
 production compilation, and the browser journey. Browser failures retain trace, screenshot, and
 video evidence.
@@ -100,7 +102,8 @@ smoke ran from the same network moments earlier, use `VUS=4` or wait for the buc
   is green.
 - Record the 90-second guided flow using [`docs/loom-script.md`](loom-script.md), then link the
   video from the README and recruiter page.
-- Confirm `DEMO_MODE=true` on both web and worker, while `INVESTIGATION_LIVE_ENABLED=false` unless
+- Confirm `DEMO_MODE=true` on both web and worker, while `AI_ENABLED=false` and
+  `INVESTIGATION_LIVE_ENABLED=false` unless
   the live-AI cost and safety review is complete.
 - Run `pnpm verify:full`, `pnpm verify:release`, and the k6 profile; retain the resulting CI run as
   the evidence link for the release.

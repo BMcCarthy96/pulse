@@ -2,6 +2,7 @@ import type { PrismaClient, Prisma } from "@prisma/client";
 import type { Queue, JobsOptions } from "bullmq";
 import { DEFAULT_JOB_OPTS } from "./queue-config.js";
 import { injectTrace } from "./telemetry.js";
+import { ApiError } from "./api-errors.js";
 
 export interface TrackedJobParams {
   queue: Queue;
@@ -34,11 +35,27 @@ export async function createTrackedJob(prisma: PrismaClient, params: TrackedJobP
     },
   });
 
-  const bullJob = await params.queue.add(
-    params.type,
-    { ...params.payload, dbJobId: dbJob.id, ...injectTrace() },
-    params.opts ?? DEFAULT_JOB_OPTS,
-  );
+  let bullJob;
+  try {
+    bullJob = await params.queue.add(
+      params.type,
+      { ...params.payload, dbJobId: dbJob.id, ...injectTrace() },
+      { ...(params.opts ?? DEFAULT_JOB_OPTS), jobId: dbJob.id },
+    );
+  } catch (error) {
+    // Keep the durable row visible for reconciliation instead of leaving an apparently queued
+    // job that was never accepted by Redis.
+    await prisma.job
+      .update({
+        where: { id: dbJob.id },
+        data: {
+          status: "FAILED",
+          lastError: error instanceof Error ? error.message.slice(0, 500) : "queue dispatch failed",
+        },
+      })
+      .catch(() => undefined);
+    throw error;
+  }
 
   await prisma.job.update({ where: { id: dbJob.id }, data: { bullJobId: String(bullJob.id) } });
   return { dbJobId: dbJob.id, bullJobId: bullJob.id };
@@ -58,15 +75,38 @@ export async function retryTrackedJob(
   const queue = queueByName[dbJob.queue];
   if (!queue) throw new Error(`unknown queue for retry: ${dbJob.queue}`);
 
-  const bullJob = await queue.add(
-    dbJob.type,
-    { ...(dbJob.payload as object), dbJobId: dbJob.id, ...injectTrace() },
-    DEFAULT_JOB_OPTS,
-  );
+  const claimed = await prisma.job.updateMany({
+    where: { id: dbJobId, status: { in: ["FAILED", "DEAD"] } },
+    data: { status: "QUEUED", bullJobId: null, lastError: null },
+  });
+  if (claimed.count !== 1) {
+    throw ApiError.conflict("job is already queued or no longer retryable");
+  }
+
+  let bullJob;
+  try {
+    bullJob = await queue.add(
+      dbJob.type,
+      { ...(dbJob.payload as object), dbJobId: dbJob.id, ...injectTrace() },
+      // BullMQ reserves ':' as an internal key separator and rejects it in custom job IDs.
+      { ...DEFAULT_JOB_OPTS, jobId: `retry-${dbJob.id}-${Date.now().toString(36)}` },
+    );
+  } catch (error) {
+    await prisma.job
+      .update({
+        where: { id: dbJobId },
+        data: {
+          status: dbJob.status,
+          lastError: error instanceof Error ? error.message.slice(0, 500) : "queue dispatch failed",
+        },
+      })
+      .catch(() => undefined);
+    throw error;
+  }
 
   await prisma.job.update({
     where: { id: dbJobId },
-    data: { status: "QUEUED", bullJobId: String(bullJob.id), lastError: null },
+    data: { bullJobId: String(bullJob.id) },
   });
   return { dbJobId, bullJobId: bullJob.id };
 }

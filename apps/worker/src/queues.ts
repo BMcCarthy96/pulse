@@ -1,4 +1,4 @@
-import { Queue, Worker, type Job as BullJob } from "bullmq";
+import { Queue, UnrecoverableError, Worker, type Job as BullJob } from "bullmq";
 import { prisma, type Prisma } from "@pulse/db";
 import {
   QUEUE_NAMES,
@@ -166,7 +166,7 @@ async function handleFailed(job: BullJob | undefined, err: Error) {
   if (!dbJob) return;
 
   const attemptsMade = job.attemptsMade;
-  const isDead = attemptsMade >= (job.opts.attempts ?? 1);
+  const isDead = err instanceof UnrecoverableError || attemptsMade >= (job.opts.attempts ?? 1);
   const priorHistory = Array.isArray(dbJob.errorHistory)
     ? (dbJob.errorHistory as Record<string, unknown>[])
     : [];

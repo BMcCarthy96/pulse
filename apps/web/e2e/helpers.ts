@@ -6,6 +6,14 @@ export const PERSONAS = {
   viewer: "Priya Nair",
 } as const;
 
+const AUTH_SESSION_COOKIE_NAME = /^(?:__Secure-)?authjs\.session-token(?:\.\d+)?$/;
+
+async function authSessionCookieCount(page: Page) {
+  return (await page.context().cookies()).filter((cookie) =>
+    AUTH_SESSION_COOKIE_NAME.test(cookie.name),
+  ).length;
+}
+
 /**
  * Signs in via the demo persona buttons — the same path the Loom walkthrough uses.
  *
@@ -25,6 +33,16 @@ export async function loginAs(page: Page, persona: keyof typeof PERSONAS) {
   if (await signOut.isVisible()) {
     await signOut.click();
     await expect(page).toHaveURL(/\/recruiter/);
+    await expect(
+      page.getByRole("heading", {
+        name: /Investigate integration failures before clinicians discover them/i,
+      }),
+    ).toBeVisible();
+    await expect
+      .poll(() => authSessionCookieCount(page), {
+        message: "Auth.js session cookies should be cleared before switching personas",
+      })
+      .toBe(0);
     await page.goto("/login");
   }
 

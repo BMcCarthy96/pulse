@@ -19,6 +19,7 @@ interface ErrorHistoryEntry {
 function jobToCalls(job: {
   createdAt: Date;
   status: string;
+  attempts: number;
   startedAt: Date | null;
   finishedAt: Date | null;
   errorHistory: unknown;
@@ -32,6 +33,10 @@ function jobToCalls(job: {
     durationMs: typeof entry.durationMs === "number" ? entry.durationMs : null,
   }));
 
+  // A durable row whose Redis dispatch failed is operator-visible, but it never reached an
+  // upstream processor and therefore must not poison connector health.
+  if (job.attempts === 0 && job.startedAt === null && failedAttempts.length === 0) return [];
+
   const succeeded = job.status === "SUCCEEDED";
   if (succeeded) {
     failedAttempts.push({
@@ -44,7 +49,11 @@ function jobToCalls(job: {
 
   if (failedAttempts.length > 0) return failedAttempts;
 
-  // No attempt history at all (seeded rows, or still queued): count the row once.
+  // Queued/active work has not produced an upstream call yet. Counting it as a successful
+  // request makes a live outage look healthy while work is still waiting in Redis.
+  if (job.status === "QUEUED" || job.status === "ACTIVE") return [];
+
+  // No attempt history at all (for example a seeded terminal row): count the row once.
   return [
     {
       at: job.createdAt,
@@ -62,10 +71,18 @@ function jobToCalls(job: {
 async function loadCalls(connectorId: string, since: Date): Promise<HealthCall[]> {
   const [jobs, events] = await Promise.all([
     prisma.job.findMany({
-      where: { connectorId, createdAt: { gt: since } },
+      where: {
+        connectorId,
+        OR: [
+          { createdAt: { gt: since } },
+          { startedAt: { gt: since } },
+          { finishedAt: { gt: since } },
+        ],
+      },
       select: {
         createdAt: true,
         status: true,
+        attempts: true,
         startedAt: true,
         finishedAt: true,
         errorHistory: true,
@@ -146,10 +163,22 @@ async function tickConnector(
 export async function runHealthTick() {
   const now = new Date();
   const connectors = await prisma.connector.findMany({
-    select: { id: true, orgId: true, key: true, displayName: true, status: true, paused: true },
+    select: {
+      id: true,
+      orgId: true,
+      key: true,
+      displayName: true,
+      status: true,
+      paused: true,
+      org: { select: { demoSession: { select: { status: true } } } },
+    },
   });
 
   for (const connector of connectors) {
+    // Recruiter tenants are compact deterministic fixtures. Background snapshots would make the
+    // cited evidence board drift while someone is reviewing it; explicit demo actions remain
+    // available, and ordinary tenant connectors continue through the production health engine.
+    if (connector.org.demoSession?.status === "ACTIVE") continue;
     try {
       await tickConnector(connector, now);
     } catch (err) {

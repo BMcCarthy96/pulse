@@ -175,7 +175,7 @@ async function streamCopilot(
           promptVersion: COPILOT_PROMPT_VERSION,
         });
 
-        if (process.env.AI_ENABLED === "false" || !process.env.ANTHROPIC_API_KEY) {
+        if (process.env.AI_ENABLED !== "true" || !process.env.ANTHROPIC_API_KEY) {
           completedStatus = "CANCELLED";
           const details = {
             code: "AI_NOT_CONFIGURED",

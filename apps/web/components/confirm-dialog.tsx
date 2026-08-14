@@ -19,6 +19,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   onConfirm,
   variant = "default",
+  contentClassName,
 }: {
   trigger: React.ReactNode;
   title: string;
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   onConfirm: () => void | Promise<void>;
   variant?: "default" | "destructive";
+  contentClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -33,7 +35,7 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger as React.ReactElement} />
-      <DialogContent>
+      <DialogContent className={contentClassName}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription render={<div />}>{description}</DialogDescription>

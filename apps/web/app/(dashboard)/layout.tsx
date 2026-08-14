@@ -16,19 +16,32 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen">
       <aside className="bg-card hidden w-56 shrink-0 border-r md:block">
         <div className="border-b px-4 py-4">
-          <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
-          <p className="text-muted-foreground text-xs">
+          <div className="flex items-center gap-2">
+            <span className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-indigo-600 text-sm font-bold text-white shadow-sm">
+              P
+            </span>
+            <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
+          </div>
+          <p className="text-muted-foreground mt-2 text-xs">
             {user?.demoSessionId ? "Isolated recruiter demo" : "Lakeview Health Partners"}
           </p>
         </div>
         <SidebarNav />
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="bg-card flex min-h-14 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
           <div className="flex items-center gap-2">
             <MobileNavigation demo={Boolean(user?.demoSessionId)} />
             <GlobalHealthDot />
+            {user?.demoSessionId && (
+              <Badge
+                variant="outline"
+                className="hidden border-teal-200 bg-teal-50 text-teal-800 sm:inline-flex"
+              >
+                Synthetic workspace
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             {user && (
@@ -54,7 +67,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </header>
 
-        <main id="main-content" className="bg-muted/20 flex-1 p-4 sm:p-6">
+        <main id="main-content" className="bg-muted/20 min-w-0 flex-1 p-4 sm:p-6">
           {children}
         </main>
       </div>

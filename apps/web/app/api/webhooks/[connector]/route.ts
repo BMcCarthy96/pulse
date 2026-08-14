@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { withSpan } from "@pulse/shared";
 import { ingestWebhook, readWebhookHeaders } from "@/lib/ingest-webhook";
-import { enforceRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
+import {
+  enforceRateLimit,
+  rateLimitClientKey,
+  RateLimitExceededError,
+  RateLimitUnavailableError,
+} from "@/lib/rate-limit";
 
 /**
  * Thin adapter over `ingestWebhook()`. Deliberately holds no logic of its own: the pipeline it
@@ -14,6 +19,9 @@ import { enforceRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
  */
 export async function POST(req: Request, { params }: { params: Promise<{ connector: string }> }) {
   const { connector: connectorKey } = await params;
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "tenant-scoped webhook route required" }, { status: 410 });
+  }
   const rawBody = await req.text();
   return withSpan(
     "api:webhook.ingest",
@@ -21,9 +29,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ connect
     async () => {
       try {
         await enforceRateLimit({
-          key: `webhook:${connectorKey}:${req.headers.get("x-pulse-source") ?? "unknown"}`,
+          key: `webhook:legacy:${connectorKey}:${rateLimitClientKey(req.headers)}`,
           capacity: 30,
           refillPerMinute: 120,
+          failClosed: true,
         });
       } catch (error) {
         if (error instanceof RateLimitExceededError) {
@@ -32,7 +41,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ connect
             { status: 429, headers: { "Retry-After": String(error.retryAfterSeconds) } },
           );
         }
-        // Webhooks fail open when Redis is down; signature verification and dedupe remain active.
+        if (error instanceof RateLimitUnavailableError) {
+          return NextResponse.json(
+            { error: "webhook protection unavailable" },
+            { status: 503, headers: { "Retry-After": "30" } },
+          );
+        }
+        throw error;
       }
 
       const result = await ingestWebhook({

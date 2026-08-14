@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@pulse/db";
 import { auth } from "@/auth";
 import { ApiError, roleAtLeast, type RoleName } from "@pulse/shared";
@@ -99,8 +100,13 @@ export function handleApiError(routeName: string, fn: RouteHandler): RouteHandle
       );
       return res;
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : ApiError.internal();
-      if (!(err instanceof ApiError)) {
+      const apiError =
+        err instanceof ApiError
+          ? err
+          : err instanceof z.ZodError
+            ? ApiError.validation(err.issues[0]?.message ?? "Invalid request")
+            : ApiError.internal();
+      if (!(err instanceof ApiError) && !(err instanceof z.ZodError)) {
         log.error(
           { route: routeName, method: req.method, userId, traceId: routeTraceId, err },
           "unhandled api error",

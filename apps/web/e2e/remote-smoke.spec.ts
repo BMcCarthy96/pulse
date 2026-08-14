@@ -12,7 +12,11 @@ test("deployed recruiter path provisions, explains, and resets an isolated demo"
       name: /Investigate integration failures before clinicians discover them/i,
     }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Try the live demo" }).first().click();
+  await page
+    .getByRole("button", { name: /Launch interactive demo/i })
+    .first()
+    .click();
+  await page.getByTestId("recruiter-tour-button").click();
   await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();

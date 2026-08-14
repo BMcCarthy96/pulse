@@ -281,6 +281,8 @@ describe("jobs.retry", () => {
 
     const after = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
     expect(after.status).toBe("QUEUED");
+    expect(after.bullJobId).toMatch(/^retry-/);
+    expect(after.bullJobId).not.toContain(":");
     // The retry history is the point of the failed-job queue — it must survive the re-queue.
     expect(Array.isArray(after.errorHistory)).toBe(true);
     expect(after.errorHistory).toHaveLength(1);
@@ -304,12 +306,17 @@ describe("jobs.retry", () => {
     expect(await prisma.auditEntry.count()).toBe(0);
   });
 
-  it("409s on a QUEUED job rather than double-queueing it", async () => {
+  it("lets one concurrent retry win and returns a typed 409 to the loser", async () => {
     const { org } = await signIn("OPS");
     const connector = await createConnector(org.id);
-    const job = await seedJob(org.id, connector.id, "QUEUED");
+    const job = await seedJob(org.id, connector.id, "DEAD");
 
-    expect((await retryJob(req(), ctx({ id: job.id }))).status).toBe(409);
+    const responses = await Promise.all([
+      retryJob(req(), ctx({ id: job.id })),
+      retryJob(req(), ctx({ id: job.id })),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(await prisma.auditEntry.count({ where: { targetId: job.id } })).toBe(1);
   });
 });
 

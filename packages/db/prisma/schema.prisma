@@ -169,6 +169,7 @@ model Job {
   updatedAt    DateTime     @updatedAt
 
   @@index([connectorId, status, createdAt])
+  @@index([orgId, connectorId, status, createdAt])
   @@index([status, createdAt])
 }
 
@@ -234,6 +235,7 @@ model LogEntry {
   createdAt   DateTime     @default(now())
 
   @@index([connectorId, createdAt])
+  @@index([orgId, connectorId, createdAt])
   @@index([level, createdAt])
   @@index([traceId, createdAt])
 }

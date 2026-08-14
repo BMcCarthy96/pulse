@@ -1,12 +1,13 @@
-# Pulse — Integration Health Dashboard
+# Pulse — AI Investigation Workspace for Healthcare Integrations
 
 [![CI](https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml)
 [![Security](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml)
 [![Worker image](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml)
 
-**Recruiter path:** [Review and test Pulse](docs/recruiter-testing.md) ·
-[90-second walkthrough](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
-[How it works](#architecture)
+**Recruiter path:** [Launch the interactive demo locally](docs/recruiter-testing.md#launching-the-demo) ·
+[Preview the 90-second demo path](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
+[Open a baseline green CI run](https://github.com/BMcCarthy96/pulse/actions/runs/31331073564) ·
+[Read the recruiter test path](docs/recruiter-testing.md)
 
 When a hospital's integrations break, nobody finds out from a dashboard — they find out when a
 clinician can't see yesterday's lab results, or when a month of claims turns out to have been
@@ -16,27 +17,55 @@ returning 503s, a retry queue fills up, and the first symptom is a human noticin
 missing.
 
 **Pulse is the console that makes that visible.** It runs the jobs, tracks every attempt, scores
-each connector's health on a rolling window, opens an incident the moment one goes down, and
-drafts a first-pass incident summary with Claude — from PHI-redacted context.
+each connector's health on a rolling window, opens an incident the moment one goes down, and gives
+an operator an evidence-cited investigation with an approval-safe recovery path.
 
-![The Pulse overview: dead-job and incident counters, per-connector health cards, a 24-hour error-rate chart, and recent incidents](docs/media/01-overview.png)
-
-> The error-rate chart is flat here because it covers 24 hours and the seed's two failure
-> clusters sit 2 and 5 days back — that is what a fresh `pnpm db:seed` actually looks like, not
-> a doctored screenshot. Drive the chaos panel for a minute and it fills in.
+![Pulse's public recruiter landing page explains the integration-failure investigation, provider-free demo path, and human approval boundary](docs/media/01-recruiter-landing.png)
 
 > **All data in this project is synthetic.** The organisation (Lakeview Health Partners), the
 > patients, the claims, and the four upstream vendors are fictional. No real PHI is involved
 > anywhere; the redaction boundary described below exists as a design discipline, not because
 > real patient data ever touches it.
 
-**Guarded recruiter demo:** enable `DEMO_MODE=true` and open `/recruiter`. **Try the live demo**
-provisions an isolated synthetic tenant (one open incident, bounded evidence, and a
-DEAD job ready for an approval-safe retry), expires it after one hour, and cleans it up every five
-minutes. When no Anthropic key is configured, the three guided investigation questions run from
-versioned recorded fixtures; arbitrary questions clearly ask the operator to choose a recorded
-flow. The persistent walkthrough makes the intended path visible on every page. Deployment notes
-are in [docs/deployment.md](docs/deployment.md).
+**Guarded recruiter demo:** open `/recruiter` and choose **Launch interactive demo**. Pulse
+provisions an isolated synthetic tenant with one coherent EHR outage, bounded evidence, and a
+DEAD job ready for an approval-safe retry. The public path uses deterministic provider-free
+synthesis; credentialed live AI uses the same report contract, budgets, redaction, and telemetry.
+The workspace expires after one hour and cleans itself up. Deployment notes are in
+[docs/deployment.md](docs/deployment.md).
+
+### One incident, from signal to audited recovery
+
+The screenshots below come from one short-lived demo tenant created through the public recruiter
+entry—no shared admin account or provider key. The seeded outage, cited findings, proposed retry,
+operator confirmation, execution result, and audit row all belong to that same incident.
+
+1. **Detect:** the overview opens on a deliberately broken integration with a DEAD job and an
+   incident that needs an operator.
+
+   ![An isolated synthetic Pulse workspace showing the broken EHR integration, dead-job counter, open incident, and a clear Continue investigation action](docs/media/03-broken-overview.png)
+
+2. **Investigate:** a provider-free run produces hypotheses linked to the bounded evidence board
+   and proposes an executable recovery action.
+
+   ![The Pulse investigation workspace showing deterministic run disclosure, cited hypotheses, proposed actions, activity, and the bounded evidence board](docs/media/04-cited-investigation.png)
+
+3. **Approve:** the operator sees the exact action and target before the server revalidates and
+   executes it once.
+
+   ![Pulse's approval confirmation naming the recovery action, target revalidation, one-time execution, and attributable audit record](docs/media/05-approval-confirmation.png)
+
+4. **Prove:** the same workspace records the successful action and the attributed audit entry.
+
+   ![The completed Pulse recovery action showing SUCCEEDED in action history and the attributed job retry in the audit trail](docs/media/06-executed-action-audit.png)
+
+<details>
+<summary>Phone-sized public entry</summary>
+
+![Pulse's public recruiter landing page at a 390-pixel phone viewport with no horizontal overflow](docs/media/02-recruiter-mobile.png)
+
+</details>
+
 **Demo logins** (password `pulse-demo-2026`):
 
 | Persona      | Email                           | Role   | Can do                                                          |
@@ -51,9 +80,9 @@ are in [docs/deployment.md](docs/deployment.md).
 
 - **Integration reliability:** connector health windows, retries, backoff, incident lifecycle, and webhook isolation.
 - **Production-minded AI:** PHI redaction, structured output, prompt versioning, measured cost/latency, and graceful degradation.
-- **AI engineering:** deterministic evals, prompt regression gates, evidence-bounded tool use, and persisted run telemetry.
+- **AI engineering:** deterministic evals, evidence-bounded tool use, runtime citation validation, and persisted run telemetry.
 - **Operational safety:** RBAC, audit entries, replay protection, rate limits, budgets, and distributed traces.
-- **Investigation workspace (v3):** durable redacted evidence, cited hypotheses, streamed live/recorded runs, and explicit OPS approval for `RETRY_JOB`, `ACKNOWLEDGE_INCIDENT`, `RESOLVE_INCIDENT`, and `REGENERATE_SUMMARY`.
+- **Investigation workspace (v3):** durable redacted evidence, clickable citations, deterministic/live run disclosure, and explicit OPS approval for `RETRY_JOB`, `ACKNOWLEDGE_INCIDENT`, `RESOLVE_INCIDENT`, and `REGENERATE_SUMMARY`.
 - **Recruiter-ready proof:** tenant-isolated demo sessions, cleanup/reset controls, OpenAPI contracts, Playwright accessibility hooks, deterministic evals, and a deployable Railway worker image.
 
 ## Stack at a glance
@@ -94,8 +123,6 @@ process, and an admin-only **chaos panel** sets each one's failure mode on deman
 | `BAD_PAYLOAD`  | 200 with a schema-invalid body                                              |
 | `AUTH_FAILURE` | 401                                                                         |
 
-![Connector detail for the EHR connector, showing the seven-mode chaos panel, a 24-hour health timeline, and sync history](docs/media/02-connector-chaos-panel.png)
-
 This is a feature, not a test hook. Every failure path in the system is **reproducible in about
 ten seconds** — including in the automated end-to-end test, which drives the same panel.
 
@@ -114,7 +141,7 @@ flowchart LR
 
   subgraph vercel[Vercel — apps/web]
     API["/api/v1/* route handlers<br/>role gate + zod + audit"]
-    WH["/api/webhooks/:connector<br/>HMAC verify + dedupe"]
+    WH["/api/webhooks/tenant/:org/:connector<br/>timestamped HMAC + dedupe"]
     AUTH[Auth.js credentials<br/>JWT, edge middleware]
   end
 
@@ -230,8 +257,6 @@ Details that turned out to matter:
 - **Bulk retry is capped at 100 and ordered oldest-first**, so repeated runs drain the backlog
   instead of re-picking the same head.
 
-![The failed job queue filtered to DEAD, showing attempt counts, the last error per job, and per-row and bulk retry actions](docs/media/03-dead-jobs.png)
-
 ---
 
 ## Health scoring & incident lifecycle
@@ -289,8 +314,6 @@ stateDiagram-v2
 
 Incident summaries are drafted by Claude (`claude-opus-4-8`) and are the one place in the system
 where data leaves the process. The design is shaped almost entirely by that fact.
-
-![An incident detail page with a Claude-drafted summary — probable cause, impact, and five suggested steps — labelled with its confidence, model, and prompt version, beside the system-generated timeline](docs/media/04-incident-ai-summary.png)
 
 Note what the footer carries: model id, prompt version, and generation time. A summary you cannot
 attribute to a specific prompt is a summary you cannot debug.
@@ -420,8 +443,8 @@ no failures in it would demonstrate nothing.
 
 | Layer                                     | Runs against            | Covers                                                                                                                                                                               | Count |
 | ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 198   |
-| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                                                       | 51    |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 200   |
+| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                                                       | 55    |
 | **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public recruiter entry, guided demo, responsive navigation, accessibility, auth, and role gates                                                                  | 12    |
 
 The split follows one rule: **if it can be a pure function, test it as one.** The health rules and
@@ -476,8 +499,6 @@ inject anything.
 - **Every mutation writes an `AuditEntry`** with actor, action, target and metadata — no
   exceptions. The audit log is an admin-only page.
 
-![The admin-only audit log: actor, action, target and metadata for chaos changes, bulk retries, and AI summary edits and regenerations](docs/media/05-audit-log.png)
-
 - **Password hashes are never selected** for the users endpoint's shape.
 - **Synthetic data only**, and anything bound for the Anthropic API passes through the redaction
   boundary with a leak check behind it.
@@ -512,10 +533,12 @@ build step ahead of its e2e job for exactly this reason. The script itself seeds
 `apps/web/scripts/prepare-e2e-db.mjs` before Playwright starts — that runs ahead of the servers,
 which a Playwright `globalSetup` could not do, since `webServer` boots first.
 
-The screenshots above are generated, not hand-captured — run
-`pnpm --filter @pulse/web screenshots` against a running stack to regenerate all five into
-`docs/media/`. It signs in as the admin persona (both the chaos panel and the audit log are
-ADMIN-gated) and picks the incident to shoot by querying for one with a finished AI summary.
+The screenshots above are generated, not hand-captured. Run
+`pnpm --filter @pulse/web screenshots` against a current stack with `DEMO_MODE=true` to regenerate
+all six into `docs/media/`. The script starts anonymously at `/recruiter`, checks the desktop and
+phone entry points, provisions a tenant-isolated synthetic outage, runs provider-free deterministic
+synthesis, approves the proposed retry, captures its attributed audit row, and resets the demo when
+finished. It never uses a shared seeded login or an AI provider key.
 
 Two things worth knowing up front: the web app runs on **:3010**, not :3000; and you must stop
 `pnpm dev` before running `pnpm build`, because a dev server and a production build will fight

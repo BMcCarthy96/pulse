@@ -17,7 +17,6 @@ import { apiPost } from "@/lib/api-client";
 import { formatDuration } from "@/lib/format";
 import type { IncidentDetailResponse } from "@/lib/types";
 import { AiSummaryCard } from "./ai-summary-card";
-import { CopilotPanel } from "./copilot-panel";
 import { InvestigationWorkspace } from "./investigation-workspace";
 import { toast } from "sonner";
 
@@ -126,18 +125,26 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <AiSummaryCard
-            incidentId={id}
-            status={incident.aiSummaryStatus}
-            summary={incident.aiSummary}
-            onChanged={() => void mutate()}
-          />
+          <section id="triage-summary" aria-labelledby="triage-label">
+            <div className="mb-2">
+              <p id="triage-label" className="text-xs font-semibold tracking-wide uppercase">
+                Automated triage
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Compact context before the evidence-grounded investigation.
+              </p>
+            </div>
+            <AiSummaryCard
+              incidentId={id}
+              status={incident.aiSummaryStatus}
+              summary={incident.aiSummary}
+              onChanged={() => void mutate()}
+            />
+          </section>
 
           <RoleGate minRole="OPS">
             <InvestigationWorkspace incidentId={id} />
           </RoleGate>
-
-          <CopilotPanel incidentId={id} />
 
           <section className="rounded-lg border p-4">
             <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
@@ -196,8 +203,11 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <dt className="text-muted-foreground">Chaos mode</dt>
-                <dd>{incident.connector.chaosMode}</dd>
+                <dt className="text-muted-foreground">Simulator ground truth</dt>
+                <dd className="text-right">
+                  {incident.connector.chaosMode}
+                  <span className="text-muted-foreground block text-[11px]">withheld from AI</span>
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-muted-foreground">Opened</dt>

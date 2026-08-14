@@ -1,4 +1,5 @@
 import { Redis } from "ioredis";
+import { createHash } from "node:crypto";
 
 const TOKEN_BUCKET_SCRIPT = `
 local now = tonumber(ARGV[1])
@@ -27,6 +28,20 @@ return { allowed, math.floor(tokens * 1000), retryMs }
 
 let redis: Redis | null = null;
 let connectPromise: Promise<void> | null = null;
+
+/**
+ * Use the right-most forwarded hop: on append-style proxies the left-most value is supplied by
+ * the client and can be spoofed. Hashing keeps untrusted header text out of Redis keys.
+ */
+export function rateLimitClientKey(headers: Headers) {
+  const forwarded = headers
+    .get("x-forwarded-for")
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const address = forwarded?.at(-1) ?? headers.get("x-real-ip")?.trim() ?? "unknown";
+  return createHash("sha256").update(address).digest("hex").slice(0, 24);
+}
 
 function client() {
   return (redis ??= new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
@@ -104,13 +119,13 @@ export async function enforceCopilotQuotas(userId: string, orgId: string) {
   await enforceRateLimit({
     key: `user:${userId}:copilot:hour`,
     capacity: 10,
-    refillPerMinute: 10,
+    refillPerMinute: 10 / 60,
     failClosed: true,
   });
   await enforceRateLimit({
     key: `org:${orgId}:copilot:day`,
     capacity: 50,
-    refillPerMinute: 50 / 24,
+    refillPerMinute: 50 / (24 * 60),
     failClosed: true,
   });
 }
@@ -119,13 +134,13 @@ export async function enforceSummaryQuotas(userId: string, orgId: string) {
   await enforceRateLimit({
     key: `user:${userId}:summary:hour`,
     capacity: 3,
-    refillPerMinute: 3,
+    refillPerMinute: 3 / 60,
     failClosed: true,
   });
   await enforceRateLimit({
     key: `org:${orgId}:summary:day`,
     capacity: 20,
-    refillPerMinute: 20 / 24,
+    refillPerMinute: 20 / (24 * 60),
     failClosed: true,
   });
 }

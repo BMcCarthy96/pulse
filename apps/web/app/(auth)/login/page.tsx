@@ -46,7 +46,7 @@ export default function LoginPage() {
     if (res?.error) {
       setError(
         res.url?.includes("demo_capacity")
-          ? "The demo is at capacity. Try the recorded tour in a moment."
+          ? "The demo is at capacity. Try the deterministic walkthrough in a moment."
           : "The guarded demo is unavailable right now.",
       );
       return;
