@@ -22,8 +22,8 @@ const authenticatedMiddleware = auth((req) => {
     return NextResponse.redirect(new URL("/recruiter", nextUrl));
   }
 
-  if (isLoggedIn && isLoginPage) {
-    return NextResponse.redirect(new URL("/", nextUrl));
+  if (isLoginPage) {
+    return isLoggedIn ? NextResponse.redirect(new URL("/", nextUrl)) : NextResponse.next();
   }
 
   if (!isLoggedIn) {
