@@ -23,7 +23,7 @@ import { Timestamp } from "@/components/timestamp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
-import { announceRecruiterTourStep } from "@/components/recruiter-tour";
+import { useGuidedWalkthrough } from "@/components/guided-walkthrough";
 
 const CONNECTOR_COLORS: Record<string, string> = {
   "ehr-fhir": "#2563eb",
@@ -35,7 +35,8 @@ const CONNECTOR_COLORS: Record<string, string> = {
 export default function OverviewPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const isRecruiterDemo = Boolean(session?.user?.demoSessionId);
+  const isGuidedDemo = Boolean(session?.user?.demoSessionId);
+  const { completeStep } = useGuidedWalkthrough();
   const { data: overview, isLoading: overviewLoading } =
     usePolling<OverviewResponse>("/api/v1/overview");
   const { data: connectorsResp } = usePolling<{ data: ConnectorRow[] }>("/api/v1/connectors");
@@ -54,7 +55,7 @@ export default function OverviewPage() {
     <div>
       <PageHeader title="Overview" description="Integration health across all connectors." />
 
-      {isRecruiterDemo && (
+      {isGuidedDemo && (
         <section
           id="demo-overview"
           tabIndex={-1}
@@ -71,26 +72,28 @@ export default function OverviewPage() {
                   : "Connectors are ready for review"}
               </h2>
               <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-                Follow one failure from health signal to cited investigation, human approval, and an
-                auditable recovery action.
+                See why the EHR sync failed, check the evidence, then approve a retry and confirm it
+                in the audit.
               </p>
               <p className="mt-2 text-xs text-teal-900/70">
-                Guided path: use Tour in the header. Explore on your own: open any connector or
-                incident.
+                Start with the highlighted button, or use Walkthrough in the header whenever you
+                want to pick this back up.
               </p>
             </div>
             {primaryIncident ? (
               <Link
                 href={`/incidents/${primaryIncident.id}#investigation-heading`}
-                onClick={() => announceRecruiterTourStep("overview")}
+                data-walkthrough="open-incident"
+                onClick={() => completeStep("open-incident")}
                 className="inline-flex shrink-0 items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
               >
-                Continue investigation →
+                Open incident →
               </Link>
             ) : (
               <Link
                 href="/incidents"
-                onClick={() => announceRecruiterTourStep("overview")}
+                data-walkthrough="open-incident"
+                onClick={() => completeStep("open-incident")}
                 className="inline-flex shrink-0 items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
               >
                 Explore incidents →

@@ -40,7 +40,7 @@ export default function LoginPage() {
     router.refresh();
   }
 
-  async function enterRecruiterDemo() {
+  async function enterGuidedDemo() {
     setError(null);
     const res = await signIn("demo", { demo: "1", redirect: false });
     if (res?.error) {
@@ -84,16 +84,16 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-primary/5 border-primary/20 rounded-md border p-3">
-              <p className="text-sm font-medium">Recruiter walkthrough</p>
+              <p className="text-sm font-medium">Guided demo</p>
               <p className="text-foreground/70 mt-1 text-xs">
-                Open an isolated OPS workspace with a live incident, evidence board, and
-                approval-safe actions.
+                Open an isolated OPS workspace with a live incident, cited evidence, and actions
+                that wait for approval.
               </p>
               <Button
                 type="button"
                 className="mt-3 w-full"
                 disabled={isPending}
-                onClick={() => startTransition(() => enterRecruiterDemo())}
+                onClick={() => startTransition(() => enterGuidedDemo())}
               >
                 {isPending ? "Preparing workspace…" : "Enter one-click demo"}
               </Button>
@@ -169,10 +169,10 @@ export default function LoginPage() {
         </p>
         <p className="text-center text-xs">
           <Link
-            href="/recruiter"
+            href="/demo"
             className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
           >
-            Back to recruiter overview
+            Back to demo overview
           </Link>
         </p>
       </div>

@@ -158,13 +158,14 @@ host), not the internal `*.railway.internal` one — Vercel cannot resolve inter
 | `AUTH_URL`                          | `https://<your-project>.vercel.app`                              |
 | `WEBHOOK_SIGNING_SECRET`            | **the same value as the worker**                                 |
 | `NEXT_PUBLIC_DEMO_PASSWORD`         | `pulse-demo-2026` (must match `SEED_DEMO_PASSWORD` used at seed) |
+| `NEXT_PUBLIC_DEMO_VIDEO_URL`        | optional captioned walkthrough URL                               |
 | `AI_ENABLED`                        | `false` until the final production smoke                         |
 | `AI_DAILY_BUDGET_USD`               | `5`                                                              |
 | `AI_RUN_MAX_COST_USD`               | `0.50`                                                           |
 | `AI_INVESTIGATION_MAX_COST_USD`     | `0.20` hard cap per live investigation                           |
 | `AI_INVESTIGATION_DAILY_BUDGET_USD` | `5` deployment-wide live investigation budget                    |
 | `AI_ALLOW_UNPRICED`                 | `false`                                                          |
-| `DEMO_MODE`                         | `true` for isolated one-click recruiter tenants                  |
+| `DEMO_MODE`                         | `true` for isolated one-click demo tenants                       |
 | `INVESTIGATION_LIVE_ENABLED`        | `false` until live-AI cost and safety review is complete         |
 
 Deploy. Note the resulting URL.

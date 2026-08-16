@@ -26,7 +26,7 @@ export function MobileNavigation({ demo = false }: { demo?: boolean }) {
         <SheetHeader>
           <SheetTitle>{APP_NAME}</SheetTitle>
           <SheetDescription>
-            {demo ? "Isolated recruiter demo" : "Lakeview Health Partners"}
+            {demo ? "Isolated demo workspace" : "Lakeview Health Partners"}
           </SheetDescription>
         </SheetHeader>
         <SidebarNav onNavigate={() => setOpen(false)} />

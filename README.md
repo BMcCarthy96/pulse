@@ -4,10 +4,10 @@
 [![Security](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml)
 [![Worker image](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml)
 
-**Recruiter path:** [Launch the interactive demo locally](docs/recruiter-testing.md#launching-the-demo) ·
+**Demo path:** [Launch the interactive demo locally](docs/recruiter-testing.md#launching-the-demo) ·
 [Preview the 90-second demo path](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
 [Open a baseline green CI run](https://github.com/BMcCarthy96/pulse/actions/runs/31331073564) ·
-[Read the recruiter test path](docs/recruiter-testing.md)
+[Read the test walkthrough](docs/recruiter-testing.md)
 
 When a hospital's integrations break, nobody finds out from a dashboard — they find out when a
 clinician can't see yesterday's lab results, or when a month of claims turns out to have been
@@ -20,14 +20,14 @@ missing.
 each connector's health on a rolling window, opens an incident the moment one goes down, and gives
 an operator an evidence-cited investigation with an approval-safe recovery path.
 
-![Pulse's public recruiter landing page explains the integration-failure investigation, provider-free demo path, and human approval boundary](docs/media/01-recruiter-landing.png)
+![Pulse's public demo page explains the integration failure, provider-free walkthrough, and human approval boundary](docs/media/01-recruiter-landing.png)
 
 > **All data in this project is synthetic.** The organisation (Lakeview Health Partners), the
 > patients, the claims, and the four upstream vendors are fictional. No real PHI is involved
 > anywhere; the redaction boundary described below exists as a design discipline, not because
 > real patient data ever touches it.
 
-**Guarded recruiter demo:** open `/recruiter` and choose **Launch interactive demo**. Pulse
+**Guided demo:** open `/demo` and choose **Launch interactive demo**. Pulse
 provisions an isolated synthetic tenant with one coherent EHR outage, bounded evidence, and a
 DEAD job ready for an approval-safe retry. The public path uses deterministic provider-free
 synthesis; credentialed live AI uses the same report contract, budgets, redaction, and telemetry.
@@ -36,14 +36,14 @@ The workspace expires after one hour and cleans itself up. Deployment notes are 
 
 ### One incident, from signal to audited recovery
 
-The screenshots below come from one short-lived demo tenant created through the public recruiter
-entry—no shared admin account or provider key. The seeded outage, cited findings, proposed retry,
+The screenshots below come from one short-lived demo tenant created through the public demo page.
+It does not use a shared admin account or provider key. The seeded outage, cited findings, proposed retry,
 operator confirmation, execution result, and audit row all belong to that same incident.
 
 1. **Detect:** the overview opens on a deliberately broken integration with a DEAD job and an
    incident that needs an operator.
 
-   ![An isolated synthetic Pulse workspace showing the broken EHR integration, dead-job counter, open incident, and a clear Continue investigation action](docs/media/03-broken-overview.png)
+   ![An isolated synthetic Pulse workspace with a pointer guiding the user to the broken EHR incident](docs/media/03-broken-overview.png)
 
 2. **Investigate:** a provider-free run produces hypotheses linked to the bounded evidence board
    and proposes an executable recovery action.
@@ -62,7 +62,9 @@ operator confirmation, execution result, and audit row all belong to that same i
 <details>
 <summary>Phone-sized public entry</summary>
 
-![Pulse's public recruiter landing page at a 390-pixel phone viewport with no horizontal overflow](docs/media/02-recruiter-mobile.png)
+![Pulse's public demo page at a 390-pixel phone viewport with no horizontal overflow](docs/media/02-recruiter-mobile.png)
+
+![The guided walkthrough using a bottom callout on a phone-sized dashboard](docs/media/03-guided-overview-mobile.png)
 
 </details>
 
@@ -83,7 +85,7 @@ operator confirmation, execution result, and audit row all belong to that same i
 - **AI engineering:** deterministic evals, evidence-bounded tool use, runtime citation validation, and persisted run telemetry.
 - **Operational safety:** RBAC, audit entries, replay protection, rate limits, budgets, and distributed traces.
 - **Investigation workspace (v3):** durable redacted evidence, clickable citations, deterministic/live run disclosure, and explicit OPS approval for `RETRY_JOB`, `ACKNOWLEDGE_INCIDENT`, `RESOLVE_INCIDENT`, and `REGENERATE_SUMMARY`.
-- **Recruiter-ready proof:** tenant-isolated demo sessions, cleanup/reset controls, OpenAPI contracts, Playwright accessibility hooks, deterministic evals, and a deployable Railway worker image.
+- **Shareable proof:** tenant-isolated demo sessions, cleanup/reset controls, OpenAPI contracts, Playwright accessibility hooks, deterministic evals, and a deployable Railway worker image.
 
 ## Stack at a glance
 
@@ -101,7 +103,7 @@ corepack pnpm run doctor
 corepack pnpm dev
 ```
 
-Open http://localhost:3010; anonymous visitors are sent to the recruiter overview. Run
+Open http://localhost:3010; anonymous visitors are sent to the demo overview. Run
 `pnpm verify:fast` during development and `pnpm verify:full` before sharing. The exact evidence and
 release checklist are in [docs/recruiter-testing.md](docs/recruiter-testing.md).
 
@@ -443,9 +445,9 @@ no failures in it would demonstrate nothing.
 
 | Layer                                     | Runs against            | Covers                                                                                                                                                                               | Count |
 | ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 200   |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 207   |
 | **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                                                       | 55    |
-| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public recruiter entry, guided demo, responsive navigation, accessibility, auth, and role gates                                                                  | 12    |
+| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public entry, guided walkthrough, responsive navigation, accessibility, auth, and role gates                                                                     | 12    |
 
 The split follows one rule: **if it can be a pure function, test it as one.** The health rules and
 the redactor are pure by design precisely so they can be tested exhaustively — table-driven across
@@ -523,7 +525,7 @@ Open http://localhost:3010 and sign in with one of the demo persona buttons.
 pnpm lint | typecheck | build
 pnpm verify:fast              # format, lint, types, coverage, evals, proof drift
 pnpm verify:full              # + services, integration, build, Playwright
-pnpm proof:refresh            # regenerate recruiter counts after adding tests
+pnpm proof:refresh            # regenerate public proof counts after adding tests
 ```
 
 `test:e2e` does **not** build. Its Playwright config starts the web app with `next start`, which
@@ -535,8 +537,8 @@ which a Playwright `globalSetup` could not do, since `webServer` boots first.
 
 The screenshots above are generated, not hand-captured. Run
 `pnpm --filter @pulse/web screenshots` against a current stack with `DEMO_MODE=true` to regenerate
-all six into `docs/media/`. The script starts anonymously at `/recruiter`, checks the desktop and
-phone entry points, provisions a tenant-isolated synthetic outage, runs provider-free deterministic
+all seven into `docs/media/`. The script starts anonymously at `/demo`, checks the desktop and
+phone entry points, provisions a tenant-isolated synthetic outage, follows the guided pointer, runs provider-free deterministic
 synthesis, approves the proposed retry, captures its attributed audit row, and resets the demo when
 finished. It never uses a shared seeded login or an AI provider key.
 

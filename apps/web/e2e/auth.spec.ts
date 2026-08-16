@@ -3,11 +3,11 @@ import AxeBuilder from "@axe-core/playwright";
 import { loginAs, logout } from "./helpers";
 
 test.describe("auth and role gates", () => {
-  test("gives an anonymous recruiter a useful public entry point and protects the app", async ({
+  test("gives an anonymous visitor a useful public entry point and protects the app", async ({
     page,
   }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(/\/recruiter/);
+    await expect(page).toHaveURL(/\/demo/);
     await expect(
       page.getByRole("heading", {
         name: /Investigate integration failures before clinicians discover them/i,
@@ -17,6 +17,8 @@ test.describe("auth and role gates", () => {
       page.getByRole("button", { name: /Launch interactive demo/i }).first(),
     ).toBeVisible();
     await expect(page.getByText("Provider-free by default")).toBeVisible();
+    await page.goto("/recruiter");
+    await expect(page).toHaveURL(/\/demo/);
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -53,65 +55,124 @@ test.describe("auth and role gates", () => {
     await loginAs(page, "ops");
     await expect(page.getByRole("link", { name: /connectors/i })).toBeVisible();
     await expect(page.getByText("Synthetic incident workspace")).toHaveCount(0);
+    await expect(page.getByTestId("walkthrough-button")).toHaveCount(0);
     await logout(page);
   });
 
-  test("opens an isolated recruiter workspace with deterministic investigation evidence", async ({
-    page,
-  }) => {
+  test("guides an isolated demo through evidence, approval, and audit", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/recruiter");
+    await page.goto("/demo");
     await page
       .getByRole("button", { name: /Launch interactive demo/i })
       .first()
       .click();
-    const recruiterTourButton = page.getByTestId("recruiter-tour-button");
-    await expect(recruiterTourButton).toBeVisible();
-    await expect.poll(() => page.evaluate(() => Math.abs(window.scrollY))).toBeLessThanOrEqual(1);
-    await recruiterTourButton.click();
-    await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
-    await expect(page.getByText("1. Review the overview")).toBeVisible();
-    await page.getByRole("button", { name: "Next: Review the overview" }).click();
-    await page.getByRole("link", { name: "Continue investigation" }).click();
-    await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();
+
+    const walkthroughButton = page.getByTestId("walkthrough-button");
+    await expect(walkthroughButton).toContainText("1/7");
+    await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toBeVisible();
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 768, height: 900 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => {
+        const callout = document
+          .querySelector('[data-testid="walkthrough-callout"]')
+          ?.getBoundingClientRect();
+        const target = document
+          .querySelector('[data-walkthrough="open-incident"]')
+          ?.getBoundingClientRect();
+        if (!callout || !target) return null;
+        return {
+          callout: {
+            top: callout.top,
+            right: callout.right,
+            bottom: callout.bottom,
+            left: callout.left,
+          },
+          overlapsTarget: !(
+            callout.right <= target.left ||
+            callout.left >= target.right ||
+            callout.bottom <= target.top ||
+            callout.top >= target.bottom
+          ),
+          overflows: document.documentElement.scrollWidth > window.innerWidth,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+        };
+      });
+      expect(layout).not.toBeNull();
+      expect(layout?.overflows).toBe(false);
+      expect(layout?.overlapsTarget).toBe(false);
+      expect(layout?.callout.left).toBeGreaterThanOrEqual(0);
+      expect(layout?.callout.top).toBeGreaterThanOrEqual(0);
+      expect(layout?.callout.right).toBeLessThanOrEqual(layout?.viewport.width ?? 0);
+      expect(layout?.callout.bottom).toBeLessThanOrEqual(layout?.viewport.height ?? 0);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const overviewAxe = await new AxeBuilder({ page }).analyze();
+    expect(
+      overviewAxe.violations.filter((violation) =>
+        ["serious", "critical"].includes(violation.impact ?? ""),
+      ),
+    ).toEqual([]);
+
+    await page.keyboard.press("Escape");
+    await expect(walkthroughButton).toContainText("Resume 1/7");
+    await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toHaveCount(0);
+    await page.reload();
+    await expect(walkthroughButton).toContainText("Resume 1/7");
+    await walkthroughButton.click();
+
+    const openIncident = page.locator('[data-walkthrough="open-incident"]');
+    await expect(openIncident).toBeFocused();
+    await openIncident.press("Enter");
     await expect(page.getByRole("heading", { name: "Investigation workspace" })).toBeVisible();
-    await expect(page.getByTestId("recruiter-tour-button")).toContainText("2/5");
-    await page.getByTestId("recruiter-tour-button").click();
-    await page.getByRole("button", { name: "Next: Find the first signal" }).click();
+    await expect(walkthroughButton).toContainText("2/7");
+    await expect(page.getByRole("heading", { name: "Check the first signal" })).toBeVisible();
+
     const firstSignal = page.getByTestId("guided-question-first-signal");
-    await firstSignal.click();
+    await expect(firstSignal).toBeFocused();
+    await firstSignal.press("Enter");
     await expect(page.getByText("Deterministic demo synthesis").first()).toBeVisible();
     await expect(page.getByTestId("investigation-telemetry")).toContainText(
       "deterministic-demo-v3",
     );
     await expect(page.getByText("Investigation activity")).toBeVisible();
-    await expect(page.getByText(/Evidence board/)).toBeVisible();
     await expect(page.getByRole("heading", { name: "Proposed actions" })).toBeVisible();
-    await expect(page.getByTestId("recruiter-tour-button")).toContainText("3/5");
-    const firstCitation = page.getByRole("button", { name: /View evidence E/i }).first();
+    await expect(walkthroughButton).toContainText("3/7");
+
+    const firstCitation = page.locator('[data-walkthrough="open-first-citation"]');
+    await expect(firstCitation).toBeFocused();
     await firstCitation.click();
-    await expect(page.locator('[id^="evidence-"]:focus')).toHaveCount(1);
-    await page.reload();
-    await expect(page.getByRole("heading", { name: "Proposed actions" })).toBeVisible();
-    // The report renders from the run.completed refresh just before the stream's finally block
-    // clears `busy`. Waiting for the guided control to re-enable avoids clicking an action while
-    // that final workspace refresh can still replace the proposed-action DOM.
-    await expect(firstSignal).toBeEnabled();
-    await page.getByTestId("approve-action").first().click();
+    await expect(walkthroughButton).toContainText("4/7");
+    const actionsLink = page.locator('[data-walkthrough="open-actions"]');
+    await expect(actionsLink).toBeFocused();
+    await actionsLink.click();
+
+    await expect(walkthroughButton).toContainText("5/7");
+    const approveRetry = page.locator('[data-walkthrough="open-retry-approval"]');
+    await expect(approveRetry).toBeFocused();
+    await approveRetry.click();
     await expect(page.getByRole("button", { name: "Revalidate and approve" })).toBeVisible();
+    await expect(walkthroughButton).toContainText("6/7");
+
+    const confirmApproval = page.locator('[data-walkthrough="confirm-retry-approval"]');
+    await expect(confirmApproval).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.locator('[data-slot="dialog-content"] :focus')).toHaveCount(1);
+    await confirmApproval.focus();
     const approvalResponse = page.waitForResponse(
       (response) => response.url().includes("/actions/") && response.url().endsWith("/approve"),
     );
-    await page.getByRole("button", { name: "Revalidate and approve" }).click();
+    await confirmApproval.press("Enter");
     expect((await approvalResponse).ok()).toBeTruthy();
     await expect(page.getByText("Action history")).toBeVisible();
-    await expect(page.getByText("SUCCEEDED")).toBeVisible();
-    await expect(page.getByText("Audit trail")).toBeVisible();
+    await expect(page.getByText("SUCCEEDED", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Job retry executed")).toBeVisible();
-    await expect(page.getByTestId("recruiter-tour-button")).toContainText("4/5");
-    await page.getByTestId("recruiter-tour-button").click();
-    await page.getByRole("button", { name: "Next: Review the audit" }).click();
-    await expect(page.getByTestId("recruiter-tour-button")).toContainText("5/5");
+    await expect(walkthroughButton).toContainText("7/7");
+    await expect(page.getByRole("heading", { name: "The action is recorded" })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).analyze();
     expect(
@@ -119,9 +180,38 @@ test.describe("auth and role gates", () => {
         ["serious", "critical"].includes(violation.impact ?? ""),
       ),
     ).toEqual([]);
+
+    await page.getByRole("button", { name: "Finish walkthrough" }).click();
+    await expect(walkthroughButton).toContainText("Replay walkthrough");
+    await page.reload();
+    await expect(walkthroughButton).toContainText("Replay walkthrough");
+    await expect(page.getByRole("heading", { name: "The action is recorded" })).toHaveCount(0);
+
+    await page.getByTestId("demo-controls-button").click();
+    await page.getByRole("menuitem", { name: "Reset workspace" }).click();
+    await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toBeVisible();
+    await expect(walkthroughButton).toContainText("1/7");
+
+    const storageKey = await page.evaluate(() =>
+      Object.keys(window.localStorage).find((key) => key.startsWith("pulse:guided-walkthrough:")),
+    );
+    if (!storageKey) throw new Error("Guided walkthrough state was not saved");
+    const incidents = await page.request.get("/api/v1/incidents?status=ACTIVE&limit=1");
+    const incidentId = (await incidents.json()).data[0].id as string;
+    await page.evaluate((key) => {
+      const current = JSON.parse(window.localStorage.getItem(key) ?? "null");
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ ...current, stepIndex: 2, status: "active" }),
+      );
+    }, storageKey);
+    await page.goto(`/incidents/${incidentId}`);
+    await expect(page.getByTestId("walkthrough-recovery")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Explore on your own" }).click();
+    await expect(walkthroughButton).toContainText("Resume 3/7");
   });
 
-  test("keeps concurrent recruiter tenants isolated", async ({ browser }) => {
+  test("keeps concurrent guided demo tenants isolated", async ({ browser }) => {
     const contextA = await browser.newContext();
     const contextB = await browser.newContext();
     const pageA = await contextA.newPage();
@@ -130,10 +220,9 @@ test.describe("auth and role gates", () => {
     for (const page of [pageA, pageB]) {
       await page.goto("/login");
       await page.getByRole("button", { name: "Enter one-click demo" }).click();
-      await page.getByTestId("recruiter-tour-button").click();
-      await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
-      await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("demo-controls-button")).toBeVisible();
     }
 
     const incidentsA = await pageA.request.get("/api/v1/incidents");
@@ -151,12 +240,14 @@ test.describe("auth and role gates", () => {
     );
     expect(crossTenantMutation.status()).toBe(404);
 
-    await pageA.getByRole("button", { name: "Reset demo" }).click();
-    await pageB.getByRole("button", { name: "Reset demo" }).click();
+    for (const page of [pageA, pageB]) {
+      await page.getByTestId("demo-controls-button").click();
+      await page.getByRole("menuitem", { name: "Reset workspace" }).click();
+    }
     await contextA.close();
     await contextB.close();
   });
-  test("keeps the recruiter login free of serious or critical accessibility violations", async ({
+  test("keeps the guided demo login free of serious or critical accessibility violations", async ({
     page,
   }) => {
     await page.goto("/login");
@@ -184,10 +275,9 @@ test.describe("auth and role gates", () => {
   }) => {
     await page.goto("/login");
     await page.getByRole("button", { name: "Enter one-click demo" }).click();
-    await page.getByTestId("recruiter-tour-button").click();
-    await expect(page.getByRole("heading", { name: "Recruiter walkthrough" })).toBeVisible();
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByRole("button", { name: "Reset demo" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("demo-controls-button")).toBeVisible();
 
     await page.goto("/");
     const overviewResults = await new AxeBuilder({ page }).analyze();

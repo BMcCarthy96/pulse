@@ -1,63 +1,65 @@
-# Recruiter video script — 90 seconds
+# Guided demo video script
 
-Record against the public deployment at 1440×900, 100% zoom. Start on `/recruiter` in a signed-out
-browser and leave live AI disabled: the deterministic path is repeatable, labelled honestly, and is
-the same path CI verifies. A clean demo session is provisioned during the take.
+Record at 1440 by 900 with the browser at 100% zoom. Start signed out on `/demo`. Keep live AI
+off so the result is repeatable. Close notifications and hide anything that contains credentials.
 
-## 0:00–0:15 — State the product problem
+## 0:00 to 0:12
 
-Show the public hero and the synthetic/deterministic badges.
+Show the public page and choose **Launch interactive demo**.
 
-> “Pulse is an investigation workspace for integration failures. It combines job attempts,
-> connector health, and incident evidence so an operator can find what changed and recover safely
-> before a clinician discovers missing data.”
+> “Pulse helps an operator investigate failed healthcare integrations. It connects job attempts,
+> health changes, and incident evidence so the operator can see what happened and recover safely.”
 
-Choose **Launch interactive demo**.
+## 0:12 to 0:25
 
-## 0:15–0:35 — Establish the system and the boundary
+Let the first pointer appear. Show the down connector, dead job, and open incident. Use the
+highlighted **Open incident** button.
 
-Let the walkthrough open. Point to the isolated-demo label, dead job, and active incident on the
-overview.
+> “This is an isolated workspace with synthetic data. The EHR sync is down, one job has run out of
+> retries, and Pulse has already opened an incident.”
 
-> “This click created an isolated synthetic tenant that expires in an hour. The worker uses
-> BullMQ, Postgres, and Redis to turn repeated upstream failures into connector health and an
-> incident—not just another log stream.”
+## 0:25 to 0:43
 
-Choose **Next: Open the EHR incident**.
+Use the highlighted **Find the first signal** question. Wait for the report to finish.
 
-## 0:35–1:05 — Investigate from bounded evidence
+> “The public demo uses deterministic evidence synthesis, so it gives the same result every time
+> without calling a model. The live path uses the same report shape and safety checks.”
 
-In the investigation workspace, choose **Find the first signal**. Let the activity stream finish,
-then point to **Deterministic demo synthesis**, evidence citations, confidence, uncertainty, and the proposed
-retry.
+## 0:43 to 0:55
 
-> “The investigation can run live, but this public path uses provider-free deterministic evidence
-> synthesis, so it is repeatable and spends no model budget. The same report schema and runtime
-> policies apply: every finding cites the bounded evidence set, and only allow-listed actions can
-> reach operator approval.”
+Open the highlighted citation, then choose **Actions**.
 
-## 1:05–1:22 — Show human approval and auditability
+> “Every finding points back to the records it used. This citation opens the source evidence, and
+> the report keeps its uncertainty visible.”
 
-Approve the retry, then show **SUCCEEDED** and the audit entries.
+## 0:55 to 1:10
 
-> “AI never executes the operation. An OPS user approves after Pulse revalidates the target, and
-> both the approval and retry are persisted in the audit trail.”
+Open the highlighted retry. Pause on the approval screen, then choose **Revalidate and approve**.
 
-## 1:22–1:30 — Close on engineering proof
+> “The suggested retry has not run yet. An OPS user reviews it, and the server checks the target
+> again before the worker can queue anything.”
 
-Return to `/recruiter` or cut to the proof cards.
+## 1:10 to 1:22
 
-> “The repository verifies its own test and eval counts, enforces coverage and Lighthouse budgets,
-> boots the production worker image in CI, and can smoke-test the deployed journey every day once
-> the public URL is configured.”
+Show **SUCCEEDED** and the highlighted audit trail.
+
+> “The worker completed the retry. The audit now shows who approved it, what ran, and when it
+> happened.”
+
+## 1:22 to 1:30
+
+Finish the walkthrough and cut back to the proof cards.
+
+> “The repository backs this flow with unit, integration, browser, accessibility, and offline AI
+> evaluation checks.”
 
 End on the repository URL and public demo URL.
 
-## Recording checklist
+## Recording notes
 
-- Say “synthetic data” and “provider-free deterministic evidence synthesis” aloud.
-- Show the generated demo—not the shared seeded personas—as the primary recruiter path.
-- Do not imply a discovered root cause when the evidence only supports a hypothesis.
-- Do not expose environment values, provider keys, Railway/Vercel dashboards, or real user data.
-- Reset the demo after the take.
-- Add captions and put the final video link in both the README and `/recruiter` page.
+- Say that the data is synthetic.
+- Call the public result deterministic evidence synthesis.
+- Describe findings as hypotheses when the evidence is not conclusive.
+- Show the generated workspace instead of a shared seeded account.
+- Reset the workspace after the take.
+- Add captions and link the finished video from the README and `/demo` page.

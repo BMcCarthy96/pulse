@@ -1,4 +1,4 @@
-# Recruiter review and release checklist
+# Demo review and release checklist
 
 This is the shortest path to understand Pulse and the exact path maintainers use to prove it is
 ready to share. The public experience is designed to be useful even before a reviewer creates a
@@ -8,13 +8,13 @@ demo session.
 
 ### Launching the demo
 
-1. Open `/recruiter`. Read the product problem, engineering proof, and the deterministic-demo
+1. Open `/demo`. Read the product problem, engineering proof, and the deterministic demo
    disclosure without signing in.
 2. Choose **Launch interactive demo**. Pulse creates an isolated, synthetic tenant that expires after
    one hour.
-3. Follow the persistent **Recruiter walkthrough**: overview → EHR incident → **Find the first
-   signal** → approve the retry → inspect the audit trail.
-4. Choose **Reset demo**. The operational data returns to its initial seeded state; the isolated
+3. Follow the pointer through the real controls: **Open incident**, **Find the first signal**, open
+   the first citation, choose **Actions**, open the retry, approve it, then review the audit.
+4. Open **Demo controls** and choose **Reset workspace**. The operational data returns to its initial seeded state; the isolated
    tenant is deleted automatically when its one-hour session expires.
 
 No Anthropic key is required for this path. The guided questions use deterministic, evidence-bound
@@ -30,10 +30,11 @@ is enabled only when `AI_ENABLED=true`, a key, and `INVESTIGATION_LIVE_ENABLED=t
 | Jobs                      | Retry/backoff history and operator-controlled recovery                               |
 | Settings → audit          | Attribution for every operational mutation (ADMIN persona)                           |
 | API reference             | OpenAPI 1.1 contract rendered from the committed specification                       |
-| `/recruiter`              | Public product story, timestamped walkthrough outline, AI quality, safety, and proof |
+| `/demo`                   | Public product story, timestamped walkthrough outline, AI quality, safety, and proof |
 
-On narrow screens, use **Open navigation** in the header. The walkthrough and its progress survive
-navigation for the lifetime of the demo session.
+On narrow screens, the pointer text sits in a bottom card so it does not cover the highlighted
+control. Press Escape to pause. Use **Walkthrough** in the header to pick up where you left off.
+Progress survives page changes and reloads for the lifetime of the demo session.
 
 ## Local verification
 
@@ -67,7 +68,7 @@ DEMO_BASE_URL=https://your-deployment.example pnpm verify:release
 ```
 
 The fast gate covers formatting, lint, TypeScript, unit coverage, deterministic evaluation fixtures, and the
-machine-derived recruiter proof manifest. The full gate adds real Postgres/Redis integration,
+machine-derived public proof manifest. The full gate adds real Postgres/Redis integration,
 production compilation, and the browser journey. Browser failures retain trace, screenshot, and
 video evidence.
 
@@ -97,11 +98,11 @@ smoke ran from the same network moments earlier, use `VUS=4` or wait for the buc
 
 ## Before sharing the repository
 
-- Put the real public URL in the README recruiter path; do not publish a placeholder URL.
+- Put the real public URL in the README demo path; do not publish a placeholder URL.
 - Set the GitHub Actions repository variable `DEMO_BASE_URL` and confirm the scheduled workflow
   is green.
 - Record the 90-second guided flow using [`docs/loom-script.md`](loom-script.md), then link the
-  video from the README and recruiter page.
+  video from the README and demo page.
 - Confirm `DEMO_MODE=true` on both web and worker, while `AI_ENABLED=false` and
   `INVESTIGATION_LIVE_ENABLED=false` unless
   the live-AI cost and safety review is complete.

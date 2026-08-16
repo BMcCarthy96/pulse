@@ -310,7 +310,7 @@ export async function provisionDemoSession() {
       if (active >= MAX_ACTIVE_DEMO_SESSIONS) throw new Error("DEMO_CAPACITY");
 
       const org = await tx.organization.create({
-        data: { name: "Pulse Recruiter Demo", slug: orgSlug },
+        data: { name: "Pulse Guided Demo", slug: orgSlug },
       });
       const user = await tx.user.create({
         data: {

@@ -15,7 +15,7 @@ async function authSessionCookieCount(page: Page) {
 }
 
 /**
- * Signs in via the demo persona buttons — the same path the Loom walkthrough uses.
+ * Signs in through the seeded persona buttons used for role checks.
  *
  * Signs out first if a session already exists: the middleware bounces an authenticated visitor
  * away from `/login`, so switching personas mid-flow would otherwise wait forever for persona
@@ -32,7 +32,7 @@ export async function loginAs(page: Page, persona: keyof typeof PERSONAS) {
   await expect(signOut.or(personaButton).first()).toBeVisible();
   if (await signOut.isVisible()) {
     await signOut.click();
-    await expect(page).toHaveURL(/\/recruiter/);
+    await expect(page).toHaveURL(/\/demo/);
     await expect(
       page.getByRole("heading", {
         name: /Investigate integration failures before clinicians discover them/i,
@@ -53,7 +53,7 @@ export async function loginAs(page: Page, persona: keyof typeof PERSONAS) {
 
 export async function logout(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/recruiter/);
+  await expect(page).toHaveURL(/\/demo/);
 }
 
 /**

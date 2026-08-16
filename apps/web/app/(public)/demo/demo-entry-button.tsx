@@ -23,7 +23,7 @@ export function DemoEntryButton({ authenticated = false }: { authenticated?: boo
       if (result?.error) {
         setError(
           result.url?.includes("demo_capacity")
-            ? "The interactive demo is at capacity. Use the walkthrough and engineering proof below."
+            ? "The interactive demo is at capacity. Use the guided path and engineering proof below."
             : result.url?.includes("demo_rate_limit")
               ? "This network has created several demos recently. Please try again later."
               : "The interactive workspace is temporarily unavailable. Please use the walkthrough below.",

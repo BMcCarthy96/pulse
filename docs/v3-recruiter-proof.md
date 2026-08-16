@@ -1,17 +1,17 @@
-# Pulse v3 recruiter proof
+# Pulse v3 demo proof
 
 This is the short evidence trail for the v3 portfolio review. It is intentionally reproducible
 without an Anthropic key.
 
 ## 90-second walkthrough
 
-1. Open `/recruiter` and choose **Launch interactive demo**.
-2. Show the persistent walkthrough, isolated OPS badge, and **Reset demo** control.
-3. Follow the walkthrough to the seeded EHR incident and choose **Find the first signal**.
-4. Point to the streamed `Deterministic demo synthesis` label, redacted evidence board, cited hypotheses, and
-   proposed `RETRY_JOB` action.
-5. Approve the retry, refresh the workspace, and show the action status plus audit entry.
-6. Reset the demo to return the workspace to a known state.
+1. Open `/demo` and choose **Launch interactive demo**.
+2. Use the highlighted **Open incident** button.
+3. Run **Find the first signal** and wait for the deterministic report.
+4. Open the highlighted citation, then choose **Actions**.
+5. Open the retry and choose **Revalidate and approve**.
+6. Show the successful action and audit entry.
+7. Open **Demo controls** and reset the workspace.
 
 With `AI_ENABLED=true`, `ANTHROPIC_API_KEY`, and `INVESTIGATION_LIVE_ENABLED=true`, the same guided
 UI emits live provider output and persists model, prompt version, token, cost, latency, and trace

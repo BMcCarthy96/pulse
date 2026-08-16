@@ -1,8 +1,8 @@
 /**
- * Captures the recruiter-facing v3 story into `docs/media/`.
+ * Captures the guided v3 demo story into `docs/media/`.
  *
- * This deliberately enters through the public `/recruiter` page and provisions the same
- * short-lived, tenant-isolated demo a recruiter receives. It does not use a shared admin
+ * This enters through the public `/demo` page and provisions a short-lived, tenant-isolated
+ * workspace. It does not use a shared admin
  * account, an AI provider key, or mutable seed history. The result is one coherent incident:
  * public pitch → broken overview → cited findings → approval → execution + audit.
  *
@@ -48,10 +48,10 @@ async function shoot(page, name, { fullPage = false } = {}) {
   console.log(`  wrote docs/media/${name}.png`);
 }
 
-async function openRecruiterLanding(page) {
-  const response = await page.goto(`${BASE_URL}/recruiter`, { waitUntil: "networkidle" });
+async function openDemoLanding(page) {
+  const response = await page.goto(`${BASE_URL}/demo`, { waitUntil: "networkidle" });
   if (!response?.ok()) {
-    throw new Error(`Recruiter landing failed: ${response?.status() ?? "no response"}`);
+    throw new Error(`Demo landing failed: ${response?.status() ?? "no response"}`);
   }
   await page
     .getByRole("heading", {
@@ -76,26 +76,26 @@ async function main() {
   let demoCreated = false;
 
   try {
-    console.log(`Capturing the public recruiter path at ${BASE_URL}`);
-    await openRecruiterLanding(page);
+    console.log(`Capturing the public demo path at ${BASE_URL}`);
+    await openDemoLanding(page);
     await shoot(page, "01-recruiter-landing");
 
     await page.setViewportSize(MOBILE_VIEWPORT);
-    await openRecruiterLanding(page);
+    await openDemoLanding(page);
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,
     );
-    if (hasHorizontalOverflow) throw new Error("Recruiter landing overflows the mobile viewport");
+    if (hasHorizontalOverflow) throw new Error("Demo landing overflows the mobile viewport");
     await shoot(page, "02-recruiter-mobile");
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await openRecruiterLanding(page);
+    await openDemoLanding(page);
     await page
       .getByRole("button", { name: /Launch interactive demo/i })
       .first()
       .click();
     try {
-      await page.getByTestId("recruiter-tour-button").waitFor({ timeout: 30_000 });
+      await page.getByTestId("walkthrough-button").waitFor({ timeout: 30_000 });
     } catch (error) {
       const visibleError = await page
         .getByRole("alert")
@@ -111,20 +111,30 @@ async function main() {
     demoCreated = true;
 
     await page.getByText("Synthetic incident workspace").waitFor();
-    await page.getByRole("link", { name: "Continue investigation" }).waitFor();
+    await page.getByRole("heading", { name: "Start with the failed sync" }).waitFor();
+    await page.locator('[data-walkthrough="open-incident"]').waitFor();
     await shoot(page, "03-broken-overview");
 
-    await page.getByRole("link", { name: "Continue investigation" }).click();
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    const guidedOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    if (guidedOverflow) throw new Error("Guided walkthrough overflows the mobile viewport");
+    await shoot(page, "03-guided-overview-mobile");
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    await page.locator('[data-walkthrough="open-incident"]').click();
     await page.getByRole("heading", { name: "Investigation workspace" }).waitFor();
-    await page.getByTestId("guided-question-first-signal").click();
+    await page.locator('[data-walkthrough="run-first-signal"]').click();
     await page.getByText("Deterministic demo synthesis").first().waitFor({ timeout: 30_000 });
     await page.getByRole("heading", { name: "Proposed actions" }).waitFor();
     await page.getByText(/Evidence board/).waitFor();
-    await page.getByRole("link", { name: "Findings", exact: true }).click();
-    await page.locator("#findings").waitFor();
+    await page.getByRole("heading", { name: "Open the source" }).waitFor();
     await shoot(page, "04-cited-investigation");
 
-    const approve = page.getByTestId("approve-action").first();
+    await page.locator('[data-walkthrough="open-first-citation"]').click();
+    await page.locator('[data-walkthrough="open-actions"]').click();
+    const approve = page.locator('[data-walkthrough="open-retry-approval"]');
     await approve.scrollIntoViewIfNeeded();
     await approve.click();
     await page.getByRole("button", { name: "Revalidate and approve" }).waitFor();
@@ -142,9 +152,11 @@ async function main() {
     const auditHeading = page.getByText("Audit trail", { exact: true });
     await auditHeading.waitFor();
     await auditHeading.scrollIntoViewIfNeeded();
+    await page.getByRole("heading", { name: "The action is recorded" }).waitFor();
     await shoot(page, "06-executed-action-audit");
+    await page.getByRole("button", { name: "Finish walkthrough" }).click();
 
-    console.log("Done. Captured one isolated, provider-free recruiter story.");
+    console.log("Done. Captured one isolated, provider-free demo story.");
   } finally {
     if (demoCreated) {
       const reset = await page.request.post(`${BASE_URL}/api/demo/reset`).catch(() => null);

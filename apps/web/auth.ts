@@ -105,7 +105,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
     Credentials({
       id: "demo",
-      name: "Recruiter demo",
+      name: "Guided demo",
       credentials: { demo: { label: "Demo", type: "text" } },
       authorize: async (credentials, request) => {
         if (process.env.DEMO_MODE !== "true" || credentials?.demo !== "1") return null;

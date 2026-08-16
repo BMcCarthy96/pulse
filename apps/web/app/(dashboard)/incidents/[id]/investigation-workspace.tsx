@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Timestamp } from "@/components/timestamp";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { announceRecruiterTourStep } from "@/components/recruiter-tour";
+import { useGuidedWalkthrough } from "@/components/guided-walkthrough";
 import { apiFetch, apiPost } from "@/lib/api-client";
 import { GUIDED_INVESTIGATION_QUESTIONS, type InvestigationActionType } from "@pulse/shared";
 import { toast } from "sonner";
@@ -166,6 +166,7 @@ function auditActionLabel(action: string) {
 }
 
 export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
+  const { completeStep } = useGuidedWalkthrough();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -189,9 +190,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
   }, [incidentId]);
 
   useEffect(() => {
-    void ensureWorkspace()
-      .then(() => announceRecruiterTourStep("incident"))
-      .finally(() => setLoading(false));
+    void ensureWorkspace().finally(() => setLoading(false));
     return () => abortRef.current?.abort();
   }, [ensureWorkspace]);
 
@@ -265,7 +264,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
           }
           if (parsed.event === "run.completed") {
             await refresh(current.id);
-            announceRecruiterTourStep("investigate");
+            completeStep("run-investigation");
           }
         }
       }
@@ -281,22 +280,24 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
     }
   }
 
-  async function action(path: string) {
-    if (!workspace?.id || actionInFlightRef.current) return;
+  async function action(path: string, walkthroughApproval = false) {
+    if (!workspace?.id || actionInFlightRef.current) return false;
     actionInFlightRef.current = true;
     setActionBusy(true);
     try {
       await apiPost(`/api/v1/investigations/${workspace.id}/actions/${path}`);
       await refresh();
-      if (path.endsWith("approve")) {
-        announceRecruiterTourStep("approve");
+      if (walkthroughApproval && path.endsWith("approve")) {
+        window.setTimeout(() => completeStep("confirm-approval"), 0);
       }
       toast.success(
         path.endsWith("approve") ? "Action approved; audit record written" : "Action dismissed",
       );
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Action failed");
       await refresh();
+      return false;
     } finally {
       actionInFlightRef.current = false;
       setActionBusy(false);
@@ -376,6 +377,10 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
           <a
             key={anchor}
             href={`#${anchor}`}
+            data-walkthrough={anchor === "actions" ? "open-actions" : undefined}
+            onClick={() => {
+              if (anchor === "actions") completeStep("open-actions");
+            }}
             className="bg-muted text-foreground/80 hover:text-foreground rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
           >
             {label}
@@ -397,6 +402,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
             <Button
               key={item.id}
               data-testid={`guided-question-${item.id}`}
+              data-walkthrough={item.id === "first-signal" ? "run-first-signal" : undefined}
               variant="outline"
               type="button"
               className="h-auto justify-start p-3 text-left text-xs whitespace-normal"
@@ -471,12 +477,18 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <span className="text-muted-foreground text-xs">Evidence</span>
-                    {item.evidenceIds.map((id) => (
+                    {item.evidenceIds.map((id, citationIndex) => (
                       <button
                         key={id}
                         type="button"
+                        data-walkthrough={
+                          index === 0 && citationIndex === 0 ? "open-first-citation" : undefined
+                        }
                         className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800 hover:bg-teal-100"
-                        onClick={() => focusEvidence(id)}
+                        onClick={() => {
+                          if (index === 0 && citationIndex === 0) completeStep("open-citation");
+                          focusEvidence(id);
+                        }}
                         aria-label={`View evidence E${workspace.evidence.findIndex((entry) => entry.id === id) + 1}: ${evidenceById.get(id)?.label ?? "Evidence"}`}
                         title={evidenceById.get(id)?.label ?? "Evidence"}
                       >
@@ -510,6 +522,9 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
                         trigger={
                           <Button
                             data-testid="approve-action"
+                            data-walkthrough={
+                              item.type === "RETRY_JOB" ? "open-retry-approval" : undefined
+                            }
                             type="button"
                             size="sm"
                             disabled={actionBusy}
@@ -622,7 +637,15 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
                         }
                         confirmLabel="Revalidate and approve"
                         contentClassName="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
-                        onConfirm={() => action(`${item.id}/approve`)}
+                        confirmButtonProps={
+                          item.type === "RETRY_JOB"
+                            ? { "data-walkthrough": "confirm-retry-approval" }
+                            : undefined
+                        }
+                        onOpenChange={(open) => {
+                          if (open && item.type === "RETRY_JOB") completeStep("open-approval");
+                        }}
+                        onConfirm={() => action(`${item.id}/approve`, item.type === "RETRY_JOB")}
                       />
                       <Button
                         type="button"
@@ -657,7 +680,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
               <div
                 id="audit-trail"
                 tabIndex={-1}
-                onFocus={() => announceRecruiterTourStep("audit")}
+                data-walkthrough="review-audit"
                 className="mt-3 scroll-mt-6 rounded-md border-t pt-3 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:outline-none"
               >
                 <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">

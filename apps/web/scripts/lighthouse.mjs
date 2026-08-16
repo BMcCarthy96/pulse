@@ -9,8 +9,8 @@ import proof from "../content/recruiter-proof.json" with { type: "json" };
 const url =
   process.env.LIGHTHOUSE_URL ??
   (process.env.DEMO_BASE_URL
-    ? `${process.env.DEMO_BASE_URL.replace(/\/$/, "")}/recruiter`
-    : "http://localhost:3010/recruiter");
+    ? `${process.env.DEMO_BASE_URL.replace(/\/$/, "")}/demo`
+    : "http://localhost:3010/demo");
 const profileRoot = process.platform === "win32" ? tmpdir() : "/tmp";
 const userDataDir = await mkdtemp(join(profileRoot, "pulse-lighthouse-"));
 const chrome = await launch({

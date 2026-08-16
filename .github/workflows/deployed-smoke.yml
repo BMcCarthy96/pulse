@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 15
     env:
       DEMO_BASE_URL: ${{ vars.DEMO_BASE_URL }}
-      LIGHTHOUSE_URL: ${{ vars.DEMO_BASE_URL }}/recruiter
+      LIGHTHOUSE_URL: ${{ vars.DEMO_BASE_URL }}/demo
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,9 +23,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install browser
         run: pnpm --filter @pulse/web exec playwright install --with-deps chromium
-      - name: Verify deployed recruiter journey
+      - name: Verify deployed demo journey
         run: pnpm smoke:remote
-      - name: Enforce recruiter-page Lighthouse budgets
+      - name: Enforce demo-page Lighthouse budgets
         run: pnpm --filter @pulse/web audit:lighthouse
       - name: Upload browser evidence
         if: failure()
