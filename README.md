@@ -6,7 +6,7 @@
 
 **Demo path:** [Launch the interactive demo locally](docs/recruiter-testing.md#launching-the-demo) ·
 [Preview the 90-second demo path](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
-[Open a baseline green CI run](https://github.com/BMcCarthy96/pulse/actions/runs/31331073564) ·
+[Open the verified GitHub Actions run](https://github.com/BMcCarthy96/pulse/actions/runs/31920943916) ·
 [Read the test walkthrough](docs/recruiter-testing.md)
 
 When a hospital's integrations break, nobody finds out from a dashboard — they find out when a

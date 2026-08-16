@@ -267,7 +267,7 @@ export default async function DemoPage() {
               </h2>
             </div>
             <a href={proof.ciRunUrl} className="text-sm font-medium hover:underline">
-              Open baseline GitHub Actions run →
+              Open verified GitHub Actions run →
             </a>
           </div>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
