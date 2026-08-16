@@ -61,6 +61,6 @@
     "eslint-plugin-import": "^2.32.0",
     "lighthouse": "^13.4.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6"
   }
 }
