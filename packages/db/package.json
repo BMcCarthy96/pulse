@@ -22,7 +22,7 @@
     "metrics": "tsx --env-file=.env scripts/metrics.ts"
   },
   "dependencies": {
-    "@faker-js/faker": "^9",
+    "@faker-js/faker": "^10",
     "@prisma/client": "^6",
     "@pulse/shared": "workspace:*",
     "bcryptjs": "^2"
