@@ -38,7 +38,7 @@ jobs:
           image: ${{ steps.image.outputs.name }}:${{ github.ref_name }}
           artifact-name: pulse-worker-${{ github.ref_name }}.spdx.json
           output-file: pulse-worker-${{ github.ref_name }}.spdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: worker-sbom
           path: pulse-worker-${{ github.ref_name }}.spdx.json
