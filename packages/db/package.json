@@ -30,7 +30,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2",
     "@types/node": "^22",
-    "prisma": "^6",
+    "prisma": "^7",
     "tsx": "^4",
     "typescript": "^5"
   }
