@@ -8,7 +8,7 @@
     "preDeployCommand": [
       "./node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma"
     ],
-    "startCommand": "exec node dist/index.js",
+    "startCommand": "node dist/index.js",
     "healthcheckPath": "/readyz",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
