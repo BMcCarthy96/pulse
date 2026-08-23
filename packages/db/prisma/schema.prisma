@@ -1,5 +1,9 @@
 generator client {
   provider = "prisma-client-js"
+  // Vercel's serverless runtime uses the RHEL OpenSSL 3 engine. Keep the
+  // native target for local development and include the deployed runtime
+  // explicitly so auth and demo provisioning can initialize Prisma.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

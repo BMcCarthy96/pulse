@@ -5,11 +5,22 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@pulse/shared", "@pulse/db"],
   outputFileTracingRoot: join(process.cwd(), "../.."),
   serverExternalPackages: [
+    "@prisma/client",
+    "prisma",
     "@opentelemetry/exporter-trace-otlp-http",
     "@opentelemetry/resources",
     "@opentelemetry/sdk-trace-base",
     "@opentelemetry/sdk-trace-node",
   ],
+  // Prisma's generated query engine lives outside the web package in this
+  // pnpm workspace. Include both native and Vercel's RHEL engine in traced
+  // serverless functions.
+  outputFileTracingIncludes: {
+    "/*": [
+      "../../node_modules/.pnpm/@prisma+client@*/node_modules/.prisma/client/**/*",
+      "../../node_modules/.pnpm/@prisma+client@*/node_modules/@prisma/client/**/*",
+    ],
+  },
   async headers() {
     const securityHeaders = [
       {
