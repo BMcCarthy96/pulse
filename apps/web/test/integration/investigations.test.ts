@@ -1,10 +1,57 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@pulse/db";
 import { GUIDED_INVESTIGATION_QUESTIONS } from "@pulse/shared";
-import { createInvestigation, runInvestigation } from "@/lib/investigations";
+import {
+  createInvestigation,
+  normalizeInvestigationActionTargets,
+  runInvestigation,
+} from "@/lib/investigations";
 import { createConnector, createOrg, createUser } from "../../../../test/integration/fixtures.js";
 
 describe("deterministic investigation", () => {
+  it("maps safe evidence-card action targets to their source records", () => {
+    const incident = { id: "incident-1" } as Parameters<
+      typeof normalizeInvestigationActionTargets
+    >[1];
+    const evidence = [
+      { id: "evidence-job", sourceId: "job-1", kind: "JOB" },
+      { id: "evidence-incident", sourceId: "incident-1", kind: "TIMELINE" },
+      { id: "evidence-log", sourceId: "log-1", kind: "LOG" },
+    ] as Parameters<typeof normalizeInvestigationActionTargets>[2];
+    const report = {
+      summary: "summary",
+      hypotheses: [],
+      uncertainty: "uncertain",
+      recommendedActions: [
+        {
+          type: "RETRY_JOB" as const,
+          targetId: "evidence-job",
+          rationale: "retry the failed job",
+          evidenceIds: ["evidence-job"],
+        },
+        {
+          type: "ACKNOWLEDGE_INCIDENT" as const,
+          targetId: "evidence-incident",
+          rationale: "assign ownership",
+          evidenceIds: ["evidence-incident"],
+        },
+        {
+          type: "RETRY_JOB" as const,
+          targetId: "evidence-log",
+          rationale: "must remain invalid",
+          evidenceIds: ["evidence-log"],
+        },
+      ],
+    };
+
+    const normalized = normalizeInvestigationActionTargets(report, incident, evidence);
+    expect(normalized.recommendedActions.map((item) => item.targetId)).toEqual([
+      "job-1",
+      "incident-1",
+      "evidence-log",
+    ]);
+  });
+
   it("grounds each guided answer in a non-EHR incident and reuses the completed workspace", async () => {
     const org = await createOrg("Claims Operations");
     const user = await createUser(org.id, { name: "Dana Alvarez", role: "OPS" });

@@ -329,6 +329,32 @@ function recordedReport(
   };
 }
 
+/**
+ * Models naturally reach for the evidence card id when they recommend an action.
+ * The action API intentionally uses the underlying source id instead. Accept the
+ * safe, unambiguous evidence-card form and canonicalize it before validation.
+ */
+export function normalizeInvestigationActionTargets(
+  report: InvestigationReport,
+  incident: Awaited<ReturnType<typeof loadEvidence>>["incident"],
+  evidence: Awaited<ReturnType<typeof persistEvidence>>,
+): InvestigationReport {
+  const byEvidenceId = new Map(evidence.map((item) => [item.id, item]));
+  return {
+    ...report,
+    recommendedActions: report.recommendedActions.map((action) => {
+      const referencedEvidence = byEvidenceId.get(action.targetId);
+      if (!referencedEvidence) return action;
+      const canTargetJob = action.type === "RETRY_JOB" && referencedEvidence.kind === "JOB";
+      const canTargetIncident =
+        action.type !== "RETRY_JOB" && referencedEvidence.sourceId === incident.id;
+      return canTargetJob || canTargetIncident
+        ? { ...action, targetId: referencedEvidence.sourceId }
+        : action;
+    }),
+  };
+}
+
 function validateInvestigationReport(
   report: InvestigationReport,
   incident: Awaited<ReturnType<typeof loadEvidence>>["incident"],
@@ -681,8 +707,9 @@ export async function runInvestigation(
         },
       },
       question: safeQuestion,
-      evidence: evidence.map(({ id, kind, label, excerpt, observedAt }) => ({
+      evidence: evidence.map(({ id, sourceId, kind, label, excerpt, observedAt }) => ({
         id,
+        sourceId,
         kind,
         label,
         excerpt,
@@ -764,7 +791,11 @@ export async function runInvestigation(
       throw error;
     }
     const report = validateInvestigationReport(
-      live?.report ?? recordedReport(loaded.incident, evidence, guided?.id),
+      normalizeInvestigationActionTargets(
+        live?.report ?? recordedReport(loaded.incident, evidence, guided?.id),
+        loaded.incident,
+        evidence,
+      ),
       loaded.incident,
       evidence,
       loaded.knownNames,

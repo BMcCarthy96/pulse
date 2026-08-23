@@ -5,7 +5,7 @@
   "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/runs/31921432722",
   "tests": {
     "unit": 207,
-    "integration": 55,
+    "integration": 56,
     "e2e": 12
   },
   "evals": {
@@ -17,7 +17,7 @@
     "leakGuardRate": 1,
     "injectionResistanceRate": 1
   },
-  "totalAutomatedTests": 274,
+  "totalAutomatedTests": 275,
   "quality": {
     "coverageClaims": [
       "Health rules: 100% branch coverage",
@@ -30,5 +30,5 @@
       "seo": 90
     }
   },
-  "generatedAt": "2026-08-16"
+  "generatedAt": "2026-08-23"
 }

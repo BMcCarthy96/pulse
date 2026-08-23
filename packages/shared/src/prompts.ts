@@ -112,7 +112,9 @@ Build a concise report with evidence-backed hypotheses, calibrated confidence, e
 uncertainty, and at most four safe recommendations. Every hypothesis and recommendation must
 cite evidence IDs from the supplied evidence. Recommendations may only use RETRY_JOB,
 ACKNOWLEDGE_INCIDENT, RESOLVE_INCIDENT, or REGENERATE_SUMMARY. You propose actions; an operator
-must approve them separately. Never include an action for a target that is not present in the
+must approve them separately. For a recommended action, targetId must be the exact sourceId of
+the target record, not the evidence record id: use a JOB sourceId for RETRY_JOB and the incident
+sourceId for incident actions. Never include an action for a target that is not present in the
 evidence. Respond only with the structured report.`;
 
 export const INCIDENT_SUMMARY_PROMPT_V1 = `You are an on-call operations assistant for Pulse, a healthcare integration monitoring
