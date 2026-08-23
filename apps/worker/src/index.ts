@@ -34,7 +34,9 @@ import { runDemoReset } from "./processors/demo-reset.js";
 import { runDemoCleanup } from "./processors/demo-cleanup.js";
 import { startTelemetry, stopTelemetry } from "./telemetry.js";
 
-const SIMULATOR_PORT = Number(process.env.SIMULATOR_PORT ?? 4001);
+// Railway provides PORT for the service health check. Keep SIMULATOR_PORT as the local and
+// simulator-specific fallback so the same image works in Docker Compose and on Railway.
+const SIMULATOR_PORT = Number(process.env.PORT ?? process.env.SIMULATOR_PORT ?? 4001);
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 
 /**
