@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "appVersion": "3.0.0",
   "apiVersion": "1.1.0",
-  "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/runs/31920943916",
+  "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/runs/31921432722",
   "tests": {
     "unit": 207,
     "integration": 55,

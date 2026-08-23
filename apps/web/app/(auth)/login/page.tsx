@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? "pulse-demo-2026";
+const configuredDemoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+const DEMO_PASSWORD = configuredDemoPassword ?? "pulse-demo-2026";
+const SHOW_LEGACY_DEMO_PERSONAS = Boolean(configuredDemoPassword);
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,7 +82,9 @@ export default function LoginPage() {
         <Card>
           <CardHeader>
             <CardTitle>Sign in</CardTitle>
-            <CardDescription>Use your credentials or a demo persona below.</CardDescription>
+            <CardDescription>
+              Use the guided demo above or sign in with an existing workspace account.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-primary/5 border-primary/20 rounded-md border p-3">
@@ -136,31 +140,35 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card text-muted-foreground px-2">Or demo as</span>
-              </div>
-            </div>
+            {SHOW_LEGACY_DEMO_PERSONAS && (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card text-muted-foreground px-2">Or demo as</span>
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              {DEMO_PERSONAS.map((p) => (
-                <Button
-                  key={p.email}
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-between"
-                  disabled={isPending}
-                  onClick={() => handleDemo(p.email)}
-                >
-                  <span>
-                    {p.name} <span className="text-muted-foreground">({p.role})</span>
-                  </span>
-                </Button>
-              ))}
-            </div>
+                <div className="space-y-2">
+                  {DEMO_PERSONAS.map((p) => (
+                    <Button
+                      key={p.email}
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                      disabled={isPending}
+                      onClick={() => handleDemo(p.email)}
+                    >
+                      <span>
+                        {p.name} <span className="text-muted-foreground">({p.role})</span>
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

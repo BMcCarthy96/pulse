@@ -11,13 +11,13 @@ Pulse deploys as two services against two managed data stores:
 
 Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#costs).
 
-> **Status:** the live deployment has **not been performed** — it needs Railway and Vercel
-> account access, so it is the reader's step. Everything in this document is written to be
-> executed top to bottom without improvisation.
+> **Status:** the repository is deployment-ready. The live deployment still requires connecting
+> the GitHub repository to your Railway and Vercel accounts. Follow the steps below in order so
+> the worker is ready before the public demo is opened.
 >
 > The worker image, however, is no longer merely _written_ — it is **built and booted** on every
 > CI run (the `Worker image` job), against real Postgres and Redis containers, asserting that it
-> migrates from an empty database, starts all seven queues, and answers `/healthz`.
+> migrates from an empty database, starts all seven queues, and answers `/readyz`.
 >
 > That job exists because an earlier version of this document called the Dockerfile "complete and
 > production-ready" when the image had never once been built. It contained four independent
@@ -77,7 +77,7 @@ git push -u origin main
 ### 1b. Configure the worker service
 
 Railway will detect [`railway.json`](../railway.json) at the repo root, which points at
-`apps/worker/Dockerfile` and sets the healthcheck to `/healthz`. Confirm under the service's
+`apps/worker/Dockerfile` and sets the healthcheck to `/readyz`. Confirm under the service's
 **Settings → Build** that the builder is `Dockerfile` and the path is `apps/worker/Dockerfile`.
 
 The Dockerfile builds from the **repository root** as context — the worker depends on two
@@ -108,7 +108,6 @@ plugin references — type them exactly; Railway resolves them at deploy time.
 | `AI_ALLOW_UNPRICED`                 | `false`                                                    |
 | `DEMO_MODE`                         | `true` only for the public demo auto-reset behavior        |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`       | optional Jaeger/OTLP HTTP endpoint                         |
-| `WEBHOOK_REQUIRE_TIMESTAMP`         | `false` during dual-signature rollout; enable after smoke  |
 | `HEALTH_TICK_SEC`                   | `30`                                                       |
 | `HEALTH_WINDOW_MIN`                 | `15`                                                       |
 | `INCIDENT_STABILITY_MIN`            | `10`                                                       |
@@ -118,31 +117,26 @@ plugin references — type them exactly; Railway resolves them at deploy time.
 the Vercel URL, and Vercel needs the Railway database. Deploy the worker first with the
 placeholder, then come back in step 3.
 
-### 1d. Seed the demo data (once)
+### 1d. Do not seed shared demo accounts
 
-The seed refuses to run against production without an explicit override — that guard exists so a
-misfired CI job cannot wipe a live database:
-
-```bash
-railway link                       # select the project
-railway run --service worker sh -c "SEED_FORCE=1 npx tsx prisma/seed.ts"
-```
-
-Expect roughly: 1 organization, 3 users, 4 connectors, ~500 sync runs, ~2300 jobs (~60 DEAD),
-~1500 events, ~2500 log entries, ~2700 health snapshots, 2 incidents.
-
-The seed is anchored to wall-clock "now" and uses faker seed **42**. Do not change that seed —
-the screenshots and tests depend on it.
+The public entry point provisions a short-lived, tenant-isolated workspace when someone chooses
+**Launch interactive demo**. It creates the EHR failure, evidence, proposed retry, and OPS user
+inside that session. Do not run `db:seed` or set `NEXT_PUBLIC_DEMO_PASSWORD` in the public
+deployment. The seed remains available for local development and full end-to-end tests only.
 
 ---
 
 ## 2. Vercel — the dashboard
 
 1. Vercel → **Add New** → **Project** → import the same repo.
-2. **Root Directory: `apps/web`.** This is the single most common way to get a broken Next.js
+2. Name the project `pulse-bmccarthy96` when available.
+3. **Root Directory: `apps/web`.** This is the single most common way to get a broken Next.js
    deploy from a monorepo — the default (repo root) produces
    `Couldn't find any 'pages' or 'app' directory`.
-3. Framework preset: Next.js. Build and install commands: leave as detected.
+4. Framework preset: Next.js. Keep the install command detected by Vercel. The checked-in
+   `apps/web/vercel.json` supplies the build command, which compiles the shared workspace packages
+   before running `next build`.
+5. Use Node.js 22 and enable the default setting that includes files outside the Root Directory.
 
 ### Vercel environment variables
 
@@ -150,25 +144,26 @@ Vercel reaches Railway over the **public** endpoints. In the Railway Postgres/Re
 open **Connect** and copy the _public_ connection string (the one with a `*.proxy.rlwy.net`
 host), not the internal `*.railway.internal` one — Vercel cannot resolve internal hosts.
 
-| Variable                            | Value                                                            |
-| ----------------------------------- | ---------------------------------------------------------------- |
-| `DATABASE_URL`                      | Railway Postgres **public** connection string                    |
-| `REDIS_URL`                         | Railway Redis **public** connection string                       |
-| `AUTH_SECRET`                       | the `openssl rand -base64 32` value from step 0                  |
-| `AUTH_URL`                          | `https://<your-project>.vercel.app`                              |
-| `WEBHOOK_SIGNING_SECRET`            | **the same value as the worker**                                 |
-| `NEXT_PUBLIC_DEMO_PASSWORD`         | `pulse-demo-2026` (must match `SEED_DEMO_PASSWORD` used at seed) |
-| `NEXT_PUBLIC_DEMO_VIDEO_URL`        | optional captioned walkthrough URL                               |
-| `AI_ENABLED`                        | `false` until the final production smoke                         |
-| `AI_DAILY_BUDGET_USD`               | `5`                                                              |
-| `AI_RUN_MAX_COST_USD`               | `0.50`                                                           |
-| `AI_INVESTIGATION_MAX_COST_USD`     | `0.20` hard cap per live investigation                           |
-| `AI_INVESTIGATION_DAILY_BUDGET_USD` | `5` deployment-wide live investigation budget                    |
-| `AI_ALLOW_UNPRICED`                 | `false`                                                          |
-| `DEMO_MODE`                         | `true` for isolated one-click demo tenants                       |
-| `INVESTIGATION_LIVE_ENABLED`        | `false` until live-AI cost and safety review is complete         |
+| Variable                            | Value                                                    |
+| ----------------------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`                      | Railway Postgres **public** connection string            |
+| `REDIS_URL`                         | Railway Redis **public** connection string               |
+| `AUTH_SECRET`                       | the `openssl rand -base64 32` value from step 0          |
+| `AUTH_URL`                          | the Vercel production origin                             |
+| `WEBHOOK_SIGNING_SECRET`            | **the same value as the worker**                         |
+| `NEXT_PUBLIC_DEMO_VIDEO_URL`        | optional captioned walkthrough URL                       |
+| `AI_ENABLED`                        | `false` until the final production smoke                 |
+| `AI_DAILY_BUDGET_USD`               | `5`                                                      |
+| `AI_RUN_MAX_COST_USD`               | `0.50`                                                   |
+| `AI_INVESTIGATION_MAX_COST_USD`     | `0.20` hard cap per live investigation                   |
+| `AI_INVESTIGATION_DAILY_BUDGET_USD` | `5` deployment-wide live investigation budget            |
+| `AI_ALLOW_UNPRICED`                 | `false`                                                  |
+| `DEMO_MODE`                         | `true` for isolated one-click demo tenants               |
+| `INVESTIGATION_LIVE_ENABLED`        | `false` until live-AI cost and safety review is complete |
 
-Deploy. Note the resulting URL.
+Deploy and copy the resulting production URL. The public link is that origin followed by `/demo`.
+The page displays the short Vercel commit SHA so the live build can be compared with the green
+main-branch workflow.
 
 In GitHub → Settings → Secrets and variables → Actions → Variables, add `DEMO_BASE_URL` with this
 origin (no trailing slash). The daily `Deployed demo smoke` workflow will then verify the public
@@ -189,23 +184,19 @@ Redeploy the worker. Inbound webhooks (lab results, claim acks) now flow Railway
 
 ## 4. Smoke test the live system
 
-Work through the demo flow against the public URL:
+Work through the public path against the Vercel URL:
 
-1. **Login** — all three demo personas (`dana@`, `marcus@`, `priya@lakeviewhealth.example`,
-   password `pulse-demo-2026`). Confirm Settings is visible to Dana only.
-2. **Chaos** — as Dana, open the EHR connector → chaos panel → `OUTAGE` → Apply.
-3. **Failure** — "Run sync now". Watch attempts climb `1/5 … 5/5` and the job land in `DEAD`.
-4. **Detection** — within ~2 health ticks the connector goes `DOWN` and an incident opens
-   (sidebar bubble increments).
-5. **AI summary** — open the incident; with a key set, the card goes queued → generating →
-   ready with a model/prompt-version footer. Without one it shows "AI not configured", which is
-   the intended degradation, not a failure.
-6. **Cross-cloud webhooks** — open the lab connector → "Simulate incoming results" → 5 events
-   reach `PROCESSED`. This is the step that proves Railway → Vercel delivery and the shared
-   signing secret; if these land `INVALID`, the two `WEBHOOK_SIGNING_SECRET` values differ.
-7. **Recovery** — chaos back to `HEALTHY`, retry the dead jobs from `/jobs`, watch health
-   recover and the incident go `MONITORING` → `RESOLVED`.
-8. **Audit** — Settings → audit log shows the chaos change and the retries, attributed to Dana.
+1. Open `/demo` and choose **Launch interactive demo**.
+2. Open the highlighted failed EHR incident.
+3. Run **Check the first signal** and wait for the deterministic report to finish.
+4. Open the first evidence citation, then open **Actions**.
+5. Choose **Approve** on the proposed retry.
+6. Choose **Revalidate and approve**. The API checks the tenant-scoped job before the worker queues it.
+7. Wait for the retry to succeed, then inspect the attributed audit row and finish the walkthrough.
+8. Use **Demo controls → Reset workspace** and confirm the isolated scenario returns to step one.
+
+The deployed smoke test follows these exact controls. It also checks the health endpoint and the
+legacy `/recruiter` redirect so a resume link created during the transition remains usable.
 
 ### Restart resilience
 

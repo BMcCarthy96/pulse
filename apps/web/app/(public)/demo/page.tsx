@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   TestTube2,
 } from "lucide-react";
-import { auth } from "@/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import proof from "@/content/recruiter-proof.json";
@@ -85,7 +84,6 @@ const PROOF_CARDS = [
 ] as const;
 
 export default async function DemoPage() {
-  const session = await auth();
   const sha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local";
   const videoUrl =
     process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? process.env.NEXT_PUBLIC_RECRUITER_VIDEO_URL;
@@ -107,9 +105,6 @@ export default async function DemoPage() {
             Pulse
           </Link>
           <nav aria-label="Project links" className="flex items-center gap-2">
-            <Button variant="ghost" render={<Link href="/login" />}>
-              Sign in
-            </Button>
             <Button variant="outline" render={<a href="https://github.com/BMcCarthy96/pulse" />}>
               <GitBranch /> GitHub
             </Button>
@@ -136,7 +131,7 @@ export default async function DemoPage() {
               investigation workspace. Every operational action still needs a person to approve it.
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <DemoEntryButton authenticated={Boolean(session?.user)} />
+              <DemoEntryButton />
               <a
                 href={videoUrl ?? "#walkthrough-video"}
                 className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
@@ -327,7 +322,7 @@ export default async function DemoPage() {
               The workspace resets safely and expires after one hour.
             </p>
           </div>
-          <DemoEntryButton authenticated={Boolean(session?.user)} />
+          <DemoEntryButton />
         </div>
       </section>
     </main>

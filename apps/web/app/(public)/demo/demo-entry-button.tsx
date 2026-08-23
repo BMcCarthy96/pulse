@@ -6,16 +6,12 @@ import { signIn } from "next-auth/react";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function DemoEntryButton({ authenticated = false }: { authenticated?: boolean }) {
+export function DemoEntryButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function enter() {
-    if (authenticated) {
-      router.push("/");
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
@@ -45,11 +41,7 @@ export function DemoEntryButton({ authenticated = false }: { authenticated?: boo
     <div className="space-y-2">
       <Button size="lg" disabled={busy} onClick={() => void enter()} className="w-full sm:w-auto">
         {busy ? <LoaderCircle className="animate-spin" /> : null}
-        {busy
-          ? "Preparing isolated workspace…"
-          : authenticated
-            ? "Open dashboard"
-            : "Launch interactive demo"}
+        {busy ? "Preparing isolated workspace…" : "Launch interactive demo"}
         {!busy && <ArrowRight />}
       </Button>
       {error && (

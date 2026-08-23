@@ -6,7 +6,7 @@
 
 **Demo path:** [Launch the interactive demo locally](docs/recruiter-testing.md#launching-the-demo) ·
 [Preview the 90-second demo path](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
-[Open the verified GitHub Actions run](https://github.com/BMcCarthy96/pulse/actions/runs/31920943916) ·
+[Open the verified GitHub Actions run](https://github.com/BMcCarthy96/pulse/actions/runs/31921432722) ·
 [Read the test walkthrough](docs/recruiter-testing.md)
 
 When a hospital's integrations break, nobody finds out from a dashboard — they find out when a
@@ -68,13 +68,9 @@ operator confirmation, execution result, and audit row all belong to that same i
 
 </details>
 
-**Demo logins** (password `pulse-demo-2026`):
-
-| Persona      | Email                           | Role   | Can do                                                          |
-| ------------ | ------------------------------- | ------ | --------------------------------------------------------------- |
-| Dana Alvarez | `dana@lakeviewhealth.example`   | ADMIN  | Everything, plus chaos panel, users, audit log                  |
-| Marcus Webb  | `marcus@lakeviewhealth.example` | OPS    | Retry jobs, acknowledge/resolve incidents, regenerate summaries |
-| Priya Nair   | `priya@lakeviewhealth.example`  | VIEWER | Read-only                                                       |
+The public deployment does not use shared demo credentials. It provisions a short-lived isolated
+workspace when **Launch interactive demo** is selected. Seeded personas remain available for local
+development and are documented in [the testing guide](docs/recruiter-testing.md).
 
 ---
 

@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build:packages": "pnpm --filter @pulse/shared build && pnpm --filter @pulse/db build",
+    "build:web:deploy": "pnpm --filter @pulse/db generate && pnpm build:packages && pnpm --filter @pulse/web build",
     "dev": "pnpm build:packages && concurrently -n web,worker -c blue,green \"pnpm --filter @pulse/web dev\" \"pnpm --filter @pulse/worker dev\"",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
