@@ -87,4 +87,4 @@ USER node
 # Migrations run as part of boot rather than as a separate release step: the worker is the only
 # service that owns the schema, and a web deploy that races ahead of a migration is exactly the
 # failure this project is supposed to be able to talk about.
-CMD ["sh", "-c", "npx prisma migrate deploy --schema ./prisma/schema.prisma && node dist/index.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma && exec node dist/index.js"]
