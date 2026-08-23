@@ -177,6 +177,13 @@ jobs:
             sleep 3
           done
 
+          # Railway runs this as the release pre-deploy command. Apply the same
+          # migrations in CI before the worker registers repeatable jobs.
+          docker run --rm --network pulse-ci \
+            -e DATABASE_URL=postgresql://pulse:pulse@pg:5432/pulse \
+            pulse-worker:ci \
+            ./node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma
+
           docker run -d --name worker --network pulse-ci -p 4001:4001 \
             -e DATABASE_URL=postgresql://pulse:pulse@pg:5432/pulse \
             -e REDIS_URL=redis://redis:6379 \
