@@ -250,6 +250,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse_e2e
           AUTH_SECRET: e2e-secret-not-used-anywhere-else
+          # The login persona shortcuts are intentionally omitted from production, but the
+          # browser suite exercises them as part of the local seeded demo contract.
+          NEXT_PUBLIC_DEMO_PASSWORD: pulse-demo-2026
 
       - name: E2E
         run: pnpm test:e2e
