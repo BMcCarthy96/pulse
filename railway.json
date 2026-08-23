@@ -5,7 +5,10 @@
     "dockerfilePath": "apps/worker/Dockerfile"
   },
   "deploy": {
-    "startCommand": "./node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma && exec node dist/index.js",
+    "preDeployCommand": [
+      "./node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma"
+    ],
+    "startCommand": "exec node dist/index.js",
     "healthcheckPath": "/readyz",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
