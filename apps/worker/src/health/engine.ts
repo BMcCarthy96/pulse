@@ -16,22 +16,27 @@ interface ErrorHistoryEntry {
  * consecutiveFailures >= 5 rule. `errorHistory` carries one entry per failed attempt, so it is
  * the source of truth; jobs without it (seeded rows) fall back to a single call.
  */
-function jobToCalls(job: {
-  createdAt: Date;
-  status: string;
-  attempts: number;
-  startedAt: Date | null;
-  finishedAt: Date | null;
-  errorHistory: unknown;
-}): HealthCall[] {
+function jobToCalls(
+  job: {
+    createdAt: Date;
+    status: string;
+    attempts: number;
+    startedAt: Date | null;
+    finishedAt: Date | null;
+    errorHistory: unknown;
+  },
+  since: Date,
+): HealthCall[] {
   const history: ErrorHistoryEntry[] = Array.isArray(job.errorHistory)
     ? (job.errorHistory as ErrorHistoryEntry[])
     : [];
-  const failedAttempts: HealthCall[] = history.map((entry) => ({
-    at: entry.at ? new Date(entry.at) : (job.finishedAt ?? job.createdAt),
-    failed: true,
-    durationMs: typeof entry.durationMs === "number" ? entry.durationMs : null,
-  }));
+  const failedAttempts: HealthCall[] = history
+    .map((entry) => ({
+      at: entry.at ? new Date(entry.at) : (job.finishedAt ?? job.startedAt ?? job.createdAt),
+      failed: true,
+      durationMs: typeof entry.durationMs === "number" ? entry.durationMs : null,
+    }))
+    .filter((call) => call.at > since);
 
   // A durable row whose Redis dispatch failed is operator-visible, but it never reached an
   // upstream processor and therefore must not poison connector health.
@@ -40,7 +45,7 @@ function jobToCalls(job: {
   const succeeded = job.status === "SUCCEEDED";
   if (succeeded) {
     failedAttempts.push({
-      at: job.finishedAt ?? job.createdAt,
+      at: job.finishedAt ?? job.startedAt ?? job.createdAt,
       failed: false,
       durationMs:
         job.startedAt && job.finishedAt ? job.finishedAt.getTime() - job.startedAt.getTime() : null,
@@ -56,7 +61,7 @@ function jobToCalls(job: {
   // No attempt history at all (for example a seeded terminal row): count the row once.
   return [
     {
-      at: job.createdAt,
+      at: job.finishedAt ?? job.startedAt ?? job.createdAt,
       failed: job.status === "FAILED" || job.status === "DEAD",
       durationMs:
         job.startedAt && job.finishedAt ? job.finishedAt.getTime() - job.startedAt.getTime() : null,
@@ -94,7 +99,7 @@ async function loadCalls(connectorId: string, since: Date): Promise<HealthCall[]
     }),
   ]);
 
-  const jobCalls: HealthCall[] = jobs.flatMap(jobToCalls);
+  const jobCalls: HealthCall[] = jobs.flatMap((job) => jobToCalls(job, since));
 
   const eventCalls: HealthCall[] = events.map((e) => ({
     at: e.receivedAt,

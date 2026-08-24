@@ -46,7 +46,7 @@ function testHost() {
   return "127.0.0.1";
 }
 
-const PORT = 3010;
+const PORT = Number(process.env.E2E_PORT ?? "3010");
 const HOST = process.env.E2E_HOST ?? testHost();
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://${HOST}:${PORT}`;
 const SIMULATOR_URL = `http://${HOST}:4001`;
@@ -55,13 +55,14 @@ const E2E_DATABASE_URL = process.env.E2E_DATABASE_URL ?? databaseUrl("pulse_e2e"
 const SHARED_ENV = {
   DATABASE_URL: E2E_DATABASE_URL,
   REDIS_URL: process.env.E2E_REDIS_URL ?? redisUrl(2),
-  AUTH_SECRET: "e2e-secret-not-used-anywhere-else",
+  AUTH_SECRET: "e2e-secret-not-used-anywhere-else-32",
   AUTH_URL: BASE_URL,
-  WEBHOOK_SIGNING_SECRET: "e2e-webhook-secret",
+  WEBHOOK_SIGNING_SECRET: "e2e-webhook-secret-with-32-bytes",
   WEBHOOK_TARGET_URL: BASE_URL,
   SEED_DEMO_PASSWORD: "pulse-demo-2026",
   NEXT_PUBLIC_DEMO_PASSWORD: "pulse-demo-2026",
   DEMO_MODE: "true",
+  PULSE_E2E: "true",
   INVESTIGATION_LIVE_ENABLED: "false",
   // doc 05 step 5: the flow must degrade gracefully with no key, and CI must never spend money.
   ANTHROPIC_API_KEY: "",
@@ -98,7 +99,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: `pnpm --filter @pulse/web start`,
+      command: `pnpm --filter @pulse/web exec next start -p ${PORT}`,
       url: `${BASE_URL}/login`,
       cwd: "../..",
       reuseExistingServer: false,

@@ -70,7 +70,7 @@ COPY --from=build /prune/node_modules ./node_modules
 COPY --from=build /app/apps/worker/dist ./dist
 COPY --from=build /app/apps/worker/package.json ./package.json
 
-# The migration files ship with the image so `prisma migrate deploy` can run at boot without
+# The migration files ship with the image so Railway's pre-deploy command can run migrations
 # needing the repository present.
 COPY --from=build /app/packages/db/prisma ./prisma
 
@@ -84,8 +84,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 USER node
 
-# Migrations run as part of boot rather than as a separate release step: the worker is the only
-# service that owns the schema, and a web deploy that races ahead of a migration is exactly the
-# failure this project is supposed to be able to talk about.
-# Keep the image fallback shell-free too; Railway runs this same long-lived worker command.
+# Railway runs migrations in its release phase before this long-lived worker command starts.
 CMD ["node", "dist/index.js"]

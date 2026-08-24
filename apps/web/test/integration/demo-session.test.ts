@@ -91,7 +91,7 @@ describe("recruiter demo reset", () => {
       incidents: 1,
       timeline: 2,
       jobs: 2,
-      syncRuns: 0,
+      syncRuns: 1,
       logs: 2,
       events: 1,
       snapshots: 2,
@@ -341,6 +341,50 @@ describe("recruiter demo reset", () => {
       actions: 0,
       aiRuns: 0,
       aiCalls: 0,
+      audit: 1,
+    });
+  });
+
+  it("keeps investigation creation on one reset generation", async () => {
+    const demo = await provisionDemoSession();
+    expect(demo).not.toBeNull();
+    const { orgId, user } = demo!;
+    const incident = await prisma.incident.findFirstOrThrow({ where: { orgId } });
+
+    let releaseResetLock: () => void = () => undefined;
+    let markLockReady: () => void = () => undefined;
+    const resetLockReady = new Promise<void>((resolve) => {
+      markLockReady = resolve;
+    });
+    const holdResetLock = new Promise<void>((resolve) => {
+      releaseResetLock = resolve;
+    });
+    const replaceGeneration = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pulse:demo-reset:${orgId}`}, 0))::text AS "lock"`;
+      await tx.incident.delete({ where: { id: incident.id } });
+      markLockReady();
+      await holdResetLock;
+    });
+    await resetLockReady;
+
+    const creation = createInvestigation({
+      orgId,
+      userId: user.id,
+      incidentId: incident.id,
+    });
+    const rejectedAsStale = expect(creation).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    releaseResetLock();
+    await replaceGeneration;
+    await rejectedAsStale;
+
+    expect(await prisma.investigation.count({ where: { orgId } })).toBe(0);
+    expect(await resetDemoSession(orgId, user.id)).toBe(true);
+    expect((await baselineState(orgId)).counts).toMatchObject({
+      incidents: 1,
+      investigations: 0,
       audit: 1,
     });
   });

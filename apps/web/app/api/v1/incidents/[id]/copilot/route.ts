@@ -37,6 +37,9 @@ export const GET = handleApiError("incidents.copilot_history", async (req, ctx) 
     orderBy: { createdAt: "desc" },
     cursor,
     limit,
+    cursorField: "createdAt",
+    cursorValue: (run) => run.createdAt.toISOString(),
+    parseCursorValue: (value) => new Date(value),
   });
   return NextResponse.json({
     data: page.data.map((run) => ({

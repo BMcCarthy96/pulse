@@ -134,7 +134,10 @@ jobs:
         env:
           # next build needs these present; values are irrelevant to a build.
           DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse
-          AUTH_SECRET: build-time-placeholder
+          REDIS_URL: redis://localhost:6379
+          AUTH_SECRET: build-time-placeholder-with-32-bytes
+          AUTH_URL: https://pulse.example
+          WEBHOOK_SIGNING_SECRET: build-time-webhook-secret-with-32-bytes
 
   # The worker image is what Railway actually deploys, and `pnpm build` proves nothing about it:
   # four separate defects (missing .dockerignore, missing prisma CLI, raw-TypeScript package
@@ -187,13 +190,16 @@ jobs:
           docker run -d --name worker --network pulse-ci -p 4001:4001 \
             -e DATABASE_URL=postgresql://pulse:pulse@pg:5432/pulse \
             -e REDIS_URL=redis://redis:6379 \
-            -e WEBHOOK_SIGNING_SECRET=ci-not-a-real-secret \
+            -e NODE_ENV=production \
+            -e PULSE_E2E=true \
+            -e WEBHOOK_SIGNING_SECRET=ci-only-webhook-secret-with-32-bytes \
+            -e WEBHOOK_TARGET_URL=http://127.0.0.1:3000 \
             -e SIMULATOR_BASE_URL=http://127.0.0.1:4001 \
             -e ANTHROPIC_API_KEY= \
             pulse-worker:ci
 
           for i in $(seq 1 40); do
-            if curl -fsS http://localhost:4001/healthz >/dev/null 2>&1; then
+            if curl -fsS http://localhost:4001/readyz >/dev/null 2>&1; then
               echo "worker healthy"
               docker logs worker 2>&1 | grep -q "queue workers started" \
                 || { echo "queues never started"; docker logs worker; exit 1; }
@@ -205,6 +211,15 @@ jobs:
             sleep 3
           done
           echo "worker never became healthy:"; docker logs worker; exit 1
+
+      - name: Scan worker image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: pulse-worker:ci
+          vuln-type: "os,library"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"
 
   e2e:
     name: E2E (demo flow)
@@ -256,7 +271,11 @@ jobs:
         run: pnpm build
         env:
           DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse_e2e
-          AUTH_SECRET: e2e-secret-not-used-anywhere-else
+          REDIS_URL: redis://localhost:6379/2
+          AUTH_SECRET: e2e-secret-not-used-anywhere-else-32
+          AUTH_URL: http://localhost:3010
+          WEBHOOK_SIGNING_SECRET: e2e-webhook-secret-with-32-bytes
+          PULSE_E2E: "true"
           # The login persona shortcuts are intentionally omitted from production, but the
           # browser suite exercises them as part of the local seeded demo contract.
           NEXT_PUBLIC_DEMO_PASSWORD: pulse-demo-2026

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, type Prisma } from "@pulse/db";
-import { paginationSchema, logLevelSchema } from "@pulse/shared";
+import { ApiError, paginationSchema, logLevelSchema } from "@pulse/shared";
 import { handleApiError, requireSession } from "@/lib/authz";
 import { paginate } from "@/lib/pagination";
 
@@ -21,6 +21,12 @@ export const GET = handleApiError("logs.list", async (req) => {
         .filter((r) => r.success)
         .map((r) => r.data)
     : [];
+  if (
+    levelsParam &&
+    levels.length !== levelsParam.split(",").filter((value) => value.length > 0).length
+  ) {
+    throw ApiError.validation("Invalid log level filter");
+  }
 
   const where: Prisma.LogEntryWhereInput = {
     orgId: session.user.orgId,
@@ -33,15 +39,18 @@ export const GET = handleApiError("logs.list", async (req) => {
 
   const { data, nextCursor } = await paginate(prisma.logEntry, {
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     cursor,
     limit,
+    cursorField: "createdAt",
+    cursorValue: (entry) => entry.createdAt.toISOString(),
+    parseCursorValue: (value) => new Date(value),
   });
 
   const withConnector = await prisma.logEntry.findMany({
     where: { orgId: session.user.orgId, id: { in: data.map((l) => l.id) } },
     include: { connector: { select: { key: true, displayName: true } } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
   return NextResponse.json({ data: withConnector, nextCursor });

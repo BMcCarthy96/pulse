@@ -7,6 +7,9 @@ test("deployed demo completes the investigation, approval, audit, and reset path
 }) => {
   const health = await page.request.get("/api/v1/health");
   expect(health.ok()).toBeTruthy();
+  const socialCard = await page.request.get("/pulse-demo-card.png", { maxRedirects: 0 });
+  expect(socialCard.status()).toBe(200);
+  expect(socialCard.headers()["content-type"]).toContain("image/png");
 
   await page.goto("/recruiter");
   await expect(page).toHaveURL(/\/demo\/?$/);
@@ -33,7 +36,9 @@ test("deployed demo completes the investigation, approval, audit, and reset path
   const firstSignal = page.getByTestId("guided-question-first-signal");
   await expect(firstSignal).toBeFocused();
   await firstSignal.press("Enter");
-  await expect(page.getByText("Deterministic demo synthesis").first()).toBeVisible();
+  // The deployed environment may expose either the provider-free replay or the budgeted live
+  // model. Both use the same evidence, citation, approval, and audit contract.
+  await expect(page.getByText(/Deterministic demo synthesis|Live provider/).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Proposed actions" })).toBeVisible();
   await expect(walkthroughButton).toContainText("3/7");
 
@@ -59,12 +64,25 @@ test("deployed demo completes the investigation, approval, audit, and reset path
     (response) => response.url().includes("/actions/") && response.url().endsWith("/approve"),
   );
   await confirmApproval.press("Enter");
-  expect((await approvalResponse).ok()).toBeTruthy();
+  const approvedResponse = await approvalResponse;
+  expect(approvedResponse.ok()).toBeTruthy();
+  const approved = (await approvedResponse.json()) as {
+    action: { result?: { dbJobId?: string } };
+  };
+  const retriedJobId = approved.action.result?.dbJobId;
+  expect(retriedJobId).toBeTruthy();
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`/api/v1/jobs/${retriedJobId}`);
+      if (!response.ok()) return `HTTP ${response.status()}`;
+      return ((await response.json()) as { job: { status: string } }).job.status;
+    })
+    .toBe("SUCCEEDED");
   await expect(page.getByText("Action history")).toBeVisible();
   await expect(page.getByText("SUCCEEDED", { exact: true }).first()).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.getByText("Job retry executed")).toBeVisible();
+  await expect(page.getByText("Job retry queued")).toBeVisible();
   await expect(walkthroughButton).toContainText("7/7");
   await expect(page.getByRole("heading", { name: "The action is recorded" })).toBeVisible();
 

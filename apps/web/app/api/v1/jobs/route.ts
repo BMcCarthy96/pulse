@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, type Prisma } from "@pulse/db";
-import { paginationSchema, jobStatusSchema } from "@pulse/shared";
+import { ApiError, paginationSchema, jobStatusSchema } from "@pulse/shared";
 import { handleApiError, requireSession } from "@/lib/authz";
 import { paginate } from "@/lib/pagination";
 
@@ -14,6 +14,7 @@ export const GET = handleApiError("jobs.list", async (req) => {
   const queue = url.searchParams.get("queue") ?? undefined;
 
   const status = statusParam ? jobStatusSchema.safeParse(statusParam) : undefined;
+  if (status && !status.success) throw ApiError.validation("Invalid job status filter");
 
   const where: Prisma.JobWhereInput = {
     orgId: session.user.orgId,
@@ -24,16 +25,19 @@ export const GET = handleApiError("jobs.list", async (req) => {
 
   const { data, nextCursor, total } = await paginate(prisma.job, {
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     cursor,
     limit,
+    cursorField: "createdAt",
+    cursorValue: (job) => job.createdAt.toISOString(),
+    parseCursorValue: (value) => new Date(value),
     withTotal: url.searchParams.get("withTotal") === "1",
   });
 
   const withConnector = await prisma.job.findMany({
     where: { orgId: session.user.orgId, id: { in: data.map((j) => j.id) } },
     include: { connector: { select: { key: true, displayName: true } } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
   return NextResponse.json({

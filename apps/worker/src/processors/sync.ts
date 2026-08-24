@@ -18,6 +18,7 @@ interface SyncPagePayload {
   connectorId: string;
   orgId: string;
   syncRunId: string;
+  dbJobId?: string;
   page: number;
   resource: "Patient" | "Appointment";
 }
@@ -62,8 +63,47 @@ async function processSyncStart(job: Job<SyncStartPayload>) {
   });
 }
 
+async function enqueueSyncPage(payload: Omit<SyncPagePayload, "dbJobId">) {
+  try {
+    await createTrackedJob({
+      queue: syncQueue,
+      queueName: "sync",
+      type: "sync.page",
+      connectorId: payload.connectorId,
+      orgId: payload.orgId,
+      syncRunId: payload.syncRunId,
+      payload,
+    });
+  } catch (error) {
+    const currentRun = await prisma.syncRun.findFirst({
+      where: {
+        id: payload.syncRunId,
+        connectorId: payload.connectorId,
+        connector: { orgId: payload.orgId },
+      },
+      select: { id: true },
+    });
+    if (currentRun) throw error;
+    log.info(
+      { connectorId: payload.connectorId, syncRunId: payload.syncRunId },
+      "stale next sync page ignored after reset",
+    );
+  }
+}
+
 async function processSyncPage(job: Job<SyncPagePayload>) {
-  const { connectorId, orgId, syncRunId, page, resource } = job.data;
+  const { connectorId, orgId, syncRunId, dbJobId, page, resource } = job.data;
+
+  if (dbJobId) {
+    const currentJob = await prisma.job.findFirst({
+      where: { id: dbJobId, orgId, connectorId, syncRunId },
+      select: { id: true },
+    });
+    if (!currentJob) {
+      log.info({ connectorId, syncRunId, jobId: dbJobId }, "stale sync page skipped after reset");
+      return;
+    }
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), SIMULATOR_HTTP_TIMEOUT_MS);
@@ -87,10 +127,14 @@ async function processSyncPage(job: Job<SyncPagePayload>) {
   }
 
   const fetched = bundle.entry.length;
-  await prisma.syncRun.update({
-    where: { id: syncRunId },
+  const updatedRun = await prisma.syncRun.updateMany({
+    where: { id: syncRunId, connectorId, connector: { orgId } },
     data: { recordsFetched: { increment: fetched } },
   });
+  if (updatedRun.count !== 1) {
+    log.info({ connectorId, syncRunId, jobId: dbJobId }, "stale sync result ignored after reset");
+    return;
+  }
   log.info(
     { connectorId, syncRunId, context: { page, resource, fetched } },
     `sync page ${page} (${resource}) fetched ${fetched} records`,
@@ -99,34 +143,37 @@ async function processSyncPage(job: Job<SyncPagePayload>) {
   if (bundle.link?.next) {
     const nextUrl = new URL(bundle.link.next, "http://simulator");
     const nextPage = Number(nextUrl.searchParams.get("_page") ?? page + 1);
-    await createTrackedJob({
-      queue: syncQueue,
-      queueName: "sync",
-      type: "sync.page",
+    await enqueueSyncPage({
       connectorId,
       orgId,
       syncRunId,
-      payload: { connectorId, orgId, syncRunId, page: nextPage, resource },
+      page: nextPage,
+      resource,
     });
     return;
   }
 
   if (resource === "Patient") {
-    await createTrackedJob({
-      queue: syncQueue,
-      queueName: "sync",
-      type: "sync.page",
+    await enqueueSyncPage({
       connectorId,
       orgId,
       syncRunId,
-      payload: { connectorId, orgId, syncRunId, page: 1, resource: "Appointment" },
+      page: 1,
+      resource: "Appointment",
     });
     return;
   }
 
-  await prisma.syncRun.update({
-    where: { id: syncRunId },
+  const completedRun = await prisma.syncRun.updateMany({
+    where: { id: syncRunId, connectorId, connector: { orgId } },
     data: { status: "SUCCEEDED", finishedAt: new Date() },
   });
+  if (completedRun.count !== 1) {
+    log.info(
+      { connectorId, syncRunId, jobId: dbJobId },
+      "stale sync completion ignored after reset",
+    );
+    return;
+  }
   log.info({ connectorId, syncRunId }, "sync run completed");
 }

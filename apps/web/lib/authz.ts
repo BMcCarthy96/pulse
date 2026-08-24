@@ -17,6 +17,18 @@ import {
 export async function requireSession() {
   const session = await auth();
   if (!session?.user) throw ApiError.unauthorized();
+  const currentUser = await prisma.user.findFirst({
+    where: { id: session.user.id, orgId: session.user.orgId },
+    select: { role: true, status: true, sessionVersion: true },
+  });
+  if (
+    !currentUser ||
+    currentUser.status !== "ACTIVE" ||
+    currentUser.role !== session.user.role ||
+    currentUser.sessionVersion !== (session.user.sessionVersion ?? 0)
+  ) {
+    throw ApiError.unauthorized("Session is no longer active");
+  }
   if (session.user.demoSessionId) {
     const activeDemo = await prisma.demoSession.findFirst({
       where: {

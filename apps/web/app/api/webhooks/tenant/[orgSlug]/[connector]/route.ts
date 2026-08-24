@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { withSpan } from "@pulse/shared";
-import { ingestWebhook, readWebhookHeaders } from "@/lib/ingest-webhook";
+import {
+  ingestWebhook,
+  MAX_WEBHOOK_BODY_BYTES,
+  readWebhookBody,
+  readWebhookHeaders,
+  webhookRateLimitScope,
+} from "@/lib/ingest-webhook";
 import {
   enforceRateLimit,
   rateLimitClientKey,
@@ -14,14 +20,22 @@ export async function POST(
   { params }: { params: Promise<{ orgSlug: string; connector: string }> },
 ) {
   const { orgSlug, connector: connectorKey } = await params;
-  const rawBody = await req.text();
+  const contentLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_WEBHOOK_BODY_BYTES) {
+    return NextResponse.json({ error: "request body too large" }, { status: 413 });
+  }
+  const body = await readWebhookBody(req);
+  if (body.tooLarge) {
+    return NextResponse.json({ error: "request body too large" }, { status: 413 });
+  }
+  const rawBody = body.rawBody;
   return withSpan(
     "api:webhook.ingest.tenant",
     { "http.method": req.method, "http.route": "/api/webhooks/tenant/:orgSlug/:connector" },
     async () => {
       try {
         await enforceRateLimit({
-          key: `webhook:${orgSlug}:${connectorKey}:${rateLimitClientKey(req.headers)}`,
+          key: `webhook:${webhookRateLimitScope(orgSlug, connectorKey)}:${rateLimitClientKey(req.headers)}`,
           capacity: 30,
           refillPerMinute: 120,
           failClosed: true,
@@ -47,6 +61,12 @@ export async function POST(
         rawBody,
         ...readWebhookHeaders(req.headers),
       });
+      if (result.outcome === "body-too-large")
+        return NextResponse.json({ error: "request body too large" }, { status: 413 });
+      if (result.outcome === "invalid-request")
+        return NextResponse.json({ error: result.reason }, { status: 400 });
+      if (result.outcome === "misconfigured")
+        return NextResponse.json({ error: "webhook protection unavailable" }, { status: 503 });
       if (result.outcome === "unknown-connector")
         return NextResponse.json({ error: "unknown connector" }, { status: 404 });
       if (result.outcome === "invalid-signature")

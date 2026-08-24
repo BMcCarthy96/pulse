@@ -42,7 +42,7 @@ The canonical commands and expected evidence are maintained in
 - `DEMO_BASE_URL=https://<deployment> pnpm verify:release`
 - `k6 run scripts/k6/v3-demo.js` against a disposable deployment
   The k6 profile provisions one isolated demo tenant per VU, exercises authenticated overview and
-  incident reads, runs the provider-free deterministic SSE path, reads persisted telemetry, resets the tenant,
+  incident reads, runs the recorded deterministic SSE path, reads persisted telemetry, resets the tenant,
   and enforces the 1% error / 750ms API p95 / 3s provisioning thresholds. Set K6_WEBHOOK_URL and
   K6_WEBHOOK_SECRET to include a signed tenant webhook; set K6_APPROVE_ACTION=true to include the
   proposal approval path.

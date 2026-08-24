@@ -23,6 +23,7 @@ import { Timestamp } from "@/components/timestamp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { useGuidedWalkthrough } from "@/components/guided-walkthrough";
 
 const CONNECTOR_COLORS: Record<string, string> = {
@@ -37,8 +38,12 @@ export default function OverviewPage() {
   const { data: session } = useSession();
   const isGuidedDemo = Boolean(session?.user?.demoSessionId);
   const { completeStep } = useGuidedWalkthrough();
-  const { data: overview, isLoading: overviewLoading } =
-    usePolling<OverviewResponse>("/api/v1/overview");
+  const {
+    data: overview,
+    error: overviewError,
+    isLoading: overviewLoading,
+    mutate: refreshOverview,
+  } = usePolling<OverviewResponse>("/api/v1/overview");
   const { data: connectorsResp } = usePolling<{ data: ConnectorRow[] }>("/api/v1/connectors");
 
   const connectors = connectorsResp?.data ?? [];
@@ -54,6 +59,19 @@ export default function OverviewPage() {
   return (
     <div>
       <PageHeader title="Overview" description="Integration health across all connectors." />
+
+      {overviewError && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+          aria-live="polite"
+        >
+          <span>Connector status is unavailable right now. The values below may be stale.</span>
+          <Button size="sm" variant="outline" onClick={() => void refreshOverview()}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {isGuidedDemo && (
         <section

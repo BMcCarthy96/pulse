@@ -4,9 +4,9 @@
 [![Security](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/security.yml)
 [![Worker image](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml/badge.svg)](https://github.com/BMcCarthy96/pulse/actions/workflows/worker-image-release.yml)
 
-**Demo path:** [Launch the interactive demo locally](docs/recruiter-testing.md#launching-the-demo) ·
+**Live demo:** [Open Pulse](https://pulse-live-demo.vercel.app/demo) ·
 [Preview the 90-second demo path](docs/v3-recruiter-proof.md#90-second-walkthrough) ·
-[Open the verified GitHub Actions run](https://github.com/BMcCarthy96/pulse/actions/runs/31921432722) ·
+[Open the CI workflow](https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml) ·
 [Read the test walkthrough](docs/recruiter-testing.md)
 
 When a hospital's integrations break, nobody finds out from a dashboard — they find out when a
@@ -20,7 +20,7 @@ missing.
 each connector's health on a rolling window, opens an incident the moment one goes down, and gives
 an operator an evidence-cited investigation with an approval-safe recovery path.
 
-![Pulse's public demo page explains the integration failure, provider-free walkthrough, and human approval boundary](docs/media/01-recruiter-landing.png)
+![Pulse's public demo page explains the integration failure, recorded walkthrough, and human approval boundary](docs/media/01-recruiter-landing.png)
 
 > **All data in this project is synthetic.** The organisation (Lakeview Health Partners), the
 > patients, the claims, and the four upstream vendors are fictional. No real PHI is involved
@@ -29,8 +29,8 @@ an operator an evidence-cited investigation with an approval-safe recovery path.
 
 **Guided demo:** open `/demo` and choose **Launch interactive demo**. Pulse
 provisions an isolated synthetic tenant with one coherent EHR outage, bounded evidence, and a
-DEAD job ready for an approval-safe retry. The public path uses deterministic provider-free
-synthesis; credentialed live AI uses the same report contract, budgets, redaction, and telemetry.
+DEAD job ready for an approval-safe retry. The public path uses deterministic recorded synthesis by
+default; credentialed live AI uses the same report contract, budgets, redaction, and telemetry.
 The workspace expires after one hour and cleans itself up. Deployment notes are in
 [docs/deployment.md](docs/deployment.md).
 
@@ -45,7 +45,7 @@ operator confirmation, execution result, and audit row all belong to that same i
 
    ![An isolated synthetic Pulse workspace with a pointer guiding the user to the broken EHR incident](docs/media/03-broken-overview.png)
 
-2. **Investigate:** a provider-free run produces hypotheses linked to the bounded evidence board
+2. **Investigate:** a recorded run produces hypotheses linked to the bounded evidence board
    and proposes an executable recovery action.
 
    ![The Pulse investigation workspace showing deterministic run disclosure, cited hypotheses, proposed actions, activity, and the bounded evidence board](docs/media/04-cited-investigation.png)
@@ -439,15 +439,15 @@ no failures in it would demonstrate nothing.
 
 ## Testing strategy
 
-| Layer                                     | Runs against            | Covers                                                                                                                                                                               | Count |
-| ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, backoff/`Retry-After` parsing, webhook signatures, AI context assembly/provider seam, prompt snapshot, copilot scope, health-strip bucketing, OpenAPI drift | 207   |
-| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health engine end-to-end, incident lifecycle, webhook ingest + dedupe, API route handlers with mocked sessions                                                                       | 55    |
-| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public entry, guided walkthrough, responsive navigation, accessibility, auth, and role gates                                                                     | 12    |
+| Layer                                     | Runs against            | Covers                                                                                                                                                                                       | Count |
+| ----------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, AI budget settlement, durable job dispatch, backoff/`Retry-After`, webhook signatures, AI context/provider seam, prompts, pagination, runtime config, OpenAPI drift | 232   |
+| **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health and incident lifecycle, atomic investigation approval, webhook isolation/dedupe, durable queue reconciliation, tenant-scoped API handlers                                             | 66    |
+| **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public entry, guided walkthrough, responsive navigation, accessibility, auth, and role gates                                                                             | 12    |
 
 The split follows one rule: **if it can be a pure function, test it as one.** The health rules and
-the redactor are pure by design precisely so they can be tested exhaustively — table-driven across
-every branch and boundary value — and both are pinned at 100% branch coverage in CI.
+the redactor are pinned at 100% branch coverage. Budget accounting and durable job dispatch are
+pinned at 100% line and function coverage, with explicit failure-path tests.
 
 Everything that only exists once a database is involved (are the right rows read? does the attempt
 expansion work? does the unique index actually stop a replay?) is an integration test against real
@@ -494,8 +494,8 @@ inject anything.
 | Retry jobs · acknowledge/resolve incidents · notes · regenerate summaries |        | ✅  |  ✅   |
 | Chaos panel · pause connectors · users · audit log                        |        |     |  ✅   |
 
-- **Every mutation writes an `AuditEntry`** with actor, action, target and metadata — no
-  exceptions. The audit log is an admin-only page.
+- **Operational mutations write an `AuditEntry`** with actor, action, target and metadata. The
+  audit log is an admin-only page.
 
 - **Password hashes are never selected** for the users endpoint's shape.
 - **Synthetic data only**, and anything bound for the Anthropic API passes through the redaction
@@ -534,7 +534,7 @@ which a Playwright `globalSetup` could not do, since `webServer` boots first.
 The screenshots above are generated, not hand-captured. Run
 `pnpm --filter @pulse/web screenshots` against a current stack with `DEMO_MODE=true` to regenerate
 all seven into `docs/media/`. The script starts anonymously at `/demo`, checks the desktop and
-phone entry points, provisions a tenant-isolated synthetic outage, follows the guided pointer, runs provider-free deterministic
+phone entry points, provisions a tenant-isolated synthetic outage, follows the guided pointer, runs recorded deterministic
 synthesis, approves the proposed retry, captures its attributed audit row, and resets the demo when
 finished. It never uses a shared seeded login or an AI provider key.
 
@@ -595,9 +595,9 @@ Things done deliberately, and what I would change with more time:
 - **Polling, not websockets.** The dashboard polls every 10 s via SWR. For a fleet of four
   connectors this is honest and simple; SSE would be the next iteration, and the health tick
   already produces a natural event stream to hang it on.
-- **Single-tenant.** `orgId` is threaded through every table and every query, so multi-tenancy is
-  a routing and authorization problem rather than a schema migration — but it is not implemented,
-  and pretending otherwise would be dishonest.
+- **Organization-scoped isolation.** orgId is threaded through the operational tables and queries,
+  and every public demo gets its own short-lived organization. Self-service customer tenancy and
+  organization administration are still outside this project.
 - **Hand-written OpenAPI.** Generating it from the zod schemas would remove a drift risk; the
   mitigation today is a CI check that the spec parses and that the documented routes exist.
 - **No rollup tables.** Health snapshots are queried directly. At four connectors and a
@@ -627,6 +627,5 @@ docs/
   openapi.yaml  API specification
 ```
 
-The build followed a written plan in [`docs/plan/`](docs/plan/), with every phase's acceptance
-criteria verified and recorded in [`docs/plan/PROGRESS.md`](docs/plan/PROGRESS.md) — including
-the deviations, which are the interesting part.
+The build followed a written plan in [docs/plan/](docs/plan/). Architecture decisions, verification
+commands, and release evidence live in the maintainer docs linked from the testing guide.

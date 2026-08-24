@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { withSpan } from "@pulse/shared";
-import { ingestWebhook, readWebhookHeaders } from "@/lib/ingest-webhook";
+import {
+  ingestWebhook,
+  MAX_WEBHOOK_BODY_BYTES,
+  readWebhookBody,
+  readWebhookHeaders,
+  webhookRateLimitScope,
+} from "@/lib/ingest-webhook";
 import {
   enforceRateLimit,
   rateLimitClientKey,
@@ -22,14 +28,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ connect
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "tenant-scoped webhook route required" }, { status: 410 });
   }
-  const rawBody = await req.text();
+  const contentLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_WEBHOOK_BODY_BYTES) {
+    return NextResponse.json({ error: "request body too large" }, { status: 413 });
+  }
+  const body = await readWebhookBody(req);
+  if (body.tooLarge) {
+    return NextResponse.json({ error: "request body too large" }, { status: 413 });
+  }
+  const rawBody = body.rawBody;
   return withSpan(
     "api:webhook.ingest",
     { "http.method": req.method, "http.route": "/api/webhooks/:connector" },
     async () => {
       try {
         await enforceRateLimit({
-          key: `webhook:legacy:${connectorKey}:${rateLimitClientKey(req.headers)}`,
+          key: `webhook:legacy:${webhookRateLimitScope(connectorKey)}:${rateLimitClientKey(req.headers)}`,
           capacity: 30,
           refillPerMinute: 120,
           failClosed: true,
@@ -55,6 +69,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ connect
         rawBody,
         ...readWebhookHeaders(req.headers),
       });
+
+      if (result.outcome === "body-too-large") {
+        return NextResponse.json({ error: "request body too large" }, { status: 413 });
+      }
+      if (result.outcome === "invalid-request") {
+        return NextResponse.json({ error: result.reason }, { status: 400 });
+      }
+      if (result.outcome === "misconfigured") {
+        return NextResponse.json({ error: "webhook protection unavailable" }, { status: 503 });
+      }
 
       switch (result.outcome) {
         case "unknown-connector":

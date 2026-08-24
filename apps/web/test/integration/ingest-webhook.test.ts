@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@pulse/db";
-import { signWebhookBody } from "@pulse/shared/webhook-signature";
+import { signWebhookBody, signWebhookBodyV2 } from "@pulse/shared/webhook-signature";
 import { ingestWebhook } from "@/lib/ingest-webhook";
 import { webhookProcessingQueue } from "@/lib/queue";
 import { createConnector, createOrg } from "../../../../test/integration/fixtures.js";
@@ -15,6 +15,7 @@ import { createConnector, createOrg } from "../../../../test/integration/fixture
 
 const SECRET = "integration-test-secret";
 const LAB_BODY = JSON.stringify({ eventType: "lab.result", patientRef: "PAT-4821", value: 12.4 });
+const mutableEnv = process.env as Record<string, string | undefined>;
 
 async function seedLabConnector() {
   const org = await createOrg();
@@ -90,6 +91,51 @@ describe("ingestWebhook — happy path", () => {
 });
 
 describe("ingestWebhook — signature rejection", () => {
+  it("requires a delivery id and timestamped signature in production", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    mutableEnv.NODE_ENV = "production";
+    try {
+      const result = await ingestWebhook(delivery({ orgSlug: "test-scope", deliveryId: null }));
+      expect(result).toMatchObject({ outcome: "invalid-request", status: 400 });
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const unscoped = await ingestWebhook(
+        delivery({
+          signature: null,
+          signatureV2: signWebhookBodyV2(LAB_BODY, SECRET, Number(timestamp)),
+          timestamp,
+        }),
+      );
+      expect(unscoped).toMatchObject({
+        outcome: "invalid-request",
+        status: 400,
+        reason: "tenant-scoped webhook route is required",
+      });
+      expect(await prisma.integrationEvent.count()).toBe(0);
+    } finally {
+      mutableEnv.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it("accepts a valid timestamped production delivery", async () => {
+    const { org } = await seedLabConnector();
+    const previousNodeEnv = process.env.NODE_ENV;
+    mutableEnv.NODE_ENV = "production";
+    try {
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const result = await ingestWebhook(
+        delivery({
+          orgSlug: org.slug,
+          signature: null,
+          signatureV2: signWebhookBodyV2(LAB_BODY, SECRET, Number(timestamp)),
+          timestamp,
+        }),
+      );
+      expect(result).toMatchObject({ outcome: "accepted", status: 202 });
+    } finally {
+      mutableEnv.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   it("rejects a tampered body and records it as INVALID", async () => {
     const { connector } = await seedLabConnector();
 
@@ -104,8 +150,22 @@ describe("ingestWebhook — signature rejection", () => {
     });
     expect(event.status).toBe("INVALID");
     expect(event.error).toBe("signature verification failed");
-    // The rejected delivery is kept, not dropped — it is the evidence an operator needs.
-    expect(event.payload).toMatchObject({ value: 999.9 });
+    // The rejected delivery is kept without persisting untrusted body content. Operators still
+    // get a stable hash and byte count to correlate with an upstream log or support ticket.
+    expect(event.payload).toMatchObject({ rejected: true, bytes: tampered.length });
+    expect(JSON.stringify(event.payload)).not.toContain("999.9");
+  });
+
+  it("treats a repeated invalid delivery as a 401 without duplicate rows", async () => {
+    const { connector } = await seedLabConnector();
+    const input = delivery({ deliveryId: "invalid-replay", signature: "not-valid" });
+
+    const first = await ingestWebhook(input);
+    const second = await ingestWebhook(input);
+
+    expect(first).toMatchObject({ outcome: "invalid-signature", status: 401 });
+    expect(second).toMatchObject({ outcome: "invalid-signature", status: 401 });
+    expect(await prisma.integrationEvent.count({ where: { connectorId: connector.id } })).toBe(1);
   });
 
   it("rejects a missing signature", async () => {
@@ -196,7 +256,7 @@ describe("ingestWebhook — dedupe", () => {
     expect(await prisma.integrationEvent.count()).toBe(2);
   });
 
-  it("does not dedupe deliveries that arrive with no delivery id", async () => {
+  it("accepts legacy test deliveries with no delivery id outside production", async () => {
     await seedLabConnector();
 
     // A null dedupeKey is excluded from the unique index in Postgres, so these must both land

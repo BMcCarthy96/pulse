@@ -293,6 +293,12 @@ function WalkthroughOverlay({
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
+    // A route transition can leave the previous page mounted for a render. Clear the old
+    // geometry immediately so the scrim never points at a stale control on the new page.
+    setTarget(null);
+    setTargetRect(null);
+    setViewport({ width: 0, height: 0 });
+    setMissing(false);
     if (!matchesWalkthroughRoute(step, pathname)) return;
     let disposed = false;
     let missingTimer = 0;

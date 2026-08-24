@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@pulse/db";
 import { ApiError, incidentStatusChangeMessage } from "@pulse/shared";
 import { handleApiError, requireRole } from "@/lib/authz";
-import { writeAudit } from "@/lib/audit";
 
 export const POST = handleApiError("incidents.acknowledge", async (_req, ctx) => {
   const session = await requireRole("OPS");
@@ -15,10 +14,11 @@ export const POST = handleApiError("incidents.acknowledge", async (_req, ctx) =>
     throw ApiError.conflict("incident is already acknowledged");
 
   const updated = await prisma.$transaction(async (tx) => {
-    const next = await tx.incident.update({
-      where: { id },
+    const claimed = await tx.incident.updateMany({
+      where: { id, orgId: session.user.orgId, status: incident.status },
       data: { status: "ACKNOWLEDGED", acknowledgedAt: incident.acknowledgedAt ?? new Date() },
     });
+    if (claimed.count !== 1) throw ApiError.conflict("incident changed before it was acknowledged");
     await tx.incidentTimelineEntry.create({
       data: {
         incidentId: id,
@@ -35,16 +35,17 @@ export const POST = handleApiError("incidents.acknowledge", async (_req, ctx) =>
         actor: session.user.id,
       },
     });
-    return next;
-  });
-
-  await writeAudit({
-    orgId: session.user.orgId,
-    userId: session.user.id,
-    action: "incident.acknowledge",
-    targetType: "incident",
-    targetId: id,
-    metadata: { from: incident.status },
+    await tx.auditEntry.create({
+      data: {
+        orgId: session.user.orgId,
+        userId: session.user.id,
+        action: "incident.acknowledge",
+        targetType: "incident",
+        targetId: id,
+        metadata: { from: incident.status },
+      },
+    });
+    return tx.incident.findUniqueOrThrow({ where: { id } });
   });
 
   return NextResponse.json({ incident: updated });

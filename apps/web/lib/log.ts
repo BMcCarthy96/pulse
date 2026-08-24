@@ -23,14 +23,37 @@ export async function logToDb(
 ) {
   try {
     const { orgId, connectorId, jobId, incidentId, traceId, ...rest } = context;
+    const [connector, job, incident] = await Promise.all([
+      connectorId
+        ? prisma.connector.findFirst({
+            where: { id: connectorId, orgId },
+            select: { id: true },
+          })
+        : null,
+      jobId
+        ? prisma.job.findFirst({
+            where: { id: jobId, orgId },
+            select: { id: true },
+          })
+        : null,
+      incidentId
+        ? prisma.incident.findFirst({
+            where: { id: incidentId, orgId },
+            select: { id: true },
+          })
+        : null,
+    ]);
     await prisma.logEntry.create({
       data: {
         orgId,
         level,
         source: "web",
-        connectorId,
-        jobId,
-        incidentId,
+        // Scalar log links are intentionally validated against the same org. LogEntry does not
+        // have composite foreign keys, so accepting a stale cross-tenant ID would create a link
+        // that looks valid to downstream readers.
+        connectorId: connector?.id,
+        jobId: job?.id,
+        incidentId: incident?.id,
         traceId: traceId ?? currentTraceId(),
         message,
         context: rest as Prisma.InputJsonValue,

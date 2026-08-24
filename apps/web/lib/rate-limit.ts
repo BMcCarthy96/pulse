@@ -30,8 +30,9 @@ let redis: Redis | null = null;
 let connectPromise: Promise<void> | null = null;
 
 /**
- * Use the right-most forwarded hop: on append-style proxies the left-most value is supplied by
- * the client and can be spoofed. Hashing keeps untrusted header text out of Redis keys.
+ * Prefer the platform-provided client address when one exists. Otherwise use the right-most
+ * forwarded hop because append-style proxies leave the left-most value client-controlled.
+ * Hashing keeps untrusted header text out of Redis keys.
  */
 export function rateLimitClientKey(headers: Headers) {
   const forwarded = headers
@@ -39,7 +40,10 @@ export function rateLimitClientKey(headers: Headers) {
     ?.split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  const address = forwarded?.at(-1) ?? headers.get("x-real-ip")?.trim() ?? "unknown";
+  const trustedAddress =
+    headers.get("x-vercel-forwarded-for")?.trim() ?? headers.get("cf-connecting-ip")?.trim();
+  const address =
+    trustedAddress ?? forwarded?.at(-1) ?? headers.get("x-real-ip")?.trim() ?? "unknown";
   return createHash("sha256").update(address).digest("hex").slice(0, 24);
 }
 

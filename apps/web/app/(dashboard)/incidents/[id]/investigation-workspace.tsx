@@ -150,7 +150,7 @@ const ACTION_PRESENTATION: Record<
 };
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
-  "job.retry": "Job retry executed",
+  "job.retry": "Job retry queued",
   "incident.acknowledge": "Incident acknowledged",
   "incident.resolve": "Incident resolved",
   "incident.summary_regenerate": "Incident summary regeneration queued",

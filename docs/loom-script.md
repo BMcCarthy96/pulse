@@ -41,10 +41,10 @@ Open the highlighted retry. Pause on the approval screen, then choose **Revalida
 
 ## 1:10 to 1:22
 
-Show **SUCCEEDED** and the highlighted audit trail.
+Show **SUCCEEDED** in action history and the highlighted audit trail.
 
-> “The worker completed the retry. The audit now shows who approved it, what ran, and when it
-> happened.”
+> “The retry request was queued successfully. The audit shows who approved it, which job was sent
+> to the worker, and when it happened.”
 
 ## 1:22 to 1:30
 

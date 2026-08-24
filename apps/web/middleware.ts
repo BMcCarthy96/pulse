@@ -11,7 +11,14 @@ import { authConfig } from "./auth.config";
 const { auth } = NextAuth(authConfig);
 
 const PUBLIC_API_PREFIXES = ["/api/webhooks", "/api/auth", "/api/v1/health"];
-const ALWAYS_PUBLIC_PAGES = new Set(["/demo", "/recruiter", "/livez", "/readyz"]);
+const ALWAYS_PUBLIC_PAGES = new Set([
+  "/demo",
+  "/recruiter",
+  "/livez",
+  "/readyz",
+  "/pulse-demo-card.png",
+  "/pulse-demo-card.svg",
+]);
 
 const authenticatedMiddleware = auth((req) => {
   const { nextUrl } = req;

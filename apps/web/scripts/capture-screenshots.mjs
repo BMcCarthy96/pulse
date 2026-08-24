@@ -58,7 +58,7 @@ async function openDemoLanding(page) {
       name: /Investigate integration failures before clinicians discover them/i,
     })
     .waitFor();
-  await page.getByText("Provider-free by default").waitFor();
+  await page.getByText("Recorded replay by default").waitFor();
 }
 
 async function main() {
@@ -146,9 +146,26 @@ async function main() {
     await page.getByRole("button", { name: "Revalidate and approve" }).click();
     const response = await approvalResponse;
     if (!response.ok()) throw new Error(`Action approval failed: ${response.status()}`);
+    const approved = await response.json();
+    const retriedJobId = approved?.action?.result?.dbJobId;
+    if (!retriedJobId) throw new Error("Action approval did not return the retried job id");
+    let retryStatus = "QUEUED";
+    for (let attempt = 0; attempt < 30 && retryStatus !== "SUCCEEDED"; attempt += 1) {
+      const jobResponse = await page.request.get(`${BASE_URL}/api/v1/jobs/${retriedJobId}`);
+      retryStatus = jobResponse.ok()
+        ? (await jobResponse.json()).job?.status
+        : `HTTP ${jobResponse.status()}`;
+      if (retryStatus !== "SUCCEEDED") await page.waitForTimeout(250);
+    }
+    if (retryStatus !== "SUCCEEDED") {
+      throw new Error(
+        `The approved retry did not complete successfully (last status: ${retryStatus})`,
+      );
+    }
 
     await page.getByText("Action history").waitFor();
     await page.getByText("SUCCEEDED", { exact: true }).first().waitFor();
+    await page.getByText("Job retry queued").waitFor();
     const auditHeading = page.getByText("Audit trail", { exact: true });
     await auditHeading.waitFor();
     await auditHeading.scrollIntoViewIfNeeded();
@@ -156,7 +173,7 @@ async function main() {
     await shoot(page, "06-executed-action-audit");
     await page.getByRole("button", { name: "Finish walkthrough" }).click();
 
-    console.log("Done. Captured one isolated, provider-free demo story.");
+    console.log("Done. Captured one isolated, recorded-replay demo story.");
   } finally {
     if (demoCreated) {
       const reset = await page.request.post(`${BASE_URL}/api/demo/reset`).catch(() => null);

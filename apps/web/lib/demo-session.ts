@@ -148,7 +148,9 @@ async function createDemoBaseline(
           kind: def.kind,
           syncIntervalSec: def.syncIntervalSec,
           status: def.key === "ehr-fhir" ? "DOWN" : "HEALTHY",
-          chaosMode: def.key === "ehr-fhir" ? "OUTAGE" : "HEALTHY",
+          // The last evaluated health state remains DOWN, while the synthetic upstream has
+          // recovered. That makes the operator-approved retry both useful and deterministic.
+          chaosMode: "HEALTHY",
         },
       }),
     );
@@ -182,16 +184,35 @@ async function createDemoBaseline(
       },
     },
   });
+  const failedRun = await tx.syncRun.create({
+    data: {
+      connectorId: ehr.id,
+      status: "FAILED",
+      trigger: "schedule",
+      startedAt: new Date(openedAt.getTime() + 2 * 60_000),
+      finishedAt: new Date(openedAt.getTime() + 8 * 60_000),
+      error: "upstream 503: service unavailable",
+    },
+  });
+  const retryPayload = {
+    connectorId: ehr.id,
+    orgId: args.orgId,
+    syncRunId: failedRun.id,
+    resource: "Patient",
+    connectorKey: "ehr-fhir",
+    demo: true,
+  } as const;
   await tx.job.create({
     data: {
       orgId: args.orgId,
       connectorId: ehr.id,
+      syncRunId: failedRun.id,
       queue: "sync",
       type: "sync.page",
       status: "DEAD",
       attempts: 5,
       maxAttempts: 5,
-      payload: { page: 1, connectorKey: "ehr-fhir", demo: true },
+      payload: { ...retryPayload, page: 1 },
       lastError: "upstream 503: service unavailable",
       errorHistory: [
         { attempt: 1, message: "upstream 503: service unavailable" },
@@ -208,12 +229,13 @@ async function createDemoBaseline(
     data: {
       orgId: args.orgId,
       connectorId: ehr.id,
+      syncRunId: failedRun.id,
       queue: "sync",
       type: "sync.page",
       status: "FAILED",
       attempts: 3,
       maxAttempts: 5,
-      payload: { page: 2, connectorKey: "ehr-fhir", demo: true },
+      payload: { ...retryPayload, page: 2 },
       lastError: "upstream 503: service unavailable",
       errorHistory: [{ attempt: 3, message: "upstream 503: service unavailable" }],
       createdAt: new Date(openedAt.getTime() + 4 * 60_000),

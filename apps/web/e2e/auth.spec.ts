@@ -16,7 +16,7 @@ test.describe("auth and role gates", () => {
     await expect(
       page.getByRole("button", { name: /Launch interactive demo/i }).first(),
     ).toBeVisible();
-    await expect(page.getByText("Provider-free by default")).toBeVisible();
+    await expect(page.getByText("Recorded replay by default")).toBeVisible();
     await page.goto("/recruiter");
     await expect(page).toHaveURL(/\/demo/);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -29,6 +29,9 @@ test.describe("auth and role gates", () => {
     const ready = await page.request.get("/readyz", { maxRedirects: 0 });
     expect([200, 503]).toContain(ready.status());
     expect(await ready.json()).toHaveProperty("ready");
+    const socialCard = await page.request.get("/pulse-demo-card.png", { maxRedirects: 0 });
+    expect(socialCard.status()).toBe(200);
+    expect(socialCard.headers()["content-type"]).toContain("image/png");
 
     await page.goto("/incidents");
     await expect(page).toHaveURL(/\/login/);
@@ -167,10 +170,23 @@ test.describe("auth and role gates", () => {
       (response) => response.url().includes("/actions/") && response.url().endsWith("/approve"),
     );
     await confirmApproval.press("Enter");
-    expect((await approvalResponse).ok()).toBeTruthy();
+    const approvedResponse = await approvalResponse;
+    expect(approvedResponse.ok()).toBeTruthy();
+    const approved = (await approvedResponse.json()) as {
+      action: { result?: { dbJobId?: string } };
+    };
+    const retriedJobId = approved.action.result?.dbJobId;
+    expect(retriedJobId).toBeTruthy();
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(`/api/v1/jobs/${retriedJobId}`);
+        if (!response.ok()) return `HTTP ${response.status()}`;
+        return ((await response.json()) as { job: { status: string } }).job.status;
+      })
+      .toBe("SUCCEEDED");
     await expect(page.getByText("Action history")).toBeVisible();
     await expect(page.getByText("SUCCEEDED", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Job retry executed")).toBeVisible();
+    await expect(page.getByText("Job retry queued")).toBeVisible();
     await expect(walkthroughButton).toContainText("7/7");
     await expect(page.getByRole("heading", { name: "The action is recorded" })).toBeVisible();
 

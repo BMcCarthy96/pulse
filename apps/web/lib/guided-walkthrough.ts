@@ -86,7 +86,7 @@ export const WALKTHROUGH_STEPS: readonly WalkthroughStep[] = [
     phase: "Audit",
     title: "The action is recorded",
     description:
-      "The retry succeeded. The audit shows who approved it, what ran, and when it happened.",
+      "The retry was queued. The audit shows who approved it, which job was sent to the worker, and when it happened.",
     placement: "left",
     incidentRoute: true,
   },

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Activity,
-  ArrowRight,
   CheckCircle2,
   CircleDollarSign,
   FileCheck2,
@@ -16,7 +15,10 @@ import { Button } from "@/components/ui/button";
 import proof from "@/content/recruiter-proof.json";
 import { DemoEntryButton } from "./demo-entry-button";
 
+const ciRunUrl = "ciRunUrl" in proof && typeof proof.ciRunUrl === "string" ? proof.ciRunUrl : null;
+
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.AUTH_URL ?? "http://localhost:3010"),
   title: "Pulse demo | AI investigation workspace",
   description:
     "Explore a tenant-isolated integration incident, evidence-bounded AI investigation, human approval, and operational audit trail.",
@@ -25,8 +27,22 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Pulse | AI investigation workspace",
     description:
-      "A one-click, synthetic integration incident with cited evidence, approval-safe actions, and a provider-free deterministic fallback.",
+      "A one-click, synthetic integration incident with cited evidence, approval-safe actions, and a recorded replay plus optional live analysis.",
     type: "website",
+    images: [
+      {
+        url: "/pulse-demo-card.png",
+        width: 1200,
+        height: 630,
+        alt: "Pulse investigation workspace with cited evidence and audited recovery",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pulse | AI investigation workspace",
+    description: "Follow a synthetic integration incident from evidence to audited recovery.",
+    images: ["/pulse-demo-card.png"],
   },
 };
 
@@ -40,7 +56,7 @@ const WALKTHROUGH = [
   [
     "3",
     "Investigate the first signal",
-    "A provider-free engine returns the same validated report contract used by live AI.",
+    "A recorded engine returns the same validated report contract used by live AI.",
   ],
   ["4", "Open a citation", "Each finding links back to the evidence record that supports it."],
   [
@@ -56,6 +72,8 @@ const WALKTHROUGH = [
   ],
 ] as const;
 
+const groundedCases = Math.round(proof.evals.groundingRate * proof.evals.summaryCases);
+
 const PROOF_CARDS = [
   {
     icon: TestTube2,
@@ -67,7 +85,7 @@ const PROOF_CARDS = [
     icon: ShieldCheck,
     value: `${Math.round(proof.evals.groundingRate * 100)}%`,
     label: "required-fact coverage",
-    detail: "13 of 14 cases on the latest summary eval corpus",
+    detail: `${groundedCases} of ${proof.evals.summaryCases} cases on the latest summary eval corpus`,
   },
   {
     icon: FileCheck2,
@@ -120,7 +138,7 @@ export default async function DemoPage() {
                 Synthetic healthcare data
               </Badge>
               <Badge className="border-white/20 bg-white/10 text-white">
-                Provider-free by default
+                Recorded replay by default
               </Badge>
             </div>
             <h1 className="max-w-3xl text-4xl leading-tight font-semibold tracking-tight sm:text-6xl">
@@ -138,12 +156,6 @@ export default async function DemoPage() {
               >
                 <PlayCircle />
                 {videoUrl ? "Watch the 90-second walkthrough" : "Preview the demo path"}
-              </a>
-              <a
-                href="#walkthrough"
-                className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
-              >
-                See the 90-second path <ArrowRight />
               </a>
             </div>
           </div>
@@ -261,9 +273,18 @@ export default async function DemoPage() {
                 Claims backed by executable gates
               </h2>
             </div>
-            <a href={proof.ciRunUrl} className="text-sm font-medium hover:underline">
-              Open verified GitHub Actions run →
-            </a>
+            {ciRunUrl ? (
+              <a href={ciRunUrl} className="text-sm font-medium hover:underline">
+                Open verified GitHub Actions run →
+              </a>
+            ) : (
+              <a
+                href="https://github.com/BMcCarthy96/pulse/actions/workflows/ci.yml"
+                className="text-sm font-medium hover:underline"
+              >
+                View the CI workflow →
+              </a>
+            )}
           </div>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {PROOF_CARDS.map(({ icon: Icon, value, label, detail }) => (
@@ -283,6 +304,9 @@ export default async function DemoPage() {
             ))}
             <span className="rounded-full border bg-white px-3 py-1">Build {sha}</span>
             <span className="rounded-full border bg-white px-3 py-1">App v{proof.appVersion}</span>
+            <span className="rounded-full border bg-white px-3 py-1">
+              Proof generated {proof.generatedAt}
+            </span>
           </div>
         </div>
       </section>

@@ -6,6 +6,7 @@ import {
   INCIDENT_SUMMARY_PROMPT_VERSION,
   exponentialBackoffMs,
   getRedisConnectionOptions,
+  DEFAULT_JOB_OPTS,
   createTrackedJob as sharedCreateTrackedJob,
   retryTrackedJob as sharedRetryTrackedJob,
   extractTrace,
@@ -109,6 +110,55 @@ const queueByName: Record<string, Queue> = {
   [QUEUE_NAMES.eligibility]: eligibilityQueue,
 };
 
+/**
+ * Reconcile durable queued jobs after a worker or producer restart.
+ *
+ * The database row is written before the Redis dispatch so a process crash cannot lose the
+ * work forever. On the next worker boot, look up the deterministic BullMQ id and recreate only
+ * the missing queue entry. BullMQ's job id uniqueness makes this safe if two workers race.
+ */
+export async function reconcileQueuedJobs() {
+  const pending = await prisma.job.findMany({
+    where: {
+      status: "QUEUED",
+      bullJobId: { not: null },
+      queue: { in: Object.keys(queueByName) },
+    },
+    orderBy: { updatedAt: "desc" },
+    // Bound each pass so a large outage cannot monopolize the worker event loop. The periodic
+    // reconciler will continue with the remaining rows after earlier jobs leave QUEUED.
+    take: 500,
+    select: { id: true, queue: true, type: true, payload: true, bullJobId: true },
+  });
+
+  let restored = 0;
+  for (const dbJob of pending) {
+    const queue = queueByName[dbJob.queue];
+    const bullJobId = dbJob.bullJobId;
+    if (!queue || !bullJobId) continue;
+
+    try {
+      if (await queue.getJob(bullJobId)) continue;
+
+      const payload =
+        dbJob.payload && typeof dbJob.payload === "object" && !Array.isArray(dbJob.payload)
+          ? (dbJob.payload as Record<string, unknown>)
+          : {};
+      await queue.add(
+        dbJob.type,
+        { ...payload, dbJobId: dbJob.id, ...injectTrace() },
+        { ...DEFAULT_JOB_OPTS, jobId: bullJobId },
+      );
+      restored += 1;
+      log.warn({ dbJobId: dbJob.id, queue: dbJob.queue, bullJobId }, "reconciled queued job");
+    } catch (err) {
+      log.error({ err, dbJobId: dbJob.id, queue: dbJob.queue }, "queued job reconciliation failed");
+    }
+  }
+
+  return { inspected: pending.length, restored };
+}
+
 export function createTrackedJob(params: TrackedJobParams) {
   return sharedCreateTrackedJob(prisma, params);
 }
@@ -205,9 +255,27 @@ async function handleFailed(job: BullJob | undefined, err: Error) {
 }
 
 function attachJobLifecycle(worker: Worker) {
-  worker.on("active", (job) => void handleActive(job));
-  worker.on("completed", (job) => void handleCompleted(job));
-  worker.on("failed", (job, err) => void handleFailed(job, err));
+  worker.on(
+    "active",
+    (job) =>
+      void handleActive(job).catch((err) =>
+        log.error({ err, jobId: job.id }, "job active mirror failed"),
+      ),
+  );
+  worker.on(
+    "completed",
+    (job) =>
+      void handleCompleted(job).catch((err) =>
+        log.error({ err, jobId: job.id }, "job completion mirror failed"),
+      ),
+  );
+  worker.on(
+    "failed",
+    (job, err) =>
+      void handleFailed(job, err).catch((mirrorError) =>
+        log.error({ err: mirrorError, jobId: job?.id }, "job failure mirror failed"),
+      ),
+  );
   worker.on("error", (err) => log.error({ err }, "worker runtime error"));
 }
 

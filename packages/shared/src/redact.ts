@@ -77,6 +77,26 @@ export function redact(text: string, knownNames: string[] = []): string {
   return output;
 }
 
+const COMMON_TITLE_CASE_PHRASES = new Set([
+  "What Happened",
+  "How Did",
+  "How Does",
+  "Can You",
+  "Could You",
+  "Tell Me",
+  "Show Me",
+  "Where Is",
+  "Why Did",
+  "Which Connector",
+]);
+
+/** Redact likely person names in free-form outbound questions. */
+export function redactLikelyPersonNames(text: string): string {
+  return text.replace(/\b([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})\b/g, (match) =>
+    COMMON_TITLE_CASE_PHRASES.has(match) ? match : "[REDACTED:name]",
+  );
+}
+
 export function redactDeep<T>(value: T, knownNames: string[] = []): T {
   if (typeof value === "string") return redact(value, knownNames) as unknown as T;
   if (

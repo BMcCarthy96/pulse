@@ -2,10 +2,12 @@ import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { assertWebRuntimeEnv } from "./lib/runtime-env";
 
 let registered = false;
 
 export function register() {
+  if (process.env.NEXT_RUNTIME !== "edge") assertWebRuntimeEnv();
   // Next invokes register in the server runtime. Keep the exporter opt-in so local development
   // remains quiet, and never initialize a tracer provider in an Edge/browser bundle.
   if (

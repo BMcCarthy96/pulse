@@ -9,6 +9,7 @@ declare module "next-auth" {
       name: string;
       email: string;
       demoSessionId?: string;
+      sessionVersion: number;
     };
   }
 
@@ -17,6 +18,7 @@ declare module "next-auth" {
     orgId: string;
     role: RoleName;
     demoSessionId?: string;
+    sessionVersion: number;
   }
 }
 
@@ -26,5 +28,6 @@ declare module "next-auth/jwt" {
     orgId: string;
     role: RoleName;
     demoSessionId?: string;
+    sessionVersion: number;
   }
 }

@@ -13,6 +13,26 @@ export const WEBHOOK_SIGNATURE_V2_HEADER = "x-pulse-signature-v2";
 export const WEBHOOK_TIMESTAMP_HEADER = "x-pulse-timestamp";
 export const WEBHOOK_DELIVERY_HEADER = "x-pulse-delivery";
 export const WEBHOOK_EVENT_HEADER = "x-pulse-event";
+export const DEFAULT_LOCAL_WEBHOOK_SECRET = "change-me-local-dev-webhook-secret";
+
+/**
+ * Resolve the shared webhook secret without allowing the development placeholder to be used in
+ * production. Keeping this check beside the signing helpers prevents the simulator and the
+ * receiver from quietly drifting into different fallback behaviour.
+ */
+export function getWebhookSigningSecret(
+  value = process.env.WEBHOOK_SIGNING_SECRET,
+  environment = process.env.NODE_ENV,
+): string {
+  const secret = value?.trim();
+  if (secret && !(environment === "production" && secret === DEFAULT_LOCAL_WEBHOOK_SECRET)) {
+    return secret;
+  }
+  if (environment === "production") {
+    throw new Error("WEBHOOK_SIGNING_SECRET must be configured in production");
+  }
+  return DEFAULT_LOCAL_WEBHOOK_SECRET;
+}
 
 export function signWebhookBody(rawBody: string, secret: string): string {
   return createHmac("sha256", secret).update(rawBody).digest("hex");

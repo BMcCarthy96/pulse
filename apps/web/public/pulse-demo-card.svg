@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Pulse integration investigation workspace</title>
+  <desc id="description">Cited evidence, human approval, and an operational audit trail for a synthetic healthcare integration incident.</desc>
+  <defs>
+    <linearGradient id="wash" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a" />
+      <stop offset="1" stop-color="#1e1b4b" />
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2dd4bf" />
+      <stop offset="1" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#wash)" />
+  <circle cx="1050" cy="-10" r="260" fill="#14b8a6" opacity="0.12" />
+  <circle cx="1180" cy="560" r="300" fill="#6366f1" opacity="0.14" />
+  <rect x="72" y="74" width="66" height="66" rx="18" fill="url(#mark)" />
+  <text x="105" y="119" fill="#fff" font-family="Arial, sans-serif" font-size="34" font-weight="700" text-anchor="middle">P</text>
+  <text x="162" y="120" fill="#fff" font-family="Arial, sans-serif" font-size="38" font-weight="700">Pulse</text>
+  <text x="72" y="258" fill="#fff" font-family="Arial, sans-serif" font-size="58" font-weight="700">Investigate the failure.</text>
+  <text x="72" y="326" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="31">Follow the evidence. Approve the recovery.</text>
+  <text x="72" y="372" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="31">Inspect the audit trail.</text>
+  <rect x="72" y="470" width="1056" height="1" fill="#94a3b8" opacity="0.35" />
+  <text x="72" y="526" fill="#5eead4" font-family="Arial, sans-serif" font-size="22" font-weight="700">Cited evidence · human approval · durable audit</text>
+  <text x="1128" y="526" fill="#94a3b8" font-family="Arial, sans-serif" font-size="22" text-anchor="end">pulse-live-demo.vercel.app</text>
+</svg>

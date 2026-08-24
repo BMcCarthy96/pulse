@@ -7,14 +7,14 @@ import {
   WEBHOOK_SIGNATURE_HEADER,
   WEBHOOK_SIGNATURE_V2_HEADER,
   WEBHOOK_TIMESTAMP_HEADER,
+  getWebhookSigningSecret,
 } from "@pulse/shared/webhook-signature";
 import { log } from "../log.js";
 import { getChaosState } from "./chaos.js";
 import { prisma } from "@pulse/db";
 
 const WEBHOOK_TARGET_URL = process.env.WEBHOOK_TARGET_URL ?? "http://localhost:3010";
-const WEBHOOK_SIGNING_SECRET =
-  process.env.WEBHOOK_SIGNING_SECRET ?? "change-me-local-dev-webhook-secret";
+const WEBHOOK_SIGNING_SECRET = getWebhookSigningSecret();
 const EMIT_TIMEOUT_MS = 5000;
 
 async function post(

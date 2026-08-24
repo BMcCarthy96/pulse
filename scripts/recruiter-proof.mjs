@@ -48,6 +48,12 @@ function packageVersion(path) {
   return readJson(join(root, path)).version;
 }
 
+function replaceRequired(content, pattern, replacement, label) {
+  if (!pattern.test(content)) throw new Error(`Could not update ${label}`);
+  pattern.lastIndex = 0;
+  return content.replace(pattern, replacement);
+}
+
 try {
   const existing = readJson(manifestPath);
   const appVersions = [
@@ -66,6 +72,15 @@ try {
 
   const corpus = readFileSync(join(root, "evals/corpus.ts"), "utf8");
   const investigationFixtures = readJson(join(root, "evals/investigation-fixtures.json"));
+  const evalReport = readJson(join(root, "evals/reports/latest.json"));
+  const aggregate = evalReport.aggregate ?? {};
+  const rate = (key) => {
+    const value = aggregate[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error(`Missing numeric eval aggregate: ${key}`);
+    }
+    return value;
+  };
   const derived = {
     appVersion: appVersions[0],
     apiVersion,
@@ -78,10 +93,21 @@ try {
       summaryCases: (corpus.match(/^\s{4}id:\s/gm) ?? []).length,
       investigationFixtures: investigationFixtures.length,
       safetyCategories: new Set(investigationFixtures.map((item) => item.category)).size,
+      groundingRate: rate("required-fact grounding"),
+      schemaPassRate: rate("critical / schema"),
+      leakGuardRate: Math.min(
+        rate("critical / pre-send leakage refusal"),
+        rate("critical / output leakage"),
+      ),
+      injectionResistanceRate: rate("critical / injection resistance"),
     },
   };
 
   if (mode === "write") {
+    const ciRunUrl =
+      process.env.GITHUB_RUN_ID && process.env.GITHUB_REPOSITORY
+        ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+        : undefined;
     const next = {
       ...existing,
       ...derived,
@@ -89,31 +115,79 @@ try {
       totalAutomatedTests: derived.tests.unit + derived.tests.integration + derived.tests.e2e,
       generatedAt: new Date().toISOString().slice(0, 10),
     };
+    if (ciRunUrl) next.ciRunUrl = ciRunUrl;
+    else delete next.ciRunUrl;
     // A local count refresh is not a commit-specific CI verification. Release automation owns
     // the immutable run/SHA association; keep the local manifest honest about what it proves.
     delete next.verifiedAt;
     delete next.lastVerifiedCommit;
     writeFileSync(manifestPath, `${JSON.stringify(next, null, 2)}\n`);
+
+    const readmePath = join(root, "README.md");
+    let readme = readFileSync(readmePath, "utf8");
+    for (const [label, count] of Object.entries(derived.tests)) {
+      const display = label === "e2e" ? "E2E" : label[0].toUpperCase() + label.slice(1);
+      const row = new RegExp(
+        `^(\\|\\s*\\*\\*${display}\\*\\*[^\\n]*\\|\\s*)\\d+(\\s*\\|\\s*)$`,
+        "m",
+      );
+      readme = replaceRequired(
+        readme,
+        row,
+        (_match, prefix, suffix) => `${prefix}${count}${suffix}`,
+        `README ${display} test count`,
+      );
+    }
+    writeFileSync(readmePath, readme);
+
+    const positioningPath = join(root, "docs/positioning.md");
+    const positioning = readFileSync(positioningPath, "utf8");
+    const total = derived.tests.unit + derived.tests.integration + derived.tests.e2e;
+    const updatedPositioning = replaceRequired(
+      positioning,
+      /\b\d+ automated tests\b/g,
+      `${total} automated tests`,
+      "positioning total test count",
+    );
+    writeFileSync(positioningPath, updatedPositioning);
+
     console.log(`Updated ${manifestPath}`);
+    console.log(`Updated generated test claims in ${readmePath} and ${positioningPath}`);
     console.log(JSON.stringify(derived, null, 2));
   } else {
     const mismatches = [];
     for (const key of ["appVersion", "apiVersion", "tests"]) {
       if (JSON.stringify(existing[key]) !== JSON.stringify(derived[key])) mismatches.push(key);
     }
-    const existingEvalCounts = {
-      summaryCases: existing.evals?.summaryCases,
-      investigationFixtures: existing.evals?.investigationFixtures,
-      safetyCategories: existing.evals?.safetyCategories,
-    };
-    if (JSON.stringify(existingEvalCounts) !== JSON.stringify(derived.evals))
-      mismatches.push("evals");
+    for (const key of [
+      "summaryCases",
+      "investigationFixtures",
+      "safetyCategories",
+      "groundingRate",
+      "schemaPassRate",
+      "leakGuardRate",
+      "injectionResistanceRate",
+    ]) {
+      if (existing.evals?.[key] !== derived.evals[key]) mismatches.push(`evals.${key}`);
+    }
     if (typeof existing.totalAutomatedTests === "number") {
       const total = derived.tests.unit + derived.tests.integration + derived.tests.e2e;
       if (existing.totalAutomatedTests !== total) mismatches.push("totalAutomatedTests");
     }
     if (typeof existing.ciRunUrl === "string" && /actions\/workflows\//.test(existing.ciRunUrl)) {
       mismatches.push("ciRunUrl (must point to an immutable run)");
+    }
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+    const positioning = readFileSync(join(root, "docs/positioning.md"), "utf8");
+    const countClaim = (label, count) =>
+      new RegExp("\\*\\*" + label + "\\*\\*[^\\n]*\\|\\s*" + count + "\\s*\\|").test(readme);
+    if (!countClaim("Unit", derived.tests.unit)) mismatches.push("README unit test claim");
+    if (!countClaim("Integration", derived.tests.integration))
+      mismatches.push("README integration test claim");
+    if (!countClaim("E2E", derived.tests.e2e)) mismatches.push("README E2E test claim");
+    const total = derived.tests.unit + derived.tests.integration + derived.tests.e2e;
+    if (!new RegExp("\\b" + total + " automated tests\\b").test(positioning)) {
+      mismatches.push("positioning automated test claim");
     }
     if ("verifiedAt" in existing || "lastVerifiedCommit" in existing) {
       mismatches.push("legacy verification metadata (run proof:refresh)");

@@ -53,7 +53,7 @@ async function removeTenantQueueState(refs: TenantRefs) {
       const jobs = await queue.getJobs(
         ["waiting", "delayed", "prioritized", "paused", "active", "completed", "failed"],
         0,
-        999,
+        9_999,
       );
       for (const job of jobs) {
         if (!belongsToTenant(job, refs)) continue;
@@ -133,19 +133,31 @@ async function clearTenantRedisState(refs: TenantRefs) {
   }
 }
 
-/** Five-minute janitor for guarded recruiter tenants. Claims rows before deleting the org. */
+/** Five-minute janitor for guarded demo tenants. Claims rows before deleting the org. */
 export async function runDemoCleanup() {
   if (process.env.DEMO_MODE !== "true") return { deleted: 0 };
+  const now = new Date();
+  const staleDeletingAt = new Date(now.getTime() - 10 * 60_000);
   const expired = await prisma.demoSession.findMany({
-    where: { status: "ACTIVE", expiresAt: { lte: new Date() } },
-    select: { id: true, orgId: true, userId: true },
+    where: {
+      OR: [
+        { status: "ACTIVE", expiresAt: { lte: now } },
+        { status: "DELETING", lastSeenAt: { lte: staleDeletingAt } },
+      ],
+    },
+    select: { id: true, orgId: true, userId: true, status: true },
     take: 50,
   });
   let deleted = 0;
   for (const session of expired) {
     const claimed = await prisma.demoSession.updateMany({
-      where: { id: session.id, status: "ACTIVE" },
-      data: { status: "DELETING" },
+      where: {
+        id: session.id,
+        ...(session.status === "ACTIVE"
+          ? { status: "ACTIVE", expiresAt: { lte: now } }
+          : { status: "DELETING", lastSeenAt: { lte: staleDeletingAt } }),
+      },
+      data: { status: "DELETING", lastSeenAt: now },
     });
     if (claimed.count !== 1) continue;
 
@@ -171,7 +183,7 @@ export async function runDemoCleanup() {
     const redisCleared = await clearTenantRedisState(refs);
     if (!queuesCleared || !redisCleared) {
       await prisma.demoSession
-        .update({ where: { id: session.id }, data: { status: "ACTIVE" } })
+        .update({ where: { id: session.id }, data: { status: "DELETING", lastSeenAt: new Date() } })
         .catch(() => undefined);
       log.warn(
         { orgId: session.orgId, queuesCleared, redisCleared },
@@ -185,7 +197,7 @@ export async function runDemoCleanup() {
     } catch (error) {
       // Allow a later pass to retry if a concurrent worker still holds a tenant row.
       await prisma.demoSession
-        .update({ where: { id: session.id }, data: { status: "ACTIVE" } })
+        .update({ where: { id: session.id }, data: { status: "DELETING", lastSeenAt: new Date() } })
         .catch(() => undefined);
       log.warn({ orgId: session.orgId, err: error }, "could not delete expired demo org");
     }

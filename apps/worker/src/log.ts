@@ -20,11 +20,6 @@ export interface LogContext {
   [key: string]: unknown;
 }
 
-async function getFallbackOrgId(): Promise<string | null> {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id ?? null;
-}
-
 const pendingEntries: Prisma.LogEntryCreateManyInput[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
 
@@ -48,7 +43,7 @@ async function flush() {
     const incidentIds = [
       ...new Set(batch.map((entry) => entry.incidentId).filter(Boolean)),
     ] as string[];
-    const [connectors, jobs, syncRuns, incidents, fallbackOrgId] = await Promise.all([
+    const [connectors, jobs, syncRuns, incidents] = await Promise.all([
       prisma.connector.findMany({
         where: { id: { in: connectorIds } },
         select: { id: true, orgId: true },
@@ -62,37 +57,46 @@ async function flush() {
         where: { id: { in: incidentIds } },
         select: { id: true, orgId: true },
       }),
-      getFallbackOrgId(),
     ]);
     const orgByConnector = new Map(connectors.map((item) => [item.id, item.orgId]));
     const orgByJob = new Map(jobs.map((item) => [item.id, item.orgId]));
     const orgBySyncRun = new Map(syncRuns.map((item) => [item.id, item.connector.orgId]));
     const orgByIncident = new Map(incidents.map((item) => [item.id, item.orgId]));
-    const existingConnectorIds = new Set(connectors.map((item) => item.id));
     const resolved: Prisma.LogEntryCreateManyInput[] = batch.flatMap((entry) => {
-      const orgId =
-        entry.orgId ||
-        (entry.connectorId ? orgByConnector.get(entry.connectorId) : undefined) ||
-        (entry.jobId ? orgByJob.get(entry.jobId) : undefined) ||
-        (entry.syncRunId ? orgBySyncRun.get(entry.syncRunId) : undefined) ||
-        (entry.incidentId ? orgByIncident.get(entry.incidentId) : undefined) ||
-        (!entry.connectorId && !entry.jobId && !entry.syncRunId && !entry.incidentId
-          ? fallbackOrgId
-          : undefined);
-      return orgId
-        ? [
-            {
-              ...entry,
-              orgId,
-              // An ephemeral demo reset may remove a connector after the log was queued. Keep
-              // the useful message and let the optional connector relation become null.
-              connectorId:
-                entry.connectorId && existingConnectorIds.has(entry.connectorId)
-                  ? entry.connectorId
-                  : null,
-            },
-          ]
-        : [];
+      const relationOrgIds = {
+        connector: entry.connectorId ? orgByConnector.get(entry.connectorId) : undefined,
+        job: entry.jobId ? orgByJob.get(entry.jobId) : undefined,
+        syncRun: entry.syncRunId ? orgBySyncRun.get(entry.syncRunId) : undefined,
+        incident: entry.incidentId ? orgByIncident.get(entry.incidentId) : undefined,
+      };
+      const targetOrgId =
+        relationOrgIds.connector ||
+        relationOrgIds.job ||
+        relationOrgIds.syncRun ||
+        relationOrgIds.incident;
+      // A caller-supplied org is only trusted when it agrees with every durable target. This
+      // keeps a stale or malformed context from attaching tenant A's connector to tenant B's log.
+      if (
+        entry.orgId &&
+        Object.values(relationOrgIds).some(
+          (relationOrgId) => relationOrgId && relationOrgId !== entry.orgId,
+        )
+      )
+        return [];
+      const orgId = entry.orgId || targetOrgId;
+      if (!orgId) return [];
+      return [
+        {
+          ...entry,
+          orgId,
+          // Scalar links are not composite foreign keys. Keep only IDs proven to belong to this
+          // tenant; a reset can also remove an optional relation between lookup and insert.
+          connectorId: relationOrgIds.connector === orgId ? entry.connectorId : null,
+          jobId: relationOrgIds.job === orgId ? entry.jobId : null,
+          syncRunId: relationOrgIds.syncRun === orgId ? entry.syncRunId : null,
+          incidentId: relationOrgIds.incident === orgId ? entry.incidentId : null,
+        },
+      ];
     });
     const orgIds = [...new Set(resolved.map((entry) => entry.orgId))];
     const existingOrganizations = await prisma.organization.findMany({
@@ -103,7 +107,29 @@ async function flush() {
     // Demo tenants are intentionally disposable. If one disappears while its worker log is
     // buffered, drop only that orphaned entry instead of failing the entire createMany batch.
     const data = resolved.filter((entry) => existingOrgIds.has(entry.orgId));
-    if (data.length > 0) await prisma.logEntry.createMany({ data });
+    if (data.length > 0) {
+      try {
+        await prisma.logEntry.createMany({ data });
+      } catch (err) {
+        // A demo reset can delete a connector between the lookup above and this batch insert.
+        // Preserve the tenant-scoped log and drop only the now-stale optional relation.
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          (err as { code?: unknown }).code === "P2003"
+        ) {
+          await prisma.logEntry.createMany({
+            data: data.map(({ connectorId: _connectorId, ...entry }) => ({
+              ...entry,
+              connectorId: null,
+            })),
+          });
+        } else {
+          throw err;
+        }
+      }
+    }
   } catch (err) {
     console.warn("[log] failed to flush LogEntry batch to DB:", err);
   }

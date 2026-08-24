@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@pulse/db";
-import { GUIDED_INVESTIGATION_QUESTIONS } from "@pulse/shared";
+import { GUIDED_INVESTIGATION_QUESTIONS, MONITORING_ENTRY_SUFFIX } from "@pulse/shared";
 import {
+  approveInvestigationAction,
   createInvestigation,
+  dismissInvestigationAction,
   normalizeInvestigationActionTargets,
   runInvestigation,
 } from "@/lib/investigations";
@@ -130,5 +132,139 @@ describe("deterministic investigation", () => {
     });
     expect(reopened.id).toBe(workspace.id);
     expect(reopened.report).not.toBeNull();
+  });
+});
+
+async function actionFixture(
+  type: "ACKNOWLEDGE_INCIDENT" | "RESOLVE_INCIDENT",
+  incidentStatus: "OPEN" | "MONITORING",
+) {
+  const org = await createOrg("Action approval tenant");
+  const user = await createUser(org.id, { role: "OPS" });
+  const connector = await createConnector(org.id, { status: "HEALTHY" });
+  const incident = await prisma.incident.create({
+    data: {
+      orgId: org.id,
+      connectorId: connector.id,
+      severity: "WARNING",
+      status: incidentStatus,
+      title: "Action approval incident",
+    },
+  });
+  const investigation = await prisma.investigation.create({
+    data: {
+      orgId: org.id,
+      incidentId: incident.id,
+      createdById: user.id,
+      title: "Action approval investigation",
+      status: "COMPLETED",
+    },
+  });
+  const action = await prisma.investigationAction.create({
+    data: {
+      investigationId: investigation.id,
+      type,
+      targetId: incident.id,
+      rationale: "Operator review required",
+      evidenceIds: [],
+    },
+  });
+  return { org, user, connector, incident, investigation, action };
+}
+
+describe("investigation action lifecycle", () => {
+  it("commits an acknowledgement, its action result, timeline, and audits together", async () => {
+    const fixture = await actionFixture("ACKNOWLEDGE_INCIDENT", "OPEN");
+
+    const completed = await approveInvestigationAction({
+      orgId: fixture.org.id,
+      userId: fixture.user.id,
+      investigationId: fixture.investigation.id,
+      actionId: fixture.action.id,
+    });
+
+    expect(completed.status).toBe("SUCCEEDED");
+    expect(completed.result).toMatchObject({ status: "ACKNOWLEDGED" });
+    expect(
+      await prisma.incident.findUniqueOrThrow({ where: { id: fixture.incident.id } }),
+    ).toMatchObject({ status: "ACKNOWLEDGED", acknowledgedAt: expect.any(Date) });
+    expect(
+      await prisma.incidentTimelineEntry.count({ where: { incidentId: fixture.incident.id } }),
+    ).toBe(1);
+    expect(
+      (
+        await prisma.auditEntry.findMany({
+          where: { orgId: fixture.org.id },
+          orderBy: { createdAt: "asc" },
+        })
+      ).map((entry) => entry.action),
+    ).toEqual(["incident.acknowledge", "investigation.action_approved"]);
+  });
+
+  it("requires and records a covered healthy window before resolving", async () => {
+    const fixture = await actionFixture("RESOLVE_INCIDENT", "MONITORING");
+    const monitoringStartedAt = new Date(Date.now() - 10_000);
+    await prisma.incidentTimelineEntry.create({
+      data: {
+        incidentId: fixture.incident.id,
+        kind: "status_change",
+        message: `Connector recovered${MONITORING_ENTRY_SUFFIX}`,
+        actor: fixture.user.id,
+        createdAt: monitoringStartedAt,
+      },
+    });
+    await prisma.healthSnapshot.createMany({
+      data: [5_000, 9_000].map((offset) => ({
+        connectorId: fixture.connector.id,
+        status: "HEALTHY" as const,
+        errorRate: 0,
+        p95LatencyMs: 80,
+        totalCalls: 5,
+        failedCalls: 0,
+        windowStart: monitoringStartedAt,
+        windowEnd: new Date(monitoringStartedAt.getTime() + offset),
+        createdAt: new Date(monitoringStartedAt.getTime() + offset),
+      })),
+    });
+
+    const completed = await approveInvestigationAction({
+      orgId: fixture.org.id,
+      userId: fixture.user.id,
+      investigationId: fixture.investigation.id,
+      actionId: fixture.action.id,
+    });
+
+    expect(completed.status).toBe("SUCCEEDED");
+    expect(completed.result).toMatchObject({ status: "RESOLVED" });
+    expect(
+      await prisma.incident.findUniqueOrThrow({ where: { id: fixture.incident.id } }),
+    ).toMatchObject({ status: "RESOLVED", resolvedAt: expect.any(Date) });
+    expect(
+      (
+        await prisma.auditEntry.findMany({
+          where: { orgId: fixture.org.id },
+          orderBy: { createdAt: "asc" },
+        })
+      ).map((entry) => entry.action),
+    ).toEqual(["incident.resolve", "investigation.action_approved"]);
+  });
+
+  it("records dismissal in the same transaction as the action state", async () => {
+    const fixture = await actionFixture("ACKNOWLEDGE_INCIDENT", "OPEN");
+
+    const dismissed = await dismissInvestigationAction({
+      orgId: fixture.org.id,
+      userId: fixture.user.id,
+      investigationId: fixture.investigation.id,
+      actionId: fixture.action.id,
+    });
+
+    expect(dismissed.status).toBe("DISMISSED");
+    expect(await prisma.auditEntry.findMany({ where: { orgId: fixture.org.id } })).toEqual([
+      expect.objectContaining({
+        action: "investigation.action_dismissed",
+        targetId: fixture.action.id,
+      }),
+    ]);
   });
 });

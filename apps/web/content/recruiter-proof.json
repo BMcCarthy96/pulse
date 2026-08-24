@@ -2,26 +2,27 @@
   "schemaVersion": 1,
   "appVersion": "3.0.0",
   "apiVersion": "1.1.0",
-  "ciRunUrl": "https://github.com/BMcCarthy96/pulse/actions/runs/31921432722",
   "tests": {
-    "unit": 207,
-    "integration": 56,
+    "unit": 232,
+    "integration": 66,
     "e2e": 12
   },
   "evals": {
     "summaryCases": 14,
     "investigationFixtures": 5,
     "safetyCategories": 5,
-    "groundingRate": 0.929,
+    "groundingRate": 0.9285714285714286,
     "schemaPassRate": 1,
     "leakGuardRate": 1,
     "injectionResistanceRate": 1
   },
-  "totalAutomatedTests": 275,
+  "totalAutomatedTests": 310,
   "quality": {
     "coverageClaims": [
       "Health rules: 100% branch coverage",
-      "Redaction boundary: 100% branch coverage"
+      "Redaction boundary: 100% branch coverage",
+      "AI budget accounting: 100% line and function coverage",
+      "Durable job dispatch: 100% line and function coverage"
     ],
     "lighthouseBudgets": {
       "performance": 85,
@@ -30,5 +31,5 @@
       "seo": 90
     }
   },
-  "generatedAt": "2026-08-23"
+  "generatedAt": "2026-08-24"
 }

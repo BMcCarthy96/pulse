@@ -7,10 +7,37 @@ import { APP_NAME } from "@pulse/shared";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { GuidedWalkthroughProvider, WalkthroughControls } from "@/components/guided-walkthrough";
 import { DemoControls } from "@/components/demo-controls";
+import { prisma } from "@pulse/db";
+import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const user = session?.user;
+  if (!user) redirect("/login");
+  const currentUser = await prisma.user.findFirst({
+    where: { id: user.id, orgId: user.orgId },
+    select: { status: true, role: true, sessionVersion: true },
+  });
+  if (
+    !currentUser ||
+    currentUser.status !== "ACTIVE" ||
+    currentUser.role !== user.role ||
+    currentUser.sessionVersion !== (user.sessionVersion ?? 0)
+  ) {
+    redirect(user.demoSessionId ? "/demo?expired=1" : "/login?expired=1");
+  }
+  if (user.demoSessionId) {
+    const activeDemo = await prisma.demoSession.findFirst({
+      where: {
+        id: user.demoSessionId,
+        userId: user.id,
+        status: "ACTIVE",
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (!activeDemo) redirect("/demo?expired=1");
+  }
 
   return (
     <GuidedWalkthroughProvider demoSessionId={user?.demoSessionId}>
@@ -71,7 +98,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           </header>
 
-          <main id="main-content" className="bg-muted/20 min-w-0 flex-1 p-4 sm:p-6">
+          <main
+            id="main-content"
+            data-demo-session={user.demoSessionId ? "true" : "false"}
+            className="bg-muted/20 min-w-0 flex-1 p-4 sm:p-6"
+          >
             {children}
           </main>
         </div>

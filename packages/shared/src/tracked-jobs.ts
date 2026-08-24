@@ -15,6 +15,15 @@ export interface TrackedJobParams {
   opts?: JobsOptions;
 }
 
+function newTrackedJobId() {
+  const runtimeCrypto = (globalThis as unknown as { crypto?: { randomUUID?: () => string } })
+    .crypto;
+  return (
+    runtimeCrypto?.randomUUID?.() ??
+    "job-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12)
+  );
+}
+
 /**
  * Creates the DB Job row first (durable, queryable history), then enqueues the BullMQ job
  * with `{dbJobId}` merged into its data so lifecycle events can find the mirrored row.
@@ -22,8 +31,11 @@ export interface TrackedJobParams {
  * sides of the pipeline mirror jobs identically.
  */
 export async function createTrackedJob(prisma: PrismaClient, params: TrackedJobParams) {
+  const durableJobId = newTrackedJobId();
   const dbJob = await prisma.job.create({
     data: {
+      id: durableJobId,
+      bullJobId: durableJobId,
       orgId: params.orgId,
       connectorId: params.connectorId,
       syncRunId: params.syncRunId,
@@ -43,13 +55,12 @@ export async function createTrackedJob(prisma: PrismaClient, params: TrackedJobP
       { ...(params.opts ?? DEFAULT_JOB_OPTS), jobId: dbJob.id },
     );
   } catch (error) {
-    // Keep the durable row visible for reconciliation instead of leaving an apparently queued
-    // job that was never accepted by Redis.
+    // Keep the durable row queued and visible for reconciliation instead of turning a dispatch
+    // outage into a false upstream failure in the health engine.
     await prisma.job
       .update({
         where: { id: dbJob.id },
         data: {
-          status: "FAILED",
           lastError: error instanceof Error ? error.message.slice(0, 500) : "queue dispatch failed",
         },
       })
@@ -57,7 +68,6 @@ export async function createTrackedJob(prisma: PrismaClient, params: TrackedJobP
     throw error;
   }
 
-  await prisma.job.update({ where: { id: dbJob.id }, data: { bullJobId: String(bullJob.id) } });
   return { dbJobId: dbJob.id, bullJobId: bullJob.id };
 }
 
@@ -77,19 +87,23 @@ export async function retryTrackedJob(
 
   const claimed = await prisma.job.updateMany({
     where: { id: dbJobId, status: { in: ["FAILED", "DEAD"] } },
-    data: { status: "QUEUED", bullJobId: null, lastError: null },
+    data: {
+      status: "QUEUED",
+      bullJobId: `retry-${dbJob.id}-${dbJob.updatedAt.getTime().toString(36)}`,
+      lastError: null,
+    },
   });
   if (claimed.count !== 1) {
     throw ApiError.conflict("job is already queued or no longer retryable");
   }
 
-  let bullJob;
+  const retryJobId = `retry-${dbJob.id}-${dbJob.updatedAt.getTime().toString(36)}`;
   try {
-    bullJob = await queue.add(
+    await queue.add(
       dbJob.type,
       { ...(dbJob.payload as object), dbJobId: dbJob.id, ...injectTrace() },
       // BullMQ reserves ':' as an internal key separator and rejects it in custom job IDs.
-      { ...DEFAULT_JOB_OPTS, jobId: `retry-${dbJob.id}-${Date.now().toString(36)}` },
+      { ...DEFAULT_JOB_OPTS, jobId: retryJobId },
     );
   } catch (error) {
     await prisma.job
@@ -104,9 +118,8 @@ export async function retryTrackedJob(
     throw error;
   }
 
-  await prisma.job.update({
-    where: { id: dbJobId },
-    data: { bullJobId: String(bullJob.id) },
-  });
-  return { dbJobId, bullJobId: bullJob.id };
+  // The deterministic retry ID was written with the QUEUED claim before dispatch. There is no
+  // second DB mirror write to fail after Redis accepts the command, so reconciliation can always
+  // find the same queue job after a producer crash.
+  return { dbJobId, bullJobId: retryJobId };
 }

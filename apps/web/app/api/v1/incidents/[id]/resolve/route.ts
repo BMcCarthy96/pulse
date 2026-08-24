@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@pulse/db";
 import { ApiError, incidentStatusChangeMessage } from "@pulse/shared";
 import { handleApiError, requireRole } from "@/lib/authz";
-import { writeAudit } from "@/lib/audit";
 
 export const POST = handleApiError("incidents.resolve", async (_req, ctx) => {
   const session = await requireRole("OPS");
@@ -13,10 +12,11 @@ export const POST = handleApiError("incidents.resolve", async (_req, ctx) => {
   if (incident.status === "RESOLVED") throw ApiError.conflict("incident is already resolved");
 
   const updated = await prisma.$transaction(async (tx) => {
-    const next = await tx.incident.update({
-      where: { id },
+    const claimed = await tx.incident.updateMany({
+      where: { id, orgId: session.user.orgId, status: incident.status },
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
+    if (claimed.count !== 1) throw ApiError.conflict("incident changed before it was resolved");
     await tx.incidentTimelineEntry.create({
       data: {
         incidentId: id,
@@ -33,16 +33,17 @@ export const POST = handleApiError("incidents.resolve", async (_req, ctx) => {
         actor: session.user.id,
       },
     });
-    return next;
-  });
-
-  await writeAudit({
-    orgId: session.user.orgId,
-    userId: session.user.id,
-    action: "incident.resolve",
-    targetType: "incident",
-    targetId: id,
-    metadata: { from: incident.status, manual: true },
+    await tx.auditEntry.create({
+      data: {
+        orgId: session.user.orgId,
+        userId: session.user.id,
+        action: "incident.resolve",
+        targetType: "incident",
+        targetId: id,
+        metadata: { from: incident.status, manual: true },
+      },
+    });
+    return tx.incident.findUniqueOrThrow({ where: { id } });
   });
 
   return NextResponse.json({ incident: updated });

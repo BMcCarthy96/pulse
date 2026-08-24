@@ -11,9 +11,9 @@ Pulse deploys as two services against two managed data stores:
 
 Target spend: Railway Hobby (~$5/mo + usage), Vercel Hobby (free). See [Costs](#costs).
 
-> **Status:** the repository is deployment-ready. The live deployment still requires connecting
-> the GitHub repository to your Railway and Vercel accounts. Follow the steps below in order so
-> the worker is ready before the public demo is opened.
+> **Status:** the repository is deployment-ready, and the public Vercel entrypoint is linked from the README.
+> Railway worker settings, environment variables, the daily demo smoke variable, and the final tag
+> remain account-owned release steps. Use the runbook below to reproduce or audit that setup.
 >
 > The worker image, however, is no longer merely _written_ — it is **built and booted** on every
 > CI run (the `Worker image` job), against real Postgres and Redis containers, asserting that it
@@ -111,6 +111,8 @@ plugin references — type them exactly; Railway resolves them at deploy time.
 | `HEALTH_TICK_SEC`                   | `30`                                                       |
 | `HEALTH_WINDOW_MIN`                 | `15`                                                       |
 | `INCIDENT_STABILITY_MIN`            | `10`                                                       |
+| `OPERATIONAL_RETENTION_DAYS`        | `30`                                                       |
+| `AUDIT_RETENTION_DAYS`              | `365`                                                      |
 | `NODE_ENV`                          | `production`                                               |
 
 `WEBHOOK_TARGET_URL` is a placeholder because of a genuine circular dependency: the worker needs

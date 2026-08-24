@@ -36,6 +36,11 @@ enum Role {
   VIEWER
 }
 
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
 model User {
   id                    String                @id @default(cuid())
   orgId                 String
@@ -44,6 +49,8 @@ model User {
   name                  String
   passwordHash          String
   role                  Role                  @default(VIEWER)
+  status                UserStatus            @default(ACTIVE)
+  sessionVersion        Int                   @default(0)
   createdAt             DateTime              @default(now())
   auditEntries          AuditEntry[]
   aiRuns                AiRun[]
@@ -211,6 +218,7 @@ model IntegrationEvent {
 
   @@unique([connectorId, dedupeKey])
   @@index([connectorId, receivedAt])
+  @@index([orgId, connectorId, receivedAt])
 }
 
 // ── Logs ────────────────────────────────────────────────────
@@ -278,6 +286,7 @@ model Incident {
   investigations  Investigation[]
 
   @@index([connectorId, status])
+  @@index([orgId, status, openedAt])
 }
 
 model IncidentTimelineEntry {

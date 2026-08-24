@@ -39,6 +39,18 @@ export default defineConfig({
           lines: 100,
           statements: 100,
         },
+        "packages/shared/src/ai-budget.ts": {
+          branches: 90,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
+        "packages/shared/src/tracked-jobs.ts": {
+          branches: 80,
+          functions: 100,
+          lines: 100,
+          statements: 100,
+        },
       },
     },
   },

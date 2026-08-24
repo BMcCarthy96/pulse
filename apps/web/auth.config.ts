@@ -15,6 +15,7 @@ export const authConfig = {
         token.orgId = (user as { orgId: string }).orgId;
         token.role = (user as { role: string }).role as never;
         token.demoSessionId = (user as { demoSessionId?: string }).demoSessionId;
+        token.sessionVersion = (user as { sessionVersion?: number }).sessionVersion ?? 0;
       }
       return token;
     },
@@ -24,6 +25,8 @@ export const authConfig = {
       session.user.role = token.role as never;
       session.user.demoSessionId =
         typeof token.demoSessionId === "string" ? token.demoSessionId : undefined;
+      session.user.sessionVersion =
+        typeof token.sessionVersion === "number" ? token.sessionVersion : 0;
       return session;
     },
   },

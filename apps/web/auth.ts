@@ -100,6 +100,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role as RoleName,
           name: user.name,
           email: user.email,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -146,6 +147,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: provisioned.user.name,
           email: provisioned.user.email,
           demoSessionId: provisioned.id,
+          sessionVersion: provisioned.user.sessionVersion,
         };
       },
     }),

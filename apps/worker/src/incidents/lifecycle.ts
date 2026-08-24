@@ -117,15 +117,20 @@ async function transition(
   to: "OPEN" | "ACKNOWLEDGED" | "MONITORING" | "RESOLVED",
   extra: { note?: string; connectorId?: string } = {},
 ) {
-  await prisma.$transaction(async (tx) => {
-    await tx.incident.update({
-      where: { id: incidentId },
+  const changed = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.incident.updateMany({
+      where: { id: incidentId, status: from as "OPEN" | "ACKNOWLEDGED" | "MONITORING" },
       data: { status: to, ...(to === "RESOLVED" ? { resolvedAt: new Date() } : {}) },
     });
+    if (claimed.count !== 1) return false;
     await addTimelineEntry(tx, incidentId, "status_change", incidentStatusChangeMessage(from, to));
     if (extra.note) await addTimelineEntry(tx, incidentId, "health_transition", extra.note);
+    return true;
   });
-  log.info({ incidentId, connectorId: extra.connectorId }, `incident ${from} → ${to}`);
+  if (changed) {
+    log.info({ incidentId, connectorId: extra.connectorId }, `incident ${from} → ${to}`);
+  }
+  return changed;
 }
 
 /**

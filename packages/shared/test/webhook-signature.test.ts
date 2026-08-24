@@ -4,6 +4,8 @@ import {
   signWebhookBodyV2,
   verifyWebhookSignature,
   verifyWebhookSignatureV2,
+  getWebhookSigningSecret,
+  DEFAULT_LOCAL_WEBHOOK_SECRET,
 } from "../src/webhook-signature.js";
 
 const SECRET = "test-signing-secret";
@@ -97,5 +99,18 @@ describe("timestamped webhook signatures", () => {
     expect(
       verifyWebhookSignatureV2(BODY, `v2=${signature}`, String(timestamp), SECRET, timestamp),
     ).toBe(true);
+  });
+});
+
+describe("webhook secret resolution", () => {
+  it("allows an explicitly configured secret", () => {
+    expect(getWebhookSigningSecret("configured", "production")).toBe("configured");
+  });
+
+  it("keeps the placeholder local-only", () => {
+    expect(() => getWebhookSigningSecret(DEFAULT_LOCAL_WEBHOOK_SECRET, "production")).toThrow(
+      /must be configured/,
+    );
+    expect(getWebhookSigningSecret(undefined, "test")).toBe(DEFAULT_LOCAL_WEBHOOK_SECRET);
   });
 });

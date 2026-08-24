@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { Redis } from "ioredis";
+import { randomUUID } from "node:crypto";
 import { APP_NAME, QUEUE_NAMES, getHealthConfig, injectTrace } from "@pulse/shared";
 import { prisma } from "@pulse/db";
 
@@ -20,6 +21,7 @@ import {
   demoResetQueue,
   demoCleanupQueue,
   createTrackedWorker,
+  reconcileQueuedJobs,
   eligibilityBackoffStrategy,
   incidentSummaryBackoffStrategy,
 } from "./queues.js";
@@ -33,11 +35,15 @@ import { runRetentionPrune } from "./processors/retention.js";
 import { runDemoReset } from "./processors/demo-reset.js";
 import { runDemoCleanup } from "./processors/demo-cleanup.js";
 import { startTelemetry, stopTelemetry } from "./telemetry.js";
+import { assertWorkerRuntimeEnv } from "./runtime-env.js";
 
 // Railway provides PORT for the service health check. Keep SIMULATOR_PORT as the local and
 // simulator-specific fallback so the same image works in Docker Compose and on Railway.
 const SIMULATOR_PORT = Number(process.env.PORT ?? process.env.SIMULATOR_PORT ?? 4001);
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
+const SCHEDULER_LEASE_KEY = "pulse:scheduler:repeatables";
+const RELEASE_LEASE_SCRIPT =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
 /**
  * Both schedules are fully rebuilt on every boot. Matching the old entry by id was not
@@ -109,7 +115,25 @@ async function registerRepeatables() {
   );
 }
 
+async function registerRepeatablesWithLease(redis: Redis) {
+  const token = randomUUID();
+  const acquired = await redis.set(SCHEDULER_LEASE_KEY, token, "PX", 60_000, "NX");
+  if (acquired !== "OK") {
+    log.warn("repeatable scheduler lease is held by another worker; keeping existing schedules");
+    return false;
+  }
+  try {
+    await registerRepeatables();
+    return true;
+  } finally {
+    await redis
+      .eval(RELEASE_LEASE_SCRIPT, 1, SCHEDULER_LEASE_KEY, token)
+      .catch((err) => log.warn({ err }, "could not release repeatable scheduler lease"));
+  }
+}
+
 async function main() {
+  assertWorkerRuntimeEnv();
   log.info(`${APP_NAME} worker booted`);
 
   const healthRedis = new Redis(REDIS_URL, {
@@ -189,7 +213,24 @@ async function main() {
     "queue workers started: sync, claims-submit, eligibility, webhook-processing, incident-summary, health-tick, demo-cleanup",
   );
 
-  await registerRepeatables();
+  const reconciliation = await reconcileQueuedJobs();
+  log.info(reconciliation, "queued job reconciliation complete");
+  await registerRepeatablesWithLease(healthRedis);
+  let reconciliationRunning = false;
+  const reconciliationTimer = setInterval(() => {
+    if (reconciliationRunning) return;
+    reconciliationRunning = true;
+    void reconcileQueuedJobs()
+      .then((result) => {
+        if (result.restored > 0)
+          log.warn(result, "periodic queued job reconciliation restored work");
+      })
+      .catch((err) => log.error({ err }, "periodic queued job reconciliation failed"))
+      .finally(() => {
+        reconciliationRunning = false;
+      });
+  }, 60_000);
+  reconciliationTimer.unref();
   workerReady = true;
   log.info(`${APP_NAME} worker ready`);
 
@@ -198,6 +239,7 @@ async function main() {
     if (shuttingDown) return;
     shuttingDown = true;
     workerReady = false;
+    clearInterval(reconciliationTimer);
     log.info({ signal }, "shutting down worker");
 
     // Release :4001 first and *wait* for it. Closing it last (or not awaiting it) meant a

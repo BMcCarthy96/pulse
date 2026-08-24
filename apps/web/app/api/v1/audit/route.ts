@@ -18,15 +18,18 @@ export const GET = handleApiError("audit.list", async (req) => {
 
   const { data, nextCursor } = await paginate(prisma.auditEntry, {
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     cursor,
     limit,
+    cursorField: "createdAt",
+    cursorValue: (entry) => entry.createdAt.toISOString(),
+    parseCursorValue: (value) => new Date(value),
   });
 
   const withUser = await prisma.auditEntry.findMany({
     where: { orgId: session.user.orgId, id: { in: data.map((a) => a.id) } },
     include: { user: { select: { name: true, email: true, role: true } } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
   // The filter dropdown needs every action that actually exists, not a hardcoded list that

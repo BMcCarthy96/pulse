@@ -242,7 +242,7 @@ function AuditLogTable() {
         onRetry={() => mutate()}
         onRowClick={(row) => setSelected(row)}
         emptyTitle="No audit entries"
-        emptyHint="Every mutation writes one — retry a job or change a chaos mode."
+        emptyHint="Operational changes appear here — retry a job or change a chaos mode."
         nextCursor={nextCursor}
         onLoadMore={loadMore}
         loadingMore={loadingMore}
