@@ -8,7 +8,8 @@ import {
 import { log } from "../log.js";
 import { RetryAfterError } from "../queue-errors.js";
 
-const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? "http://localhost:4001";
+const SIMULATOR_PORT = process.env.PORT ?? process.env.SIMULATOR_PORT ?? "4001";
+const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? `http://localhost:${SIMULATOR_PORT}`;
 
 interface EligibilityPayload {
   connectorId: string;

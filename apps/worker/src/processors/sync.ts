@@ -4,7 +4,8 @@ import { fhirBundleSchema, SIMULATOR_HTTP_TIMEOUT_MS } from "@pulse/shared";
 import { log } from "../log.js";
 import { syncQueue, createTrackedJob } from "../queues.js";
 
-const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? "http://localhost:4001";
+const SIMULATOR_PORT = process.env.PORT ?? process.env.SIMULATOR_PORT ?? "4001";
+const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? `http://localhost:${SIMULATOR_PORT}`;
 const PAGE_COUNT = 15;
 type FhirBundle = ReturnType<typeof fhirBundleSchema.parse>;
 
