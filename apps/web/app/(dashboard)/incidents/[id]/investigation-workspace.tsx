@@ -286,9 +286,17 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
     setActionBusy(true);
     try {
       await apiPost(`/api/v1/investigations/${workspace.id}/actions/${path}`);
-      await refresh();
       if (walkthroughApproval && path.endsWith("approve")) {
         window.setTimeout(() => completeStep("confirm-approval"), 0);
+      }
+
+      // The approval response is the authoritative operation result. A transient
+      // panel refresh failure must not turn a successful server-side action into
+      // a failed walkthrough step or error toast.
+      try {
+        await refresh();
+      } catch {
+        window.setTimeout(() => void refresh().catch(() => undefined), 1_000);
       }
       toast.success(
         path.endsWith("approve") ? "Action approved; audit record written" : "Action dismissed",
