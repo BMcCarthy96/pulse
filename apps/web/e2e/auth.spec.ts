@@ -131,6 +131,7 @@ test.describe("auth and role gates", () => {
     const openIncident = page.locator('[data-walkthrough="open-incident"]');
     await expect(openIncident).toBeFocused();
     await openIncident.press("Enter");
+    await expect(page).toHaveURL(/\/incidents\/[^/]+#investigation-heading/);
     await expect(page.getByRole("heading", { name: "Investigation workspace" })).toBeVisible();
     await expect(walkthroughButton).toContainText("2/7");
     await expect(page.getByRole("heading", { name: "Check the first signal" })).toBeVisible();
