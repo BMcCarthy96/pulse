@@ -78,6 +78,7 @@ export function GuidedWalkthroughProvider({
   const [ready, setReady] = useState(!enabled);
   const [incidentId, setIncidentId] = useState<string | null>(null);
   const [targetAttempt, setTargetAttempt] = useState(0);
+  const navigationTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!demoSessionId || !storageKey) {
@@ -135,6 +136,7 @@ export function GuidedWalkthroughProvider({
     if (!demoSessionId) return;
     setState(createWalkthroughState(demoSessionId));
     setTargetAttempt((current) => current + 1);
+    navigationTargetRef.current = "/";
     router.push("/");
   }, [demoSessionId, router]);
 
@@ -150,7 +152,9 @@ export function GuidedWalkthroughProvider({
     );
     setTargetAttempt((current) => current + 1);
     if (!matchesWalkthroughRoute(step, pathname)) {
-      router.push(step.incidentRoute && incidentId ? `/incidents/${incidentId}` : "/");
+      const destination = step.incidentRoute && incidentId ? `/incidents/${incidentId}` : "/";
+      navigationTargetRef.current = destination;
+      router.push(destination);
     }
   }, [demoSessionId, incidentId, pathname, restart, router, state]);
 
@@ -162,8 +166,15 @@ export function GuidedWalkthroughProvider({
 
   useEffect(() => {
     if (!ready || !activeStep || state?.status !== "active") return;
-    if (matchesWalkthroughRoute(activeStep, pathname)) return;
-    const timeout = window.setTimeout(pause, 1_500);
+    if (matchesWalkthroughRoute(activeStep, pathname)) {
+      navigationTargetRef.current = null;
+      return;
+    }
+    // A reset or Resume click can intentionally navigate to the next step's route. Remote
+    // database work can make that transition slower than the normal leave-page pause window, so
+    // give the requested route time to settle before treating it as an interruption.
+    const waitingForNavigation = navigationTargetRef.current !== null;
+    const timeout = window.setTimeout(pause, waitingForNavigation ? 10_000 : 1_500);
     return () => window.clearTimeout(timeout);
   }, [activeStep, pathname, pause, ready, state?.status]);
 
