@@ -11,13 +11,13 @@ code, it does not belong.
 > Built an AI-assisted incident investigation platform for simulated healthcare integrations,
 > combining BullMQ retry and health pipelines with evidence-cited LLM analysis, PHI redaction,
 > human-approved recovery actions, tenant-isolated demos, and deterministic eval/CI gates across
-> 310 automated tests.
+> 314 automated tests.
 
 ### Shorter variant (one line, for a dense résumé)
 
 > AI investigation workspace for simulated healthcare integrations — Next.js, PostgreSQL,
 > Redis/BullMQ, cited findings, runtime PHI and grounding policies, human-approved recovery, and
-> 310 automated tests plus 19 offline eval fixtures.
+> 314 automated tests plus 19 offline eval fixtures.
 
 ### Supporting bullets (pick two, matched to the role)
 
@@ -98,7 +98,7 @@ Lead with **the whole system existing and being demonstrable in three minutes**.
 - One person, planned in phases, every phase's acceptance criteria verified and recorded —
   including the deviations, which is the part worth reading.
 - Two-service deployment with a real reason for the split (BullMQ needs a live process).
-- 310 automated tests across three layers plus 19 offline eval fixtures, chosen by what each layer
+- 314 automated tests across three layers plus 19 offline eval fixtures, chosen by what each layer
   can actually prove.
 - The demo is the pitch: break something, watch it get detected, watch it recover.
 

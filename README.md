@@ -441,7 +441,7 @@ no failures in it would demonstrate nothing.
 
 | Layer                                     | Runs against            | Covers                                                                                                                                                                                       | Count |
 | ----------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, AI budget settlement, durable job dispatch, backoff/`Retry-After`, webhook signatures, AI context/provider seam, prompts, pagination, runtime config, OpenAPI drift | 232   |
+| **Unit** (`pnpm test:unit`)               | nothing — pure Node     | Health rules, redaction, AI budget settlement, durable job dispatch, backoff/`Retry-After`, webhook signatures, AI context/provider seam, prompts, pagination, runtime config, OpenAPI drift | 236   |
 | **Integration** (`pnpm test:integration`) | real Postgres + Redis   | Health and incident lifecycle, atomic investigation approval, webhook isolation/dedupe, durable queue reconciliation, tenant-scoped API handlers                                             | 66    |
 | **E2E** (`pnpm test:e2e`)                 | built app + real worker | The full demo flow, public entry, guided walkthrough, responsive navigation, accessibility, auth, and role gates                                                                             | 12    |
 

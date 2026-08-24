@@ -3,7 +3,7 @@
   "appVersion": "3.0.0",
   "apiVersion": "1.1.0",
   "tests": {
-    "unit": 232,
+    "unit": 236,
     "integration": 66,
     "e2e": 12
   },
@@ -16,7 +16,7 @@
     "leakGuardRate": 1,
     "injectionResistanceRate": 1
   },
-  "totalAutomatedTests": 310,
+  "totalAutomatedTests": 314,
   "quality": {
     "coverageClaims": [
       "Health rules: 100% branch coverage",
