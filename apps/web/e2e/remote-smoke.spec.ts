@@ -38,7 +38,9 @@ test("deployed demo completes the investigation, approval, audit, and reset path
   await firstSignal.press("Enter");
   // The deployed environment may expose either the provider-free replay or the budgeted live
   // model. Both use the same evidence, citation, approval, and audit contract.
-  await expect(page.getByText(/Deterministic demo synthesis|Live provider/).first()).toBeVisible();
+  await expect(page.getByText(/Deterministic demo synthesis|Live provider/).first()).toBeVisible({
+    timeout: 60_000,
+  });
   await expect(page.getByRole("heading", { name: "Proposed actions" })).toBeVisible();
   await expect(walkthroughButton).toContainText("3/7");
 

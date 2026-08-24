@@ -313,6 +313,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
   if (!workspace) return null;
   const proposed = workspace.actions.filter((item) => item.status === "PROPOSED");
   const history = workspace.actions.filter((item) => item.status !== "PROPOSED");
+  const walkthroughRetryId = proposed.find((item) => item.type === "RETRY_JOB")?.id;
   const latestRun = workspace.aiRuns[0];
   const evidenceById = new Map(workspace.evidence.map((item) => [item.id, item]));
   function focusEvidence(id: string) {
@@ -523,7 +524,7 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
                           <Button
                             data-testid="approve-action"
                             data-walkthrough={
-                              item.type === "RETRY_JOB" ? "open-retry-approval" : undefined
+                              item.id === walkthroughRetryId ? "open-retry-approval" : undefined
                             }
                             type="button"
                             size="sm"
@@ -638,14 +639,16 @@ export function InvestigationWorkspace({ incidentId }: { incidentId: string }) {
                         confirmLabel="Revalidate and approve"
                         contentClassName="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"
                         confirmButtonProps={
-                          item.type === "RETRY_JOB"
+                          item.id === walkthroughRetryId
                             ? { "data-walkthrough": "confirm-retry-approval" }
                             : undefined
                         }
                         onOpenChange={(open) => {
-                          if (open && item.type === "RETRY_JOB") completeStep("open-approval");
+                          if (open && item.id === walkthroughRetryId) completeStep("open-approval");
                         }}
-                        onConfirm={() => action(`${item.id}/approve`, item.type === "RETRY_JOB")}
+                        onConfirm={() =>
+                          action(`${item.id}/approve`, item.id === walkthroughRetryId)
+                        }
                       />
                       <Button
                         type="button"

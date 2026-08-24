@@ -612,7 +612,10 @@ export async function runInvestigation(
   });
   if (!investigation) throw ApiError.notFound(`investigation "${args.investigationId}" not found`);
   const guided = questionIsGuided(args.question);
-  const mode: InvestigationMode = investigationMode();
+  // Guided questions are the stable public replay path. Keep live provider mode available for
+  // free-form questions, but do not let provider latency, extra proposals, or model variance
+  // make the one-click walkthrough nondeterministic.
+  const mode: InvestigationMode = guided ? "RECORDED" : investigationMode();
   if (!guided && mode === "RECORDED") {
     throw ApiError.conflict(
       "Live investigations are unavailable. Choose one of the three deterministic questions.",
