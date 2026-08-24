@@ -5,7 +5,12 @@ import { log } from "../log.js";
 import { syncQueue, createTrackedJob } from "../queues.js";
 
 const SIMULATOR_PORT = process.env.PORT ?? process.env.SIMULATOR_PORT ?? "4001";
-const SIMULATOR_BASE_URL = process.env.SIMULATOR_BASE_URL ?? `http://localhost:${SIMULATOR_PORT}`;
+const configuredSimulatorUrl = process.env.SIMULATOR_BASE_URL?.trim();
+const SIMULATOR_BASE_URL =
+  process.env.PORT &&
+  (!configuredSimulatorUrl || configuredSimulatorUrl === "http://localhost:4001")
+    ? `http://localhost:${SIMULATOR_PORT}`
+    : configuredSimulatorUrl || `http://localhost:${SIMULATOR_PORT}`;
 const PAGE_COUNT = 15;
 type FhirBundle = ReturnType<typeof fhirBundleSchema.parse>;
 
