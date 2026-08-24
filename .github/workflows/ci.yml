@@ -213,7 +213,7 @@ jobs:
           echo "worker never became healthy:"; docker logs worker; exit 1
 
       - name: Scan worker image for high and critical vulnerabilities
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: pulse-worker:ci
           vuln-type: "os,library"
