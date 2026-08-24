@@ -370,61 +370,70 @@ export async function resetDemoSession(orgId: string, userId: string) {
   });
   if (!session) return false;
   let runtimeRefs: DemoTenantRefs | null = null;
-  const reset = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pulse:demo-reset:${orgId}`}, 0))::text AS "lock"`;
-    const activeSession = await tx.demoSession.findFirst({
-      where: { id: session.id, orgId, userId, status: "ACTIVE", expiresAt: { gt: new Date() } },
-      select: { id: true },
-    });
-    if (!activeSession) return false;
+  // Rebuilding a tenant is deliberately more work than a normal request: it removes the
+  // investigation and worker history, recreates the four connector fixtures, and writes the
+  // evidence rows used by the walkthrough. Vercel-to-Railway latency can push that sequence past
+  // Prisma's five-second interactive transaction default, which would roll the reset back after
+  // the user has already completed the demo. Keep the transaction atomic, but give it a bounded
+  // window that still fits comfortably inside the serverless request timeout.
+  const reset = await prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pulse:demo-reset:${orgId}`}, 0))::text AS "lock"`;
+      const activeSession = await tx.demoSession.findFirst({
+        where: { id: session.id, orgId, userId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+        select: { id: true },
+      });
+      if (!activeSession) return false;
 
-    const [connectors, incidents, jobs] = await Promise.all([
-      tx.connector.findMany({ where: { orgId }, select: { id: true } }),
-      tx.incident.findMany({ where: { orgId }, select: { id: true } }),
-      tx.job.findMany({ where: { orgId }, select: { id: true, bullJobId: true } }),
-    ]);
-    runtimeRefs = {
-      sessionId: session.id,
-      orgId,
-      userId,
-      connectorIds: new Set(connectors.map((item) => item.id)),
-      incidentIds: new Set(incidents.map((item) => item.id)),
-      dbJobIds: new Set(jobs.map((item) => item.id)),
-      bullJobIds: new Set(jobs.flatMap((item) => (item.bullJobId ? [item.bullJobId] : []))),
-    };
-
-    // Remove every mutable row owned by this demo tenant. Identity and the signed-in session are
-    // intentionally retained; connector recreation gives the replacement scenario fresh IDs.
-    await tx.investigation.deleteMany({ where: { orgId } });
-    await tx.aiRun.deleteMany({ where: { orgId } });
-    await tx.auditEntry.deleteMany({ where: { orgId } });
-    await tx.logEntry.deleteMany({ where: { orgId } });
-    await tx.integrationEvent.deleteMany({ where: { orgId } });
-    await tx.job.deleteMany({ where: { orgId } });
-    await tx.syncRun.deleteMany({ where: { connector: { orgId } } });
-    await tx.incident.deleteMany({ where: { orgId } });
-    await tx.healthSnapshot.deleteMany({ where: { connector: { orgId } } });
-    await tx.connector.deleteMany({ where: { orgId } });
-    await createDemoBaseline(tx, { orgId, sessionId: session.id, now: new Date() });
-    await tx.demoSession.update({
-      where: { id: session.id },
-      data: { lastSeenAt: new Date() },
-    });
-    // The audit is part of the serialized reset itself. Concurrent resets therefore converge on
-    // one current entry: the later transaction removes the earlier generation before writing its
-    // own, and a successful reset can never be committed without its audit record.
-    await tx.auditEntry.create({
-      data: {
+      const [connectors, incidents, jobs] = await Promise.all([
+        tx.connector.findMany({ where: { orgId }, select: { id: true } }),
+        tx.incident.findMany({ where: { orgId }, select: { id: true } }),
+        tx.job.findMany({ where: { orgId }, select: { id: true, bullJobId: true } }),
+      ]);
+      runtimeRefs = {
+        sessionId: session.id,
         orgId,
         userId,
-        action: "demo.reset",
-        targetType: "demo_session",
-        targetId: session.id,
-        metadata: {},
-      },
-    });
-    return true;
-  });
+        connectorIds: new Set(connectors.map((item) => item.id)),
+        incidentIds: new Set(incidents.map((item) => item.id)),
+        dbJobIds: new Set(jobs.map((item) => item.id)),
+        bullJobIds: new Set(jobs.flatMap((item) => (item.bullJobId ? [item.bullJobId] : []))),
+      };
+
+      // Remove every mutable row owned by this demo tenant. Identity and the signed-in session are
+      // intentionally retained; connector recreation gives the replacement scenario fresh IDs.
+      await tx.investigation.deleteMany({ where: { orgId } });
+      await tx.aiRun.deleteMany({ where: { orgId } });
+      await tx.auditEntry.deleteMany({ where: { orgId } });
+      await tx.logEntry.deleteMany({ where: { orgId } });
+      await tx.integrationEvent.deleteMany({ where: { orgId } });
+      await tx.job.deleteMany({ where: { orgId } });
+      await tx.syncRun.deleteMany({ where: { connector: { orgId } } });
+      await tx.incident.deleteMany({ where: { orgId } });
+      await tx.healthSnapshot.deleteMany({ where: { connector: { orgId } } });
+      await tx.connector.deleteMany({ where: { orgId } });
+      await createDemoBaseline(tx, { orgId, sessionId: session.id, now: new Date() });
+      await tx.demoSession.update({
+        where: { id: session.id },
+        data: { lastSeenAt: new Date() },
+      });
+      // The audit is part of the serialized reset itself. Concurrent resets therefore converge on
+      // one current entry: the later transaction removes the earlier generation before writing its
+      // own, and a successful reset can never be committed without its audit record.
+      await tx.auditEntry.create({
+        data: {
+          orgId,
+          userId,
+          action: "demo.reset",
+          targetType: "demo_session",
+          targetId: session.id,
+          metadata: {},
+        },
+      });
+      return true;
+    },
+    { maxWait: 5_000, timeout: 20_000 },
+  );
   if (runtimeRefs) {
     // Runtime cleanup is intentionally outside the short database transaction. New connector
     // IDs already fence active jobs, while this removes waiting/delayed history and resets only
