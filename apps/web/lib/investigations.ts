@@ -484,33 +484,39 @@ export async function createInvestigation(args: {
   userId: string;
   incidentId: string;
 }) {
-  return prisma.$transaction(async (tx) => {
-    // Reset replaces the entire synthetic scenario. Sharing its tenant lock keeps an
-    // investigation, its evidence, and the response snapshot on one fixture generation.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pulse:demo-reset:${args.orgId}`}, 0))::text AS "lock"`;
-    const loaded = await loadEvidence(tx, args.orgId, args.incidentId);
-    const existing = await tx.investigation.findFirst({
-      where: {
-        orgId: args.orgId,
-        incidentId: args.incidentId,
-        status: { in: ["ACTIVE", "COMPLETED"] },
-      },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true },
-    });
-    const investigation = existing
-      ? await tx.investigation.findUniqueOrThrow({ where: { id: existing.id } })
-      : await tx.investigation.create({
-          data: {
-            orgId: args.orgId,
-            incidentId: args.incidentId,
-            createdById: args.userId,
-            title: `Investigation · ${loaded.incident.title}`,
-          },
-        });
-    await persistEvidence(tx, investigation.id, loaded.evidence);
-    return getInvestigation(args.orgId, investigation.id, tx);
-  });
+  // This transaction loads the bounded evidence window, upserts its evidence cards, and reads the
+  // hydrated workspace before returning. Across Vercel and Railway, that remote round trip can
+  // exceed Prisma's five-second interactive default even though the same work is quick locally.
+  return prisma.$transaction(
+    async (tx) => {
+      // Reset replaces the entire synthetic scenario. Sharing its tenant lock keeps an
+      // investigation, its evidence, and the response snapshot on one fixture generation.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`pulse:demo-reset:${args.orgId}`}, 0))::text AS "lock"`;
+      const loaded = await loadEvidence(tx, args.orgId, args.incidentId);
+      const existing = await tx.investigation.findFirst({
+        where: {
+          orgId: args.orgId,
+          incidentId: args.incidentId,
+          status: { in: ["ACTIVE", "COMPLETED"] },
+        },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true },
+      });
+      const investigation = existing
+        ? await tx.investigation.findUniqueOrThrow({ where: { id: existing.id } })
+        : await tx.investigation.create({
+            data: {
+              orgId: args.orgId,
+              incidentId: args.incidentId,
+              createdById: args.userId,
+              title: `Investigation · ${loaded.incident.title}`,
+            },
+          });
+      await persistEvidence(tx, investigation.id, loaded.evidence);
+      return getInvestigation(args.orgId, investigation.id, tx);
+    },
+    { maxWait: 5_000, timeout: 20_000 },
+  );
 }
 
 export async function getInvestigation(
@@ -833,30 +839,33 @@ export async function runInvestigation(
         `The live investigation exceeded the $${investigationRunBudgetUsd().toFixed(2)} run budget.`,
       );
     }
-    await prisma.$transaction(async (tx) => {
-      await writeActions(tx, investigation.id, report, evidence);
-      await tx.investigation.update({
-        where: { id: investigation.id },
-        data: {
-          report: report as unknown as Prisma.InputJsonValue,
-          status: "COMPLETED",
-          completedAt: new Date(),
-        },
-      });
-      await tx.aiRun.update({
-        where: { id: run.id },
-        data: {
-          status: "SUCCEEDED",
-          answer: report.summary,
-          totalInputTokens: usage.input,
-          totalOutputTokens: usage.output,
-          totalCostUsd: live ? (cost ?? reservedSpend) : 0,
-          latencyMs: Date.now() - startedAt,
-          completedAt: new Date(),
-          toolEvents: { evidenceCount: evidence.length, questionKey: guided?.id ?? null, mode },
-        },
-      });
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        await writeActions(tx, investigation.id, report, evidence);
+        await tx.investigation.update({
+          where: { id: investigation.id },
+          data: {
+            report: report as unknown as Prisma.InputJsonValue,
+            status: "COMPLETED",
+            completedAt: new Date(),
+          },
+        });
+        await tx.aiRun.update({
+          where: { id: run.id },
+          data: {
+            status: "SUCCEEDED",
+            answer: report.summary,
+            totalInputTokens: usage.input,
+            totalOutputTokens: usage.output,
+            totalCostUsd: live ? (cost ?? reservedSpend) : 0,
+            latencyMs: Date.now() - startedAt,
+            completedAt: new Date(),
+            toolEvents: { evidenceCount: evidence.length, questionKey: guided?.id ?? null, mode },
+          },
+        });
+      },
+      { maxWait: 5_000, timeout: 20_000 },
+    );
     const actions = await prisma.investigationAction.findMany({
       where: { investigationId: investigation.id, status: "PROPOSED" },
       orderBy: { createdAt: "asc" },
