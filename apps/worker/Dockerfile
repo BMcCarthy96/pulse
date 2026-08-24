@@ -61,7 +61,12 @@ FROM node:22-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# The runtime starts with `node` and invokes the bundled Prisma CLI for Railway's release
+# migration. npm, npx, Corepack, and pnpm are build-time tools only; leaving them in the image
+# needlessly expands the vulnerability scan (and the production attack surface).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /usr/local/bin/pnpm /usr/local/bin/pnpx
 
 ENV NODE_ENV=production
 WORKDIR /app
