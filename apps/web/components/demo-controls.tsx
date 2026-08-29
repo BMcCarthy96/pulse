@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut, MoreHorizontal, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function DemoControls() {
-  const router = useRouter();
   const { restart } = useGuidedWalkthrough();
   const [resetting, setResetting] = useState(false);
 
@@ -28,8 +26,9 @@ export function DemoControls() {
       await apiPost("/api/demo/reset");
       restart();
       toast.success("Demo workspace reset");
-      router.replace("/");
-      router.refresh();
+      // A reset replaces the records backing the current route. A full navigation clears any
+      // stale incident state and makes the guided entry screen the browser's source of truth.
+      window.location.assign("/");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not reset the demo");
     } finally {
