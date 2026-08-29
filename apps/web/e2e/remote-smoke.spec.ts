@@ -92,7 +92,14 @@ test("deployed demo completes the investigation, approval, audit, and reset path
   await expect(walkthroughButton).toContainText("Replay walkthrough");
 
   await page.getByTestId("demo-controls-button").click();
-  await page.getByRole("menuitem", { name: "Reset workspace" }).click();
+  const resetWorkspace = page.getByRole("menuitem", { name: "Reset workspace" });
+  await expect(resetWorkspace).toBeVisible();
+  const resetResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/demo/reset") && response.request().method() === "POST",
+  );
+  await resetWorkspace.press("Enter");
+  expect((await resetResponse).ok()).toBeTruthy();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toBeVisible();
   await expect(walkthroughButton).toContainText("1/7");

@@ -38,6 +38,9 @@ export async function loginAs(page: Page, persona: keyof typeof PERSONAS) {
         name: /Investigate integration failures before clinicians discover them/i,
       }),
     ).toBeVisible();
+    // Auth.js can leave an already-invalid session cookie in the browser after the sign-out
+    // redirect. Remove that client-side residue so persona switches are deterministic.
+    await page.context().clearCookies({ name: AUTH_SESSION_COOKIE_NAME });
     await expect
       .poll(() => authSessionCookieCount(page), {
         message: "Auth.js session cookies should be cleared before switching personas",
