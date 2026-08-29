@@ -206,6 +206,7 @@ test.describe("auth and role gates", () => {
 
     await page.getByTestId("demo-controls-button").click();
     await page.getByRole("menuitem", { name: "Reset workspace" }).click();
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { name: "Start with the failed sync" })).toBeVisible();
     await expect(walkthroughButton).toContainText("1/7");
 

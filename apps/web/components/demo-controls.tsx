@@ -28,6 +28,7 @@ export function DemoControls() {
       await apiPost("/api/demo/reset");
       restart();
       toast.success("Demo workspace reset");
+      router.replace("/");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not reset the demo");
